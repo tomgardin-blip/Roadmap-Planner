@@ -23,6 +23,7 @@
   --qtot: #f2f2ef;
 
   --ok-bg: #e3f8ec;   --ok-ink: #00753e;
+  --commit-bg: #e8eefc; --commit-ink: #2c4fb0; --qtr-bg: #fef4ee; --qtr-ink: #a5501f; --live-bg: #ede9fe; --live-ink: #6d28d9; --tbd-ink: #b45309;
   --amb-bg: #fdf3d6;  --amb-ink: #8a6a12;
   --red-bg: #fbe3e7;  --red-ink: #b02a40;
 }
@@ -32,6 +33,7 @@
     --grey: #2a2d2e; --hdr: #23262a; --line: #34383c; --ink: #e7eaea; --muted: #98a2a4;
     --app: #14171a; --paper: #191d20; --card: #22272b; --qtot: #202528;
     --ok-bg: #133325; --ok-ink: #5fe0a0; --amb-bg: #3a3115; --amb-ink: #ffd877; --red-bg: #3d1a21; --red-ink: #ff94a5;
+    --commit-bg: #1f2a44; --commit-ink: #9db6ff; --qtr-bg: #3a2417; --qtr-ink: #ffbe96; --live-bg: #2e2450; --live-ink: #c4b5fd; --tbd-ink: #f5b46a;
   }
 }
 :root[data-theme="dark"] {
@@ -39,6 +41,7 @@
   --grey: #2a2d2e; --hdr: #23262a; --line: #34383c; --ink: #e7eaea; --muted: #98a2a4;
   --app: #14171a; --paper: #191d20; --card: #22272b; --qtot: #202528;
   --ok-bg: #133325; --ok-ink: #5fe0a0; --amb-bg: #3a3115; --amb-ink: #ffd877; --red-bg: #3d1a21; --red-ink: #ff94a5;
+    --commit-bg: #1f2a44; --commit-ink: #9db6ff; --qtr-bg: #3a2417; --qtr-ink: #ffbe96; --live-bg: #2e2450; --live-ink: #c4b5fd; --tbd-ink: #f5b46a;
 }
 
 * { box-sizing: border-box; }
@@ -148,8 +151,8 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .connicon.green { border-color: var(--green-dark); color: var(--green-dark); }
 .connicon.orange { border-color: var(--orange); color: var(--orange); }
 .connicon.red { border-color: var(--red); color: var(--red); }
-.tag.live { background: #ede9fe; color: #6d28d9; }
-:root[data-theme="dark"] .tag.live { background: #2e2450; color: #c4b5fd; }
+.tag.live { background: var(--live-bg); color: var(--live-ink); }
+
 
 /* Side drawer, same treatment as Liam's .drawer */
 .drawer {
@@ -177,13 +180,11 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .issue .t { font-weight: 600; font-size: 12px; }
 .issue .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; font-size: 11px; color: var(--muted); align-items: center; }
 .tag { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; background: var(--grey); color: var(--muted); }
-.tag.commit { background: #e8eefc; color: #2c4fb0; }
+.tag.commit { background: var(--commit-bg); color: var(--commit-ink); }
 .tag.late { background: var(--red-bg); color: var(--red-ink); }
-.tag.qtr { background: #fef4ee; color: #a5501f; }
+.tag.qtr { background: var(--qtr-bg); color: var(--qtr-ink); }
 .tag.blocked { background: var(--red-bg); color: var(--red-ink); }
-.tag.score { background: #e3f8ec; color: #00753e; }
-:root[data-theme="dark"] .tag.commit { background: #1f2a44; color: #9db6ff; }
-:root[data-theme="dark"] .tag.qtr { background: #3a2417; color: #ffbe96; }
+.tag.score { background: var(--ok-bg); color: var(--ok-ink); }
 .issue .eff { font-variant-numeric: tabular-nums; }
 .issue .eff b { color: var(--ink); }
 .datebtns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
@@ -192,7 +193,7 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .datebtns .sep { width: 1px; background: var(--line); margin: 0 3px; }
 
 .grid col.c-team { width: 150px; } .grid col.c-skill { width: 74px; } .grid col.c-qt { width: 104px; } .grid col.c-pot { width: 62px; }
-.grid td.cell.tbd .d { color: #b45309; }
+.grid td.cell.tbd .d { color: var(--tbd-ink); }
 .grid td.cell.pot { background: var(--qtot); } .grid td.cell.pot .d { color: var(--muted); font-weight: 600; }
 .issue .t a { color: inherit; text-decoration: none; } .issue .t a:hover { text-decoration: underline; }
 @media (max-width: 640px) {

@@ -138,7 +138,16 @@ function show(rows) {
 async function boot() {
   shell();
   renderChrome();
-  const mcp = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('mcp').catch(() => null) : null;
+  const inViewer = !!(window.claude && typeof window.claude.use === 'function');
+  const mcp = inViewer ? await window.claude.use('mcp').catch(() => null) : null;
+  if (inViewer && !mcp) {
+    // Inside claude.ai but no connector access: never fall back to fake numbers here.
+    state.mode = 'live';
+    state.status = { lightdash: 'error', notion: 'error', lightdashError: 'Connectors are not available in this view. Open the page in claude.ai, allow Lightdash and Notion when asked, and check both are connected under Settings → Connectors.' };
+    renderChrome();
+    document.getElementById('grid').innerHTML = '';
+    return;
+  }
   if (mcp) {
     state.mode = 'live';
     state.status = { lightdash: 'loading', notion: 'loading' };
