@@ -1,0 +1,14 @@
+{
+  "name": "roadmap-planner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.js",
+    "screenshot": "node scripts/screenshot.mjs docs/checkpoints/1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
+    "playwright-core": "^1.56.1"
+  }
+}
