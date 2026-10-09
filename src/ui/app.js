@@ -1,8 +1,9 @@
-// Entry point. Checkpoint 1: fake data only, no connectors.
+// Entry point. Data: window.__RP_ROWS__ (Lightdash rows) when present, otherwise fake rows.
+// Both run through the same capacity engine. Live loading over MCP comes with publishing.
 
 import { horizon as buildHorizon } from '../periods.js';
-import { buildGrid, TEAMS } from '../capacity.js';
-import { fakeCapacity, fakeIssues } from '../data/fake.js';
+import { buildGrid, runCapacity, issuesWithoutTeam, TEAMS } from '../capacity.js';
+import { fakeLightdashRows } from '../data/fake.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { LOGO } from './logo.js';
@@ -11,8 +12,11 @@ const TODAY = new URLSearchParams(location.search).get('today') || new Date().to
 
 const state = { teamFilter: 'all', sel: null };
 const horizon = buildHorizon(TODAY);
-const issues = fakeIssues(horizon);
-const grid = buildGrid(issues, fakeCapacity(horizon), horizon);
+const LIVE = Array.isArray(window.__RP_ROWS__);
+const [ty, tm, td] = TODAY.split('-').map(Number);
+const run = runCapacity(LIVE ? window.__RP_ROWS__ : fakeLightdashRows(horizon), { now: new Date(ty, tm - 1, td, 12) });
+const grid = buildGrid(run, horizon);
+const noTeam = issuesWithoutTeam(run);
 
 function themeToggle() {
   const root = document.documentElement;
@@ -29,7 +33,7 @@ function shell() {
     if (t) document.documentElement.dataset.theme = t;
   } catch { /* storage unavailable */ }
 
-  const noTeamDays = grid.noTeam.reduce((s, i) => s + i.effort.FE + i.effort.BE + i.effort.MOB, 0);
+  const noTeamDays = noTeam.reduce((s, i) => s + (i.skillEfforts.frontend || 0) + (i.skillEfforts.backend || 0) + (i.skillEfforts.mobile || 0), 0);
   // Render into our own root: replacing document.body would also delete the
   // <style> and <script> tags the artifact runtime puts inside it.
   let root = document.getElementById('rp-root');
@@ -45,9 +49,9 @@ function shell() {
         <span class="brandbar"></span>
         <span class="brandtitle">Roadmap Planner</span>
         <span class="tsub">Engineering capacity · FE / BE / MOB · 4 teams</span>
-        <span class="pill fake">FAKE DATA</span>
+        ${LIVE ? `<span class="pill">Lightdash snapshot</span>` : '<span class="pill fake">FAKE DATA</span>'}
         <span class="spacer"></span>
-        ${grid.noTeam.length ? `<span class="pill warn" title="Issues with effort but no team do not count in any capacity"><b>${grid.noTeam.length}</b> issue with no team · ${noTeamDays} d invisible</span>` : ''}
+        ${noTeam.length ? `<span class="pill warn" title="Issues with effort and dates but no team or assignee count in no team's load"><b>${noTeam.length}</b> with no team · ${Math.round(noTeamDays)} d invisible</span>` : ''}
         <span class="pill">Today <b>${TODAY}</b></span>
         <span class="connwrap" title="Connectors arrive in checkpoints 2 and 3"><span class="connicon">L</span><span class="connicon">N</span></span>
       </div>
@@ -71,7 +75,7 @@ function shell() {
       </div>
     </header>
     <main class="gridwrap" id="grid"></main>
-    <div class="note">Planned days / capacity in effort days. Month-level issues (committed) count in their End month. Quarter-level issues (no commit, End = last Friday of the quarter) are spread ⅓ over each month. Month colours use the quarter's ±2 / ±5 days scaled to the month's share of capacity.</div>
+    <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. Total = months + pot. The current quarter counts from this week.</div>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; draw(); });
@@ -81,7 +85,7 @@ function shell() {
     if (!td) return;
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     td.classList.add('sel');
-    openDrawer(document.getElementById('drawer'), { issues, grid, horizon, ...td.dataset });
+    openDrawer(document.getElementById('drawer'), { run, grid, horizon, ...td.dataset });
   });
   document.getElementById('drawer').addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) {

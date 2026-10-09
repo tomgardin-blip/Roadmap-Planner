@@ -1,8 +1,9 @@
-// FAKE DATA for checkpoint 1 (layout only). Deterministic so screenshots are
-// repeatable. Nothing here reflects real Qargo issues, effort or capacity.
+// FAKE DATA in the exact shape of the Lightdash serve_engineering_capacity rows,
+// so the fake and real paths both run through the capacity engine. Deterministic
+// so screenshots are repeatable. Nothing here reflects real Qargo people or issues.
 
-import { TEAMS, SKILLS, cellId } from '../capacity.js';
 import { parseISO, toISO } from '../periods.js';
+import { TEAMS } from '../capacity.js';
 
 function rng(seed) {
   let s = seed >>> 0;
@@ -14,94 +15,95 @@ function rng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+const addDays = (iso, n) => { const d = parseISO(iso); d.setUTCDate(d.getUTCDate() + n); return toISO(d); };
 
-const SUBJECTS = {
-  'Transport Planning': ['Planning board', 'Trip builder', 'Route optimiser', 'Resource calendar', 'Subcontractor view', 'Load splitting', 'Map planning', 'Trailer swap'],
-  'Order + Invoice': ['Order import', 'Rate cards', 'Invoice run', 'Credit notes', 'Surcharges', 'Self-billing', 'Order templates', 'Fuel index'],
-  'Trip Execution': ['Driver app', 'Proof of delivery', 'Live ETA', 'Stop events', 'Damage reports', 'Offline mode', 'Checklists', 'Telematics feed'],
-  'Application Platform': ['Permissions', 'Audit trail', 'Bulk edit', 'Custom fields', 'Saved filters', 'Notifications', 'Search', 'Data export'],
-};
-const VERBS = ['support for', 'rework of', 'filters on', 'multi-currency on', 'bulk actions in', 'performance of', 'new columns in', 'API for'];
+// Positional builders (element order = the explore's field descriptions).
+export function allocationRow({ id, title, email, team, fe = 0, be = 0, mob = 0, lead = false, start = '2026-06-01', end = null, hol26 = 26, hol27 = 26 }) {
+  return [id, title, email, team, null, 0, 0, be, 0, fe, 0, mob, 0, lead, start, end, hol26, hol27];
+}
+export function featureRow({ id, title, type = 'Feature 🚀', status = 'Not started', assignee = null, start = null, end = null, committed = null, team = null, fe = 0, be = 0, mob = 0, priority = null, blockedBy = null }) {
+  const f = new Array(35).fill(null);
+  Object.assign(f, {
+    0: id, 1: title, 2: `https://example.invalid/${id}`, 3: type, 5: status, 6: assignee, 11: blockedBy,
+    14: be || null, 15: fe || null, 24: start, 25: end, 26: committed, 29: team, 30: mob || null, 33: priority,
+  });
+  return f;
+}
 
-// Fake engineer counts per team per skill; 10 effort days per engineer per month (SPEC.md > Capacity).
+const SUBJECTS = ['Planning board', 'Trip builder', 'Order import', 'Rate cards', 'Driver app', 'Proof of delivery', 'Permissions', 'Bulk edit', 'Live ETA', 'Invoice run', 'Saved filters', 'Map planning'];
+const VERBS = ['support for', 'rework of', 'filters on', 'bulk actions in', 'performance of', 'API for'];
+
+// Fake engineers per team per skill.
 const HEADCOUNT = {
-  'Transport Planning': { FE: 3, BE: 4, MOB: 0.5 },
+  'Transport Planning': { FE: 3, BE: 4, MOB: 0 },
   'Order + Invoice': { FE: 2, BE: 4, MOB: 0 },
-  'Trip Execution': { FE: 2, BE: 2, MOB: 3 },
-  'Application Platform': { FE: 2, BE: 3, MOB: 0.5 },
+  'Trip Execution': { FE: 0, BE: 2, MOB: 0, FEMOB: 2 },
+  'Application Platform': { FE: 1, BE: 4, MOB: 0 },
 };
 
-export function fakeCapacity(horizon) {
-  const cap = {};
-  for (const team of TEAMS) for (const skill of SKILLS) for (const q of horizon) for (const m of q.months) {
-    cap[cellId(team, skill, m.key)] = Math.round(HEADCOUNT[team][skill] * 10);
-  }
-  return cap;
-}
-
-function pick(r, arr) { return arr[Math.floor(r() * arr.length)]; }
-
-function addDays(iso, n) {
-  const d = parseISO(iso);
-  d.setUTCDate(d.getUTCDate() + n);
-  return toISO(d);
-}
-
-export function fakeIssues(horizon, seed = 42) {
+export function fakeLightdashRows(horizon, seed = 42) {
   const r = rng(seed);
-  const issues = [];
+  const allocations = [];
   let n = 1;
   for (const team of TEAMS) {
     const hc = HEADCOUNT[team];
-    for (const q of horizon) {
-      // Load factor per quarter: current tight, next close, pot overfull.
-      const load = { current: 1.0, next: 1.05, pot: 1.35 }[q.role] * (0.9 + r() * 0.2);
-      for (const skill of SKILLS) {
-        let budget = hc[skill] * 30 * load; // 3 months × 10 days
-        while (budget > 2) {
-          const committed = r() < 0.35;
-          const main = Math.min(budget, Math.round(2 + r() * 14));
-          const effort = { FE: 0, BE: 0, MOB: 0 };
-          effort[skill] = main;
-          budget -= main;
-          // Some issues need a second skill too.
-          const other = SKILLS.filter((s) => s !== skill && hc[s] > 0);
-          if (r() < 0.3 && other.length) effort[pick(r, other)] = Math.round(1 + r() * 4);
+    allocations.push(allocationRow({ id: `a${n}`, title: `Lead ${team}`, email: `lead${n}@example.invalid`, team, be: 1, lead: true })); n++;
+    for (const [skill, count] of Object.entries(hc)) {
+      for (let i = 0; i < count; i++) {
+        const fe = skill === 'FE' || skill === 'FEMOB' ? 1 : 0;
+        const mob = skill === 'MOB' || skill === 'FEMOB' ? 1 : 0;
+        const be = skill === 'BE' ? 1 : 0;
+        allocations.push(allocationRow({ id: `a${n}`, title: `Engineer ${n}`, email: `eng${n}@example.invalid`, team, fe, be, mob })); n++;
+      }
+    }
+  }
 
-          let end, committedDate = null;
-          if (committed) {
-            const mi = Math.floor(r() * 3);
-            const m = q.months[mi];
-            end = m.lastFriday;
-            // Commit 1 to 2 months after the planned month, occasionally before (at risk).
-            committedDate = addDays(end, r() < 0.12 ? -10 : 25 + Math.floor(r() * 40));
+  const features = [];
+  let f = 1;
+  for (const team of TEAMS) {
+    const hc = HEADCOUNT[team];
+    const skills = { FE: hc.FE + (hc.FEMOB || 0) / 2, BE: hc.BE, MOB: hc.MOB + (hc.FEMOB || 0) / 2 };
+    for (const q of horizon) {
+      const load = { current: 1.0, next: 1.05, pot: 1.3 }[q.role] * (0.9 + r() * 0.2);
+      for (const [skill, fte] of Object.entries(skills)) {
+        let budget = fte * 36 * load;
+        while (budget > 2) {
+          const days = Math.min(budget, Math.round(2 + r() * 12));
+          budget -= days;
+          const kind = r();
+          let start, end, committed = null;
+          if (kind < 0.55) {
+            end = start = q.lastFriday; // quarter pot
+          } else if (kind < 0.8) {
+            const m = pick(r, q.months);
+            end = start = m.lastFriday; // committed month placement (pot in the planner)
+            committed = addDays(end, 20 + Math.floor(r() * 40));
           } else {
-            end = q.lastFriday;
+            const m = pick(r, q.months);
+            start = addDays(m.lastFriday, -25); // dated range inside the month
+            end = m.lastFriday;
           }
-          const subject = pick(r, SUBJECTS[team]);
-          issues.push({
-            id: `fake-${n}`,
-            title: `${subject}: ${pick(r, VERBS)} ${subject.toLowerCase()} #${n}`,
-            team,
-            status: pick(r, ['Not started', 'Not started', 'Not started', 'In progress', 'Blocked']),
+          const subject = pick(r, SUBJECTS);
+          features.push(featureRow({
+            id: `f${f}`, title: `${subject}: ${pick(r, VERBS)} ${subject.toLowerCase()} #${f}`, team, start, end, committed,
+            fe: skill === 'FE' ? days : 0, be: skill === 'BE' ? days : 0, mob: skill === 'MOB' ? days : 0,
             priority: committed ? null : pick(r, ['High', 'Medium', 'Low']),
-            effort,
-            start: end,
-            end,
-            committed: committedDate,
-            frCount: Math.max(1, Math.round(r() * r() * 14)),
-            score: Math.round(r() * r() * 400) / 10,
-          });
-          n++;
+            status: pick(r, ['Not started', 'Not started', 'In progress', 'Blocked']),
+          }));
+          f++;
         }
       }
     }
   }
-  // One issue with no team, mirrors the "invisible in capacity" risk in SPEC.md.
-  issues.push({
-    id: `fake-${n}`, title: 'Rates rework (no team set)', team: null, status: 'Not started', priority: null,
-    effort: { FE: 10, BE: 40, MOB: 0 }, start: horizon[0].lastFriday, end: horizon[0].lastFriday,
-    committed: addDays(horizon[0].months[0].lastFriday, -4), frCount: 6, score: 3.1,
-  });
-  return issues;
+  // One issue with effort but no team: the "invisible in capacity" risk from SPEC.md.
+  features.push(featureRow({ id: `f${f}`, title: 'Rates rework (no team set)', start: horizon[0].lastFriday, end: horizon[0].lastFriday, be: 40, fe: 10 }));
+
+  return [{
+    serve_engineering_capacity_is_default: true,
+    serve_engineering_capacity_features: JSON.stringify(features),
+    serve_engineering_capacity_customer_tasks: '[]',
+    serve_engineering_capacity_deals: '[]',
+    serve_engineering_capacity_engineering_team_allocations: JSON.stringify(allocations),
+  }];
 }

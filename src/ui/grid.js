@@ -1,4 +1,4 @@
-// Capacity grid: rows = team × skill, columns = 3 quarters × (3 months + quarter total).
+// Capacity grid: rows = team × skill; per quarter its 3 months, the pot and the quarter total.
 
 import { TEAMS } from '../capacity.js';
 
@@ -18,26 +18,30 @@ function cell(c, attrs, extraClass = '') {
     <div class="d">${delta(c.planned, c.capacity)}</div></td>`;
 }
 
+function potCell(days, attrs) {
+  if (!days) return '<td class="cell pot empty">–</td>';
+  return `<td class="cell pot" ${attrs} title="${fmt(days)} days with Start = End, at quarter level"><div class="n">${fmt(days)}</div><div class="d">in pot</div></td>`;
+}
+
 export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
   const teams = teamFilter === 'all' ? TEAMS : [teamFilter];
   let h = '<table class="grid"><colgroup><col class="c-team"><col class="c-skill">';
-  for (const q of horizon) h += '<col><col><col><col class="c-qt">';
+  for (let i = 0; i < horizon.length; i++) h += '<col><col><col><col class="c-pot"><col class="c-qt">';
   h += '</colgroup><thead><tr class="q"><th class="lead" rowspan="2">Team</th><th class="lead2" rowspan="2">Skill</th>';
   for (const q of horizon) {
-    h += `<th colspan="4" class="qdiv ${q.role}"><span class="role">${ROLE_LABEL[q.role]}</span>${esc(q.label)}</th>`;
+    h += `<th colspan="5" class="qdiv ${q.role}"><span class="role">${ROLE_LABEL[q.role]}</span>${esc(q.label)}</th>`;
   }
   h += '</tr><tr class="m">';
   for (const q of horizon) {
     q.months.forEach((m, i) => { h += `<th class="${i === 0 ? 'qdiv' : ''}">${m.label} ${String(m.year).slice(2)}</th>`; });
-    h += `<th>${q.shortLabel} total</th>`;
+    h += `<th>${q.shortLabel} pot</th><th>${q.shortLabel} total</th>`;
   }
   h += '</tr></thead><tbody>';
 
   for (const team of teams) {
     const rows = grid.rows.filter((r) => r.team === team);
     rows.forEach((row, ri) => {
-      const last = ri === rows.length - 1;
-      h += `<tr class="${last ? 'teamend' : ''}">`;
+      h += `<tr class="${ri === rows.length - 1 ? 'teamend' : ''}">`;
       if (ri === 0) {
         const sums = horizon.map((q, qi) => {
           const p = rows.reduce((s, r) => s + r.quarters[qi].planned, 0);
@@ -47,11 +51,11 @@ export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
         h += `<td class="lead" rowspan="${rows.length}">${esc(team)}${sums.map((s) => `<span class="tsum">${s}</span>`).join('')}</td>`;
       }
       h += `<td class="lead2">${row.skill}</td>`;
+      const at = (period) => `data-team="${esc(team)}" data-skill="${row.skill}" data-period="${period}"`;
       row.quarters.forEach((q) => {
-        q.months.forEach((m, i) => {
-          h += cell(m, `data-team="${esc(team)}" data-skill="${row.skill}" data-period="${m.key}"`, i === 0 ? 'qdiv' : '');
-        });
-        h += cell(q, `data-team="${esc(team)}" data-skill="${row.skill}" data-period="${q.key}"`, 'qt');
+        q.months.forEach((m, i) => { h += cell(m, at(m.key), i === 0 ? 'qdiv' : ''); });
+        h += potCell(q.pot, at(`${q.key}-pot`));
+        h += cell(q, at(q.key), 'qt');
       });
       h += '</tr>';
     });

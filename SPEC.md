@@ -47,7 +47,15 @@ Committed dates drive the plan; GO LIVE dates never do directly.
 **Capacity**
 
 - Target 100% per team per skill. 1 to 2 days over or under is fine; 10 days is a problem.
-- No buffer for bugs or unplanned work: engineers deliver about 30 effort days per quarter (10 per month), the other 50% covers bugs and meetings.
+- Capacity comes from the Lightdash planner's own engine (`vendor/capacity-engine.js`, Sander De Wilde), used unchanged. Decided 2026-10-09. What it does:
+  - Per engineer per week: (5 working days × part-time % × ramp − holiday days that week) × 0.6. About 3 days per full-time engineer per week, about 13 per month. (This replaces the earlier "10 per month" assumption, which was wrong.)
+  - Ramp for joiners: ⅓ in their first month, ⅔ in the second, then full. People who started before July 2026 count as fully ramped.
+  - Team leads carry 0 capacity.
+  - Engineers with several skills are split pro rata (FE 1 + MOB 1 = 50/50).
+  - Holidays: planned "Holidays 🌴" issues in their week, plus the year's unspent allowance (default 26 days) spread over the remaining future months.
+  - A week counts in the month of its Friday. The current quarter counts from the current week only.
+  - Load goes to the assignee's team first; the Team property only routes unassigned issues. An issue with Team = Transport Planning assigned to a Connectors engineer counts against Connectors.
+  - Issues with Start = End are the quarter "pot": they count at quarter level, never in a month, whether committed or not.
 - Capacity is a constant job: estimates grow mid-quarter (5 to 15 days happens), dependencies surface, issues move. The tool must make each change visible.
 
 **Dependencies**
@@ -106,10 +114,12 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 **1. Capacity grid (main screen)**
 
 - Rows: 4 teams × FE / BE / MOB. Columns: current quarter, next quarter, pot, each split into its 3 months.
+- Columns per quarter: 3 months, the pot, the quarter total. Matches the Lightdash planner exactly (decided 2026-10-09, replaces the earlier "spread ⅓ per month" decision).
+  - Month: dated work (Start ≠ End) spread over its working days.
+  - Pot: every issue with Start = End, at quarter level, including committed issues placed on a month's last Friday.
+  - Total: months + pot against the quarter's capacity.
 - Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
-- Month cells: the same thresholds scaled by the month's share of the quarter's capacity (month capacity ÷ quarter capacity × 2 and × 5, so about ±0.7 / ±1.7 days for an even quarter). Decided 2026-10-09.
-- Quarter-level issues are spread evenly over the quarter's 3 months (⅓ of the effort in each). Month-level issues count in their End month. Decided 2026-10-09.
-- Quarter-level = End on the last Friday of the quarter AND no committed date. A committed issue on that same date is month-level (the quarter's third month), because committed issues are always planned on months.
+- Month cells: the same thresholds scaled by the month's share of the quarter's capacity (about ±0.7 / ±1.7 days for an even quarter). Decided 2026-10-09.
 - Click a cell: the issues in it, sorted by committed date then score.
 - Overbooked cell: suggested issues to push out (lowest score, no commit, quick-win fillers first). Underbooked cell: suggested issues to pull forward (highest score that fits).
 
@@ -232,7 +242,9 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 
 - [x] Can Claude Code publish to the claude.ai artifact runtime with `mcp`? Yes, confirmed 2026-10-09.
 - [ ] How often does the Lightdash capacity dataset refresh? Decides how much the live Notion overlay must cover.
-- [ ] Who owns the capacity planner's math (holidays, part-time, vacancies), so changes stay in sync?
+- [x] Who owns the capacity planner's math? Sander De Wilde. We use his engine file unchanged and swap in each new export.
+- [ ] How does the planner app build `emailToName`, `settings` and `config.teams` for the engine? We map allocation email → allocation title (without it planned holidays never count) and use default settings. To confirm with Sander; it can move a Q4 cell by up to 4.5 days.
+- [ ] Engine version: we have the 27 Aug 2026 export. Sander to send the latest.
 - [ ] Where does the planner audit log live: a new Notion database, or the artifact's own storage?
 - [ ] Should a move of a committed issue past its commit be blocked, or allowed with a mandatory reason?
 
