@@ -1,47 +1,45 @@
-// Entry point. Data: window.__RP_ROWS__ (Lightdash rows) when present, otherwise fake rows.
-// Both run through the same capacity engine. Live loading over MCP comes with publishing.
+// Entry point.
+// Data, in order of preference:
+//   1. live: the viewer's Lightdash + Notion connectors over the artifact `mcp` capability;
+//   2. window.__RP_ROWS__: a saved Lightdash snapshot (local preview only);
+//   3. fake Lightdash-shaped rows.
+// All three run through the same capacity engine.
 
 import { horizon as buildHorizon } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, TEAMS } from '../capacity.js';
 import { fakeLightdashRows } from '../data/fake.js';
+import { loadLive } from '../data/live.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { LOGO } from './logo.js';
 
 const TODAY = new URLSearchParams(location.search).get('today') || new Date().toISOString().slice(0, 10);
-
-const state = { teamFilter: 'all', sel: null };
-const horizon = buildHorizon(TODAY);
-const LIVE = Array.isArray(window.__RP_ROWS__);
 const [ty, tm, td] = TODAY.split('-').map(Number);
-const run = runCapacity(LIVE ? window.__RP_ROWS__ : fakeLightdashRows(horizon), { now: new Date(ty, tm - 1, td, 12) });
-const grid = buildGrid(run, horizon);
-const noTeam = issuesWithoutTeam(run);
+const NOW = new Date(ty, tm - 1, td, 12);
+const horizon = buildHorizon(TODAY);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const state = { teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [] };
 
 function themeToggle() {
   const root = document.documentElement;
-  const dark = root.dataset.theme
-    ? root.dataset.theme === 'dark'
-    : matchMedia('(prefers-color-scheme: dark)').matches;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   root.dataset.theme = dark ? 'light' : 'dark';
   try { localStorage.setItem('rp.theme', root.dataset.theme); } catch { /* storage unavailable */ }
 }
 
-function shell() {
-  try {
-    const t = localStorage.getItem('rp.theme');
-    if (t) document.documentElement.dataset.theme = t;
-  } catch { /* storage unavailable */ }
+function fmtTime(iso) {
+  if (!iso) return '?';
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
 
-  const noTeamDays = noTeam.reduce((s, i) => s + (i.skillEfforts.frontend || 0) + (i.skillEfforts.backend || 0) + (i.skillEfforts.mobile || 0), 0);
+function shell() {
+  try { const t = localStorage.getItem('rp.theme'); if (t) document.documentElement.dataset.theme = t; } catch { /* storage unavailable */ }
   // Render into our own root: replacing document.body would also delete the
   // <style> and <script> tags the artifact runtime puts inside it.
   let root = document.getElementById('rp-root');
-  if (!root) {
-    root = document.createElement('div');
-    root.id = 'rp-root';
-    document.body.appendChild(root);
-  }
+  if (!root) { root = document.createElement('div'); root.id = 'rp-root'; document.body.appendChild(root); }
   root.innerHTML = `
     <header>
       <div class="topbar">
@@ -49,11 +47,10 @@ function shell() {
         <span class="brandbar"></span>
         <span class="brandtitle">Roadmap Planner</span>
         <span class="tsub">Engineering capacity · FE / BE / MOB · 4 teams</span>
-        ${LIVE ? `<span class="pill">Lightdash snapshot</span>` : '<span class="pill fake">FAKE DATA</span>'}
+        <span id="modePill"></span>
         <span class="spacer"></span>
-        ${noTeam.length ? `<span class="pill warn" title="Issues with effort and dates but no team or assignee count in no team's load"><b>${noTeam.length}</b> with no team · ${Math.round(noTeamDays)} d invisible</span>` : ''}
-        <span class="pill">Today <b>${TODAY}</b></span>
-        <span class="connwrap" title="Connectors arrive in checkpoints 2 and 3"><span class="connicon">L</span><span class="connicon">N</span></span>
+        <span id="pills"></span>
+        <span class="connwrap"><span class="connicon" id="connL" title="Lightdash">L</span><span class="connicon" id="connN" title="Notion">N</span></span>
       </div>
       <nav class="tabs">
         <button class="on">Capacity</button>
@@ -63,29 +60,30 @@ function shell() {
         <button disabled title="v2">History</button>
       </nav>
       <div class="toolbar">
-        <label class="fld">Team <select id="teamSel"><option value="all">All teams</option>${TEAMS.map((t) => `<option>${t}</option>`).join('')}</select></label>
+        <label class="fld">Team <select id="teamSel"><option value="all">All teams</option>${TEAMS.map((t) => `<option>${esc(t)}</option>`).join('')}</select></label>
         <span class="legend">
           <span><span class="sw ok"></span>within ±2 d</span>
           <span><span class="sw amber"></span>±2 to 5 d</span>
           <span><span class="sw red"></span>over ±5 d</span>
-          <span>· quarter totals; months scaled to their share (≈ ±0.7 / ±1.7 d)</span>
+          <span>· quarter totals only</span>
         </span>
         <span class="spacer" style="flex:1"></span>
         <button id="themeBtn" title="Light / dark">Theme</button>
       </div>
+      <div id="banners"></div>
     </header>
-    <main class="gridwrap" id="grid"></main>
-    <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. Total = months + pot. The current quarter counts from this week.</div>
+    <main class="gridwrap" id="grid"><div class="loading">Loading capacity from Lightdash…</div></main>
+    <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. Total = months + pot. The current quarter counts from this week.</div>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; draw(); });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
   document.getElementById('grid').addEventListener('click', (e) => {
-    const td = e.target.closest('td.cell[data-period]');
-    if (!td) return;
+    const cell = e.target.closest('td.cell[data-period]');
+    if (!cell || !state.run) return;
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
-    td.classList.add('sel');
-    openDrawer(document.getElementById('drawer'), { run, grid, horizon, ...td.dataset });
+    cell.classList.add('sel');
+    openDrawer(document.getElementById('drawer'), { run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [], ...cell.dataset });
   });
   document.getElementById('drawer').addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) {
@@ -96,9 +94,63 @@ function shell() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(document.getElementById('drawer')); });
 }
 
-function draw() {
-  renderGrid(document.getElementById('grid'), grid, horizon, state);
+function setConn(id, s) {
+  document.getElementById(id).className = `connicon ${{ ok: 'green', loading: 'orange', error: 'red' }[s] || ''}`;
 }
 
-shell();
-draw();
+function renderChrome() {
+  const s = state.status || {};
+  const mode = { live: '', snapshot: '<span class="pill">Lightdash snapshot</span>', fake: '<span class="pill fake">FAKE DATA</span>', loading: '' }[state.mode];
+  document.getElementById('modePill').innerHTML = mode;
+  setConn('connL', state.mode === 'live' ? s.lightdash : '');
+  setConn('connN', state.mode === 'live' ? s.notion : '');
+
+  const pills = [];
+  if (state.mode === 'live' && s.syncedAt) {
+    const n = (s.changed?.length || 0) + (s.added?.length || 0);
+    pills.push(`<span class="pill" title="Lightdash last synced from Notion at ${esc(fmtTime(s.syncedAt))}. Issues edited in Notion since then are read live and applied on top.">Lightdash ${esc(fmtTime(s.syncedAt))} · <b>${n}</b> live from Notion</span>`);
+  }
+  if (state.noTeam.length) {
+    const days = state.noTeam.reduce((a, i) => a + (i.skillEfforts.frontend || 0) + (i.skillEfforts.backend || 0) + (i.skillEfforts.mobile || 0), 0);
+    pills.push(`<span class="pill warn" title="Issues with effort and dates but no team or assignee count in no team's load"><b>${state.noTeam.length}</b> with no team · ${Math.round(days)} d invisible</span>`);
+  }
+  pills.push(`<span class="pill">Today <b>${esc(TODAY)}</b></span>`);
+  document.getElementById('pills').innerHTML = pills.join(' ');
+
+  const banners = [];
+  if (s.lightdashError) banners.push(`<div class="banner bad"><b>No capacity data.</b> ${esc(s.lightdashError)}</div>`);
+  if (s.notionError) banners.push(`<div class="banner warn"><b>Notion not read.</b> ${esc(s.notionError)} Showing Lightdash as of ${esc(fmtTime(s.syncedAt))}; edits made after that are missing.</div>`);
+  document.getElementById('banners').innerHTML = banners.join('');
+}
+
+function draw() {
+  if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
+}
+
+function show(rows) {
+  state.run = runCapacity(rows, { now: NOW });
+  state.grid = buildGrid(state.run, horizon);
+  state.noTeam = issuesWithoutTeam(state.run);
+  renderChrome();
+  draw();
+}
+
+async function boot() {
+  shell();
+  renderChrome();
+  const mcp = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('mcp').catch(() => null) : null;
+  if (mcp) {
+    state.mode = 'live';
+    state.status = { lightdash: 'loading', notion: 'loading' };
+    renderChrome();
+    const { rows, status } = await loadLive(mcp);
+    state.status = status;
+    if (rows) show(rows);
+    else { renderChrome(); document.getElementById('grid').innerHTML = ''; }
+    return;
+  }
+  state.mode = Array.isArray(window.__RP_ROWS__) ? 'snapshot' : 'fake';
+  show(state.mode === 'snapshot' ? window.__RP_ROWS__ : fakeLightdashRows(horizon));
+}
+
+boot();

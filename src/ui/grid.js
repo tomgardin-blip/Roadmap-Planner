@@ -11,9 +11,11 @@ const delta = (planned, cap) => {
 
 const ROLE_LABEL = { current: 'Current', next: 'Next', pot: 'Pot' };
 
-function cell(c, attrs, extraClass = '') {
+// Months are neutral: with pot work at quarter level, month load alone says little.
+// Only quarter totals carry the green / amber / red status (Tom, 2026-10-09).
+function cell(c, attrs, extraClass = '', neutral = false) {
   if (!c.capacity && !c.planned) return `<td class="cell empty ${extraClass}">–</td>`;
-  return `<td class="cell ${c.status} ${extraClass}" ${attrs} title="${fmt(c.planned)} planned of ${fmt(c.capacity)} capacity">
+  return `<td class="cell ${neutral ? 'month' : c.status} ${extraClass}" ${attrs} title="${fmt(c.planned)} planned of ${fmt(c.capacity)} capacity">
     <div class="n">${fmt(c.planned)}<span class="cap"> / ${fmt(c.capacity)}</span></div>
     <div class="d">${delta(c.planned, c.capacity)}</div></td>`;
 }
@@ -53,7 +55,7 @@ export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
       h += `<td class="lead2">${row.skill}</td>`;
       const at = (period) => `data-team="${esc(team)}" data-skill="${row.skill}" data-period="${period}"`;
       row.quarters.forEach((q) => {
-        q.months.forEach((m, i) => { h += cell(m, at(m.key), i === 0 ? 'qdiv' : ''); });
+        q.months.forEach((m, i) => { h += cell(m, at(m.key), i === 0 ? 'qdiv' : '', true); });
         h += potCell(q.pot, at(`${q.key}-pot`));
         h += cell(q, at(q.key), 'qt');
       });

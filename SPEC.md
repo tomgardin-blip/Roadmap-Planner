@@ -119,7 +119,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Pot: every issue with Start = End, at quarter level, including committed issues placed on a month's last Friday.
   - Total: months + pot against the quarter's capacity.
 - Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
-- Month cells: the same thresholds scaled by the month's share of the quarter's capacity (about ±0.7 / ±1.7 days for an even quarter). Decided 2026-10-09.
+- Month cells are neutral (no colour): with pot work at quarter level, month load alone says little. Only quarter totals are coloured. Decided 2026-10-09, replaces the earlier "scaled month thresholds".
 - Click a cell: the issues in it, sorted by committed date then score.
 - Overbooked cell: suggested issues to push out (lowest score, no commit, quick-win fillers first). Underbooked cell: suggested issues to pull forward (highest score that fits).
 
@@ -209,7 +209,11 @@ Read the model from Lightdash, overlay live Notion, write to Notion, log every w
 **Data flow**
 
 1. On open: load the full model from Lightdash (features, FRs, allocations, deals, deal size).
-2. Then re-read Start, End, Effort FE/BE/MOB, Team and Status live from Notion for issues in the 3 visible quarters. Lightdash is a synced copy and lags; Notion values win.
+2. Then read live from Notion every issue edited since Lightdash's last sync (the latest `_extracted_at` in the loaded rows), and patch Start, End, Effort FE/BE/MOB, Team and Status onto the Lightdash rows before the engine runs. Lightdash is a synced copy and lags; Notion values win. Decided 2026-10-09: "edited since the sync" instead of "all issues in the 3 visible quarters", because unedited issues already match Lightdash and the edited set also catches issues moved into or out of the window.
+   - An empty effort counts as 0 on both sides (Lightdash stores 0, Notion null).
+   - Issues edited in Notion that the loaded Lightdash rows don't have (new since the sync) are added when they have a date, routed by their Team property.
+   - Not overlaid: Assigned to (Notion returns user ids, the engine routes by email), committed dates and customer links (formulas and rollups, Lightdash only). Load routing follows Lightdash's assignees until the next sync.
+   - Every changed issue shows a "Live from Notion" tag with before → after. If Notion fails, the grid stays on Lightdash with a banner naming the fix.
 3. A date button writes Start/End to Notion, updates the grid immediately, and writes an audit row.
 4. A failed write retries, then queues in the browser with a visible banner until it lands (Liam's pattern).
 

@@ -35,7 +35,10 @@ function dateButtons(issue, horizon) {
   return h + '</div>';
 }
 
-function issueCard({ issue, days }, skill, horizon) {
+const FIELD_LABEL = { start: 'Start', end: 'End', fe: 'FE', be: 'BE', mob: 'MOB', team: 'Team', status: 'Status' };
+const showVal = (k, v) => (v == null || v === '' ? '–' : (k === 'start' || k === 'end') ? formatDate(v) : String(v));
+
+function issueCard({ issue, days }, skill, horizon, change) {
   const late = issue.committed && issue.end && issue.end > issue.committed;
   const eff = ['FE', 'BE', 'MOB'].map((s) => {
     const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0;
@@ -48,6 +51,7 @@ function issueCard({ issue, days }, skill, horizon) {
     `<span class="tag ${pot ? 'qtr' : ''}">${when}</span>`,
     issue.priority ? `<span class="tag">${esc(issue.priority)}</span>` : '',
     issue.status === 'Blocked' ? '<span class="tag blocked">Blocked</span>' : '',
+    change ? `<span class="tag live" title="${esc(change.fields.map((k) => `${FIELD_LABEL[k]}: ${showVal(k, change.before[k])} → ${showVal(k, change.after[k])}`).join('\n'))}">Live from Notion: ${esc(change.fields.map((k) => FIELD_LABEL[k]).join(', '))} changed</span>` : '',
   ].join('');
   const title = issue.url && !issue.url.includes('example.invalid')
     ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
@@ -56,7 +60,8 @@ function issueCard({ issue, days }, skill, horizon) {
     ${dateButtons(issue, horizon)}</div>`;
 }
 
-export function openDrawer(el, { run, grid, horizon, team, skill, period }) {
+export function openDrawer(el, { run, grid, horizon, changes = [], team, skill, period }) {
+  const byId = new Map(changes.map((c) => [c.id, c]));
   const row = grid.rows.find((r) => r.team === team && r.skill === skill);
   const { label, c } = cellInfo(row, horizon, period);
   const list = cellIssues(run, team, skill, period);
@@ -77,7 +82,7 @@ export function openDrawer(el, { run, grid, horizon, team, skill, period }) {
       ${hasCap ? `<h4>${over ? 'Suggested to push out' : 'Suggested to pull forward'}</h4>
       <div class="placeholder">${over ? 'Lowest score, no commit, quick-win fillers first.' : 'Highest score that fits the free days.'} Arrives with scoring in checkpoint 4.</div>` : ''}
       <h4>Issues in this cell · by committed date, then days</h4>
-      ${list.map((x) => issueCard(x, skill, horizon)).join('') || '<div class="placeholder">No issues.</div>'}
+      ${list.map((x) => issueCard(x, skill, horizon, byId.get(x.issue.id))).join('') || '<div class="placeholder">No issues.</div>'}
     </div>`;
   el.classList.add('open');
 }
