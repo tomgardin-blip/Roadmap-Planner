@@ -20,7 +20,8 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Verify per team and per skill (FE/BE/MOB) against Lightdash before trusting our numbers.
 
 ## Notion writes
-- Write ONLY to the test issue "ROADMAP PLANNER TEST - ignore" until Tom explicitly approves writing to real issues.
+- Write ONLY to the test issue "Test Tom - ignore" (page ID `3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`) until Tom explicitly approves writing to real issues.
+- Write ONLY Start and End. Never effort, team, status or anything else.
 - Every Notion write produces an audit entry: who, when, issue, before, after, reason.
 
 ## Working style

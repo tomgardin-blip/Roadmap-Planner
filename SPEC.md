@@ -106,7 +106,10 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 **1. Capacity grid (main screen)**
 
 - Rows: 4 teams × FE / BE / MOB. Columns: current quarter, next quarter, pot, each split into its 3 months.
-- Each cell: planned days vs capacity. Green within ±2 days, amber to ±5, red beyond.
+- Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
+- Month cells: the same thresholds scaled by the month's share of the quarter's capacity (month capacity ÷ quarter capacity × 2 and × 5, so about ±0.7 / ±1.7 days for an even quarter). Decided 2026-10-09.
+- Quarter-level issues are spread evenly over the quarter's 3 months (⅓ of the effort in each). Month-level issues count in their End month. Decided 2026-10-09.
+- Quarter-level = End on the last Friday of the quarter AND no committed date. A committed issue on that same date is month-level (the quarter's third month), because committed issues are always planned on months.
 - Click a cell: the issues in it, sorted by committed date then score.
 - Overbooked cell: suggested issues to push out (lowest score, no commit, quick-win fillers first). Underbooked cell: suggested issues to pull forward (highest score that fits).
 

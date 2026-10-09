@@ -77,12 +77,6 @@ export function horizon(todayISO) {
   return out;
 }
 
-/** True when an issue's End sits on its quarter's last Friday (quarter-level placement). */
-export function isQuarterPlacement(endISO) {
-  const { year, q } = quarterOf(endISO);
-  return endISO === lastFridayOfQuarter(year, q);
-}
-
 export function formatDate(iso) {
   if (!iso) return '';
   const d = parseISO(iso);

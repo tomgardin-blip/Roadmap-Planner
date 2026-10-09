@@ -3,25 +3,46 @@
 // input as-is. The real capacity formula (allocations, part-time, holidays)
 // lands in checkpoint 2 and must match the Lightdash capacity planner exactly.
 
-import { monthKey } from './periods.js';
+import { monthKey, quarterOf, lastFridayOfQuarter } from './periods.js';
 
 export const TEAMS = ['Transport Planning', 'Order + Invoice', 'Trip Execution', 'Application Platform'];
 export const SKILLS = ['FE', 'BE', 'MOB'];
 export const SKILL_LABEL = { FE: 'Frontend', BE: 'Backend', MOB: 'Mobile' };
 
-// SPEC.md > Capacity grid: green within ±2 days, amber to ±5, red beyond.
-export function cellStatus(planned, capacity) {
+// SPEC.md > Capacity grid: quarter totals green within ±2 days, amber to ±5,
+// red beyond. Month cells pass scale = month capacity / quarter capacity.
+export function cellStatus(planned, capacity, scale = 1) {
   const diff = Math.abs(planned - capacity);
-  if (diff <= 2) return 'ok';
-  if (diff <= 5) return 'amber';
+  if (diff <= 2 * scale + 1e-9) return 'ok';
+  if (diff <= 5 * scale + 1e-9) return 'amber';
   return 'red';
+}
+
+/** Quarter-level = End on the quarter's last Friday and no committed date (SPEC.md). */
+export function isQuarterLevel(issue) {
+  if (!issue.end || issue.committed) return false;
+  const { year, q } = quarterOf(issue.end);
+  return issue.end === lastFridayOfQuarter(year, q);
+}
+
+/**
+ * Where an issue's effort counts: [{ month, share }].
+ * Quarter-level issues spread ⅓ over the quarter's months; others count fully in their End month.
+ */
+export function placement(issue) {
+  if (!issue.end) return [];
+  if (isQuarterLevel(issue)) {
+    const { year, q } = quarterOf(issue.end);
+    return [0, 1, 2].map((i) => ({ month: `${year}-${String((q - 1) * 3 + i + 1).padStart(2, '0')}`, share: 1 / 3 }));
+  }
+  return [{ month: monthKey(issue.end), share: 1 }];
 }
 
 export const cellId = (team, skill, period) => `${team}|${skill}|${period}`;
 
 /**
  * Planned days per team × skill × month, keyed by cellId.
- * An issue counts in the month of its End date (placeholder Start = End).
+ * Effort is placed per placement(): quarter-level spread ⅓ per month, others in their End month.
  * Issues without a team or outside the horizon are returned separately.
  */
 export function plannedByCell(issues, horizon) {
@@ -31,14 +52,16 @@ export function plannedByCell(issues, horizon) {
   const outside = [];
   for (const issue of issues) {
     if (!issue.end) continue;
-    const mk = monthKey(issue.end);
-    if (!months.has(mk)) { outside.push(issue); continue; }
+    const parts = placement(issue);
+    if (!months.has(parts[0].month)) { outside.push(issue); continue; }
     if (!TEAMS.includes(issue.team)) { noTeam.push(issue); continue; }
     for (const skill of SKILLS) {
       const days = issue.effort[skill] || 0;
       if (!days) continue;
-      const id = cellId(issue.team, skill, mk);
-      cells.set(id, (cells.get(id) || 0) + days);
+      for (const { month, share } of parts) {
+        const id = cellId(issue.team, skill, month);
+        cells.set(id, (cells.get(id) || 0) + days * share);
+      }
     }
   }
   return { cells, noTeam, outside };
@@ -51,13 +74,16 @@ export function buildGrid(issues, capacity, horizon) {
   for (const team of TEAMS) {
     for (const skill of SKILLS) {
       const quarters = horizon.map((q) => {
-        const months = q.months.map((m) => {
-          const planned = cells.get(cellId(team, skill, m.key)) || 0;
-          const cap = capacity[cellId(team, skill, m.key)] || 0;
-          return { key: m.key, planned, capacity: cap, status: cellStatus(planned, cap) };
-        });
-        const planned = months.reduce((s, m) => s + m.planned, 0);
-        const cap = months.reduce((s, m) => s + m.capacity, 0);
+        const raw = q.months.map((m) => ({
+          key: m.key,
+          planned: cells.get(cellId(team, skill, m.key)) || 0,
+          capacity: capacity[cellId(team, skill, m.key)] || 0,
+        }));
+        const planned = raw.reduce((s, m) => s + m.planned, 0);
+        const cap = raw.reduce((s, m) => s + m.capacity, 0);
+        const months = raw.map((m) => ({
+          ...m, status: cellStatus(m.planned, m.capacity, cap ? m.capacity / cap : 1 / 3),
+        }));
         return { key: q.key, months, planned, capacity: cap, status: cellStatus(planned, cap) };
       });
       rows.push({ team, skill, quarters });
@@ -66,12 +92,17 @@ export function buildGrid(issues, capacity, horizon) {
   return { rows, noTeam, outside };
 }
 
-/** Issues in one cell: committed date first (earliest first, none last), then score high to low. */
+/**
+ * Issues in one cell with the share of their effort counted there,
+ * committed date first (earliest first, none last), then score high to low.
+ */
 export function issuesInCell(issues, team, skill, periodKeys) {
   const keys = new Set(periodKeys);
   return issues
-    .filter((i) => i.team === team && i.end && keys.has(monthKey(i.end)) && (i.effort[skill] || 0) > 0)
-    .sort((a, b) => {
+    .filter((i) => i.team === team && (i.effort[skill] || 0) > 0)
+    .map((i) => ({ issue: i, share: placement(i).filter((p) => keys.has(p.month)).reduce((s, p) => s + p.share, 0) }))
+    .filter((x) => x.share > 0)
+    .sort(({ issue: a }, { issue: b }) => {
       if (a.committed && b.committed) return a.committed.localeCompare(b.committed) || b.score - a.score;
       if (a.committed) return -1;
       if (b.committed) return 1;

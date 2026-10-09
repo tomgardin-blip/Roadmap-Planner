@@ -1,8 +1,8 @@
 // Cell drawer: the issues behind one grid cell, plus the layout of the
 // date buttons (disabled until checkpoint 5) and suggestions (checkpoint 4).
 
-import { issuesInCell, SKILLS } from '../capacity.js';
-import { formatDate, isQuarterPlacement, monthKey } from '../periods.js';
+import { issuesInCell, isQuarterLevel, SKILLS } from '../capacity.js';
+import { formatDate, monthKey } from '../periods.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n) => (Math.round(n * 10) / 10).toString();
@@ -18,7 +18,7 @@ function periodInfo(horizon, period) {
 
 function dateButtons(issue, horizon) {
   const endMonth = monthKey(issue.end);
-  const quarterLevel = isQuarterPlacement(issue.end);
+  const quarterLevel = isQuarterLevel(issue);
   let h = '<div class="datebtns">';
   for (const q of horizon) for (const m of q.months) {
     const cur = !quarterLevel && m.key === endMonth;
@@ -32,13 +32,14 @@ function dateButtons(issue, horizon) {
   return h + '</div>';
 }
 
-function issueCard(issue, skill, horizon) {
+function issueCard({ issue, share }, skill, horizon) {
   const late = issue.committed && issue.end > issue.committed;
   const eff = SKILLS.map((s) => (issue.effort[s] ? (s === skill ? `<b>${s} ${fmt(issue.effort[s])}</b>` : `${s} ${fmt(issue.effort[s])}`) : null))
     .filter(Boolean).join(' · ');
   const tags = [
     issue.committed ? `<span class="tag ${late ? 'late' : 'commit'}">${late ? 'After commit ' : 'Commit '}${formatDate(issue.committed)}</span>` : '',
-    isQuarterPlacement(issue.end) ? '<span class="tag qtr">Quarter-level</span>' : `<span class="tag">End ${formatDate(issue.end)}</span>`,
+    isQuarterLevel(issue) ? '<span class="tag qtr">Quarter-level</span>' : `<span class="tag">End ${formatDate(issue.end)}</span>`,
+    share < 1 ? `<span class="tag" title="Quarter-level effort is spread evenly over the quarter's 3 months">⅓ counted here</span>` : '',
     issue.priority ? `<span class="tag">${issue.priority}</span>` : '',
     issue.status === 'Blocked' ? '<span class="tag blocked">Blocked</span>' : '',
     `<span class="tag score">Score ${fmt(issue.score)}</span>`,
@@ -76,7 +77,7 @@ export function openDrawer(el, { issues, grid, horizon, team, skill, period }) {
         ? 'Lowest score, no commit, quick-win fillers first.'
         : 'Highest score that fits the free days.'} Arrives with scoring in checkpoint 4.</div>
       <h4>Issues in this cell · by committed date, then score</h4>
-      ${list.map((i) => issueCard(i, skill, horizon)).join('') || '<div class="placeholder">No issues.</div>'}
+      ${list.map((x) => issueCard(x, skill, horizon)).join('') || '<div class="placeholder">No issues.</div>'}
     </div>`;
   el.classList.add('open');
 }

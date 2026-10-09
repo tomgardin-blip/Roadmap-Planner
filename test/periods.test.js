@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lastFridayOfMonth, lastFridayOfQuarter, horizon, isQuarterPlacement } from '../src/periods.js';
+import { lastFridayOfMonth, lastFridayOfQuarter, horizon } from '../src/periods.js';
 
 test('last Friday of month', () => {
   assert.equal(lastFridayOfMonth(2026, 9), '2026-10-30');
@@ -25,9 +25,4 @@ test('horizon on 2026-10-09 = Q4 2026 current, Q1 2027 next, Q2 2027 pot', () =>
 test('horizon rolls over on the first day of a quarter', () => {
   assert.equal(horizon('2026-12-31')[0].key, '2026-Q4');
   assert.equal(horizon('2027-01-01')[0].key, '2027-Q1');
-});
-
-test('quarter-level placement detection', () => {
-  assert.equal(isQuarterPlacement('2026-12-25'), true);
-  assert.equal(isQuarterPlacement('2026-11-27'), false);
 });

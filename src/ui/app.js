@@ -64,13 +64,14 @@ function shell() {
           <span><span class="sw ok"></span>within ±2 d</span>
           <span><span class="sw amber"></span>±2 to 5 d</span>
           <span><span class="sw red"></span>over ±5 d</span>
+          <span>· quarter totals; months scaled to their share (≈ ±0.7 / ±1.7 d)</span>
         </span>
         <span class="spacer" style="flex:1"></span>
         <button id="themeBtn" title="Light / dark">Theme</button>
       </div>
     </header>
     <main class="gridwrap" id="grid"></main>
-    <div class="note">Planned days / capacity in effort days. An issue counts in the month of its End date, so quarter-level issues (End = last Friday of the quarter) land in the quarter's third month.</div>
+    <div class="note">Planned days / capacity in effort days. Month-level issues (committed) count in their End month. Quarter-level issues (no commit, End = last Friday of the quarter) are spread ⅓ over each month. Month colours use the quarter's ±2 / ±5 days scaled to the month's share of capacity.</div>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; draw(); });
