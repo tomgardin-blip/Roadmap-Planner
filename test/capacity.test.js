@@ -85,3 +85,16 @@ test('issues with effort but no team or assignee are flagged', () => {
   const { run } = grid([fe('a1')], [orphan]);
   assert.deepEqual(issuesWithoutTeam(run).map((i) => i.id), ['o1']);
 });
+
+test('TBD: committed issues without dates count in their committed quarter (overdue → current, beyond window → dropped)', () => {
+  const q1 = F({ id: 't1', title: 'Committed Feb, unplanned', team: TP, committed: '2027-02-10', fe: 7 });
+  const overdue = F({ id: 't2', title: 'Committed Aug, unplanned', team: TP, committed: '2026-08-01', fe: 3 });
+  const far = F({ id: 't3', title: 'Committed 2028', team: TP, committed: '2028-02-01', fe: 9 });
+  const { run, g } = grid([fe('a1')], [q1, overdue, far]);
+  const q = row(g, TP, 'FE').quarters;
+  close(q[0].tbd, 3); close(q[0].planned, 3);
+  close(q[1].tbd, 7); close(q[1].planned, 7);
+  close(q[2].tbd, 0);
+  assert.deepEqual(cellIssues(run, TP, 'FE', '2027-Q1-tbd').map((x) => x.issue.id), ['t1']);
+  assert.deepEqual(cellIssues(run, TP, 'FE', '2026-Q4').map((x) => x.issue.id), ['t2']);
+});

@@ -73,7 +73,7 @@ function shell() {
       <div id="banners"></div>
     </header>
     <main class="gridwrap" id="grid"><div class="loading">Loading capacity from Lightdash…</div></main>
-    <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. Total = months + pot. The current quarter counts from this week.</div>
+    <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Total = months + pot + TBD, as the planner's quarter cards. The current quarter counts from this week.</div>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; draw(); });

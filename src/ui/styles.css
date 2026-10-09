@@ -191,7 +191,8 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .datebtns button.cur { border-color: var(--green-dark); color: var(--green-dark); font-weight: 700; opacity: 1; }
 .datebtns .sep { width: 1px; background: var(--line); margin: 0 3px; }
 
-.grid col.c-team { width: 150px; } .grid col.c-skill { width: 74px; } .grid col.c-qt { width: 104px; } .grid col.c-pot { width: 70px; }
+.grid col.c-team { width: 150px; } .grid col.c-skill { width: 74px; } .grid col.c-qt { width: 104px; } .grid col.c-pot { width: 62px; }
+.grid td.cell.tbd .d { color: #b45309; }
 .grid td.cell.pot { background: var(--qtot); } .grid td.cell.pot .d { color: var(--muted); font-weight: 600; }
 .issue .t a { color: inherit; text-decoration: none; } .issue .t a:hover { text-decoration: underline; }
 @media (max-width: 640px) {

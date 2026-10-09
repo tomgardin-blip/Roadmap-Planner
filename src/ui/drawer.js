@@ -14,6 +14,7 @@ function cellInfo(row, horizon, period) {
     const gq = row.quarters[qi];
     if (period === q.key) return { label: `${q.label} total`, c: gq };
     if (period === `${q.key}-pot`) return { label: `${q.label} pot`, c: { planned: gq.pot, capacity: null } };
+    if (period === `${q.key}-tbd`) return { label: `${q.label} TBD (committed, no dates)`, c: { planned: gq.tbd, capacity: null } };
     const mi = q.months.findIndex((m) => m.key === period);
     if (mi >= 0) return { label: `${q.months[mi].label} ${q.months[mi].year}`, c: gq.months[mi] };
   }
@@ -45,7 +46,7 @@ function issueCard({ issue, days }, skill, horizon, change) {
     return v ? (s === skill ? `<b>${s} ${fmt(v)}</b>` : `${s} ${fmt(v)}`) : null;
   }).filter(Boolean).join(' · ');
   const pot = issue.start && issue.start === issue.end;
-  const when = pot ? `Pot · ${formatDate(issue.end)}` : `${formatDate(issue.start)} → ${formatDate(issue.end)}`;
+  const when = !issue.start && !issue.end ? 'No dates (TBD)' : pot ? `Pot · ${formatDate(issue.end)}` : `${formatDate(issue.start)} → ${formatDate(issue.end)}`;
   const tags = [
     issue.committed ? `<span class="tag ${late ? 'late' : 'commit'}">${late ? 'After commit ' : 'Commit '}${formatDate(issue.committed)}</span>` : '',
     `<span class="tag ${pot ? 'qtr' : ''}">${when}</span>`,

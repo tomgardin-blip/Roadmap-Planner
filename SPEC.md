@@ -56,6 +56,8 @@ Committed dates drive the plan; GO LIVE dates never do directly.
   - A week counts in the month of its Friday. The current quarter counts from the current week only.
   - Load goes to the assignee's team first; the Team property only routes unassigned issues. An issue with Team = Transport Planning assigned to a Connectors engineer counts against Connectors.
   - Issues with Start = End are the quarter "pot": they count at quarter level, never in a month, whether committed or not.
+  - "TBD": committed issues with no Start and no End count in the quarter of their effective committed date (earliest of the issue's own date, its customer tasks' dates and the issues it blocks). Overdue ones count in the current quarter; ones beyond the 3 visible quarters are left out.
+  - Firefighting without a skill is a team-level drain in the planner. It has no skill, so it is not in our per-skill cells.
 - Capacity is a constant job: estimates grow mid-quarter (5 to 15 days happens), dependencies surface, issues move. The tool must make each change visible.
 
 **Dependencies**
@@ -117,7 +119,8 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Columns per quarter: 3 months, the pot, the quarter total. Matches the Lightdash planner exactly (decided 2026-10-09, replaces the earlier "spread ⅓ per month" decision).
   - Month: dated work (Start ≠ End) spread over its working days.
   - Pot: every issue with Start = End, at quarter level, including committed issues placed on a month's last Friday.
-  - Total: months + pot against the quarter's capacity.
+  - TBD: committed issues with no dates (see Capacity).
+  - Total: months + pot + TBD against the quarter's capacity, as the planner's quarter cards.
 - Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
 - Month cells are neutral (no colour): with pot work at quarter level, month load alone says little. Only quarter totals are coloured. Decided 2026-10-09, replaces the earlier "scaled month thresholds".
 - Click a cell: the issues in it, sorted by committed date then score.
@@ -247,8 +250,9 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 - [x] Can Claude Code publish to the claude.ai artifact runtime with `mcp`? Yes, confirmed 2026-10-09.
 - [ ] How often does the Lightdash capacity dataset refresh? Decides how much the live Notion overlay must cover.
 - [x] Who owns the capacity planner's math? Sander De Wilde. We use his engine file unchanged and swap in each new export.
-- [ ] How does the planner app build `emailToName`, `settings` and `config.teams` for the engine? We map allocation email → allocation title (without it planned holidays never count) and use default settings. To confirm with Sander; it can move a Q4 cell by up to 4.5 days.
-- [ ] Engine version: we have the 27 Aug 2026 export. Sander to send the latest.
+- [x] How does the planner app build `emailToName`, `settings` and `config.teams`? Confirmed from Sander's app export (9 Oct 2026): email → title, `{daysPerMonth: 10.2, horizon: 12, startMonth: '2026-07'}`, `buildTeams(allocation, TEAM_DISPLAY_ORDER)`. Copied into `src/capacity.js`.
+- [x] Engine version: the app export of 9 Oct 2026 carries the same engine file as the 27 Aug export (byte-identical).
+- [ ] The default Lightdash row with customer tasks and deals is about 2.6 MB. Confirm it loads through the artifact's `mcp` capability (first test publish).
 - [ ] Where does the planner audit log live: a new Notion database, or the artifact's own storage?
 - [ ] Should a move of a committed issue past its commit be blocked, or allowed with a mandatory reason?
 

@@ -48,7 +48,8 @@ export async function loadLightdashRows(mcp) {
     description: 'Default row of serve_engineering_capacity for the Roadmap Planner',
     queryConfig: {
       exploreName: 'serve_engineering_capacity',
-      dimensions: ['serve_engineering_capacity_features', 'serve_engineering_capacity_engineering_team_allocations'],
+      // Customer tasks feed the engine's effective committed date (earliest of the issue and its FRs); deals name the customers.
+      dimensions: ['serve_engineering_capacity_features', 'serve_engineering_capacity_engineering_team_allocations', 'serve_engineering_capacity_customer_tasks', 'serve_engineering_capacity_deals'],
       metrics: [], sorts: [], limit: 2,
       filters: { type: 'and', dimensions: [{ fieldId: 'serve_engineering_capacity_is_default', fieldType: 'boolean', fieldFilterType: 'boolean', operator: 'equals', values: [true] }] },
     },
