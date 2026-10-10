@@ -110,6 +110,12 @@ Committed FRs ranked by how easy they are to challenge with the COM/AM. Signals,
 
 The ranking is a suggestion. The planner overrides it, and every override is logged with a reason so Product can learn Tom's judgment.
 
+Decided 2026-10-10 (v2):
+- "In previous TMS" is ignored (filled on 22 of 551 committed FRs). "Niche wording" is skipped (needs AI on FR text).
+- Ranking, strongest first: fewest customers on the issue, then highest effort (FE+BE+MOB), then smallest deal size.
+- Scope: committed FRs linked to open issues of our 4 teams. Toggle "only issues in overbooked quarters". Each row shows the COM/AM (Lightdash "Responsible success email").
+- Override = "Not a pushback" button with an optional reason, logged in the audit DB (category "Pushback override"). Actual pushback uses the existing FR edit and owner ping.
+
 ## Features and screens
 
 The main screen is the capacity puzzle; everything else feeds it or warns about it.
@@ -150,7 +156,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 **3. Prep queues (per priority: Required for GO LIVE, Top 3)**
 
 - No eng issue: FRs needing Product to create or link one.
-- No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate.
+- No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate (private, `C0C1CPJKZKK`), as the viewer, no tags, after an editable preview (decided 2026-10-10).
 - Not planned: estimated, not on the grid. The to-do list.
 - Built 2026-10-10 (src/prep.js):
   - Groups: "Required for GO LIVE" = FR priority Needed for go-live or Needed 1 month before; "Top 3" = Top 3. An issue sits under its highest-priority FR.
@@ -181,12 +187,15 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Every planner move: who, when, what, before/after, reason.
 - Changes made directly in Notion: picked up from the daily snapshots and flagged "no reason given".
 - Per quarter: what changed its load this week and by how much.
+- v2 build (decided 2026-10-10, route "b"): planner moves from the audit DB, plus issues edited in Notion since the last Lightdash sync (from the live overlay, before/after), flagged "no reason given". Full Notion-edit history needs the BigQuery snapshots exposed as a Lightdash explore (Tom asked Sander, 2026-10-10).
 
 **7. Optimizer (v3)**
 
 - Proposes a full set of moves that maximises total score within capacity, respecting commits and dependencies. The planner accepts or rejects each move.
 
 **8. Read-only view (v2)** for product owners and COMs/AMs: priority list and planned month per issue.
+
+- Same link (decided 2026-10-10). Tom picks Editor or Viewer per person in the Share menu. Anyone who cannot edit the artifact gets read-only mode: no date buttons, no FR edit, no pings, no Slack post, no baseline writes. Everyone has Lightdash; viewers need their own Lightdash and Notion connectors.
 
 ## Data sources and field names
 
