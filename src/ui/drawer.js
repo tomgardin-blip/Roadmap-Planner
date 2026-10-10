@@ -104,7 +104,11 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
   const p = pullForward({ run, scores, team, skill, quarter, free, backlog });
   const note = extra.backlog === 'loading' ? ' Unplanned backlog still loading.' : extra.backlog === 'error' ? ' Unplanned backlog unavailable.' : '';
   let h = `<h4>Suggested to pull forward · ${fmt(free)} d free</h4><div class="hint">Planned later or not planned, fits the free days, not blocked. Committed first (buys margin), then highest score.${note}</div>`;
-  h += p.items.map((x) => suggestion(x, skill)).join('') || '<div class="placeholder">Nothing fits the free days.</div>';
+  // Top 20, the rest behind "Show all" (decided 2026-10-10). Push out stays a full list.
+  const top = p.items.slice(0, 20).map((x) => suggestion(x, skill)).join('');
+  const rest = p.items.slice(20).map((x) => suggestion(x, skill)).join('');
+  h += top || '<div class="placeholder">Nothing fits the free days.</div>';
+  if (rest) h += `<details class="more"><summary>Show all ${p.items.length}</summary>${rest}</details>`;
   h += `<h4>Quick wins that fit · ${p.quickWins.length}</h4><div class="hint">No commit, at most 2 d total effort, highest score first. Your call.</div>`;
   h += p.quickWins.map((x) => suggestion(x, skill)).join('') || '<div class="placeholder">No quick wins fit.</div>';
   return h;

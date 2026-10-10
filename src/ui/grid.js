@@ -1,4 +1,5 @@
 // Capacity grid: rows = team × skill; per quarter its 3 months, the pot and the quarter total.
+// view 'quarters' shows only the quarter totals (default on phones, decided 2026-10-10).
 
 import { TEAMS } from '../capacity.js';
 
@@ -26,20 +27,21 @@ function bucketCell(days, attrs, kind) {
   return `<td class="cell pot ${kind}" ${attrs} title="${fmt(days)} days ${title}"><div class="n">${fmt(days)}</div><div class="d">${kind === 'tbd' ? 'TBD' : 'in pot'}</div></td>`;
 }
 
-export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
+export function renderGrid(el, grid, horizon, { teamFilter = 'all', view = 'months' } = {}) {
   const teams = teamFilter === 'all' ? TEAMS : [teamFilter];
-  let h = '<table class="grid"><colgroup><col class="c-team"><col class="c-skill">';
-  for (let i = 0; i < horizon.length; i++) h += '<col><col><col><col class="c-pot"><col class="c-pot"><col class="c-qt">';
-  h += '</colgroup><thead><tr class="q"><th class="lead" rowspan="2">Team</th><th class="lead2" rowspan="2">Skill</th>';
+  const qOnly = view === 'quarters';
+  let h = `<table class="grid ${qOnly ? 'quarters' : ''}"><colgroup><col class="c-team"><col class="c-skill">`;
+  for (let i = 0; i < horizon.length; i++) h += qOnly ? '<col class="c-qt">' : '<col><col><col><col class="c-pot"><col class="c-pot"><col class="c-qt">';
+  h += `</colgroup><thead><tr class="q"><th class="lead" rowspan="${qOnly ? 1 : 2}">Team</th><th class="lead2" rowspan="${qOnly ? 1 : 2}">Skill</th>`;
   for (const q of horizon) {
-    h += `<th colspan="6" class="qdiv ${q.role}"><span class="role">${ROLE_LABEL[q.role]}</span>${esc(q.label)}</th>`;
+    h += `<th colspan="${qOnly ? 1 : 6}" class="qdiv ${q.role}"><span class="role">${ROLE_LABEL[q.role]}</span>${esc(q.label)}</th>`;
   }
-  h += '</tr><tr class="m">';
-  for (const q of horizon) {
+  h += qOnly ? '</tr>' : '</tr><tr class="m">';
+  for (const q of qOnly ? [] : horizon) {
     q.months.forEach((m, i) => { h += `<th class="${i === 0 ? 'qdiv' : ''}">${m.label} ${String(m.year).slice(2)}</th>`; });
     h += `<th title="Issues with Start = End">Pot</th><th title="Committed, no dates yet">TBD</th><th>${q.shortLabel} total</th>`;
   }
-  h += '</tr></thead><tbody>';
+  h += qOnly ? '</thead><tbody>' : '</tr></thead><tbody>';
 
   for (const team of teams) {
     const rows = grid.rows.filter((r) => r.team === team);
@@ -56,6 +58,7 @@ export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
       h += `<td class="lead2">${row.skill}</td>`;
       const at = (period) => `data-team="${esc(team)}" data-skill="${row.skill}" data-period="${period}"`;
       row.quarters.forEach((q) => {
+        if (qOnly) { h += cell(q, at(q.key), 'qt qdiv'); return; }
         q.months.forEach((m, i) => { h += cell(m, at(m.key), i === 0 ? 'qdiv' : '', true); });
         h += bucketCell(q.pot, at(`${q.key}-pot`), 'potc');
         h += bucketCell(q.tbd, at(`${q.key}-tbd`), 'tbd');

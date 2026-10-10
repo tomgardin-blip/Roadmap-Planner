@@ -204,6 +204,16 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .frs li { padding: 6px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
 .frs li .frt { color: var(--muted); margin-top: 2px; }
 .frs .mult { font-weight: 700; color: var(--ok-ink); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 5px 10px; background: transparent; }
+.seg button.on { background: var(--navy, #00343c); color: #fff; font-weight: 700; }
+details.more > summary { cursor: pointer; list-style: none; text-align: center; padding: 8px; margin: 4px 0 8px; border: 1px dashed var(--line); border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more[open] > summary { display: none; }
+.grid.quarters { width: 100%; min-width: 0; }
+.grid.quarters col.c-team { width: 26%; } .grid.quarters col.c-skill { width: 12%; }
+.grid.quarters td.cell .n { font-size: 13px; white-space: nowrap; } .grid.quarters td.cell .cap { font-size: 11px; } .grid.quarters col.c-qt { width: auto; }
+.grid.quarters .tsum { display: none; }
 .coverline { margin: 8px 0 10px; padding-top: 6px; border-top: 2px solid var(--ok-ink); color: var(--ok-ink); font-size: 11px; font-weight: 700; }
 .coverline.bad { border-top-color: var(--red-ink); color: var(--red-ink); }
 .issue .eff { font-variant-numeric: tabular-nums; }

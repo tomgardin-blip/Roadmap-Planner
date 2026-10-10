@@ -125,10 +125,13 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
 - Month cells are neutral (no colour): with pot work at quarter level, month load alone says little. Only quarter totals are coloured. Decided 2026-10-09, replaces the earlier "scaled month thresholds".
 - Click a cell: the issues in it, sorted by committed date then score.
+- Views: Quarters (team × skill × quarter totals only, default on phones) and Months (the full grid, default on desktop). The choice is remembered per viewer. Decided 2026-10-10.
+- Every issue card shows its FR count (with go-live and Top 3 counts); tapping it lists each FR with priority, customer and deal-size multiplier. Decided 2026-10-10.
 - Suggestions sit on quarter totals only (months are neutral). Rules decided 2026-10-10:
   - Over capacity, push out: the quarter's issues with no commit and not in progress (Implementing, To implement this week, To test, Production Ready). Quick wins first, then lowest score. Full list, with a line where the overbooking is covered.
   - Under capacity, pull forward: issues of that team and skill planned after the quarter or not planned, whose effort in that skill fits the free days, not Blocked/on hold and no open "Blocked by". Committed issues first, because pulling them forward buys margin: planned after their commit first, then by committed date. Then the rest by highest score.
   - Quick wins that fit: uncommitted quick wins, own section, highest score first.
+  - Pull forward shows the top 20, the rest behind "Show all". Push out is always the full list.
 
 **2. Date buttons on every issue**
 

@@ -20,7 +20,13 @@ const NOW = new Date(ty, tm - 1, td, 12);
 const horizon = buildHorizon(TODAY);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+function initialView() {
+  try { const v = localStorage.getItem('rp.view'); if (v === 'quarters' || v === 'months') return v; } catch { /* storage unavailable */ }
+  return matchMedia('(max-width: 700px)').matches ? 'quarters' : 'months';
+}
+
 const state = {
+  view: initialView(),
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
   // Background load (SPEC "Data flow"): scores need the uncommitted FRs, pull forward the unplanned backlog.
@@ -74,6 +80,7 @@ function shell() {
           <span><span class="sw red"></span>over ±5 d</span>
           <span>· quarter totals only</span>
         </span>
+        <span class="seg" id="viewSeg"><button data-view="quarters">Quarters</button><button data-view="months">Months</button></span>
         <span class="spacer" style="flex:1"></span>
         <button id="themeBtn" title="Light / dark">Theme</button>
       </div>
@@ -85,6 +92,13 @@ function shell() {
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; draw(); });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
+  document.getElementById('viewSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-view]');
+    if (!b) return;
+    state.view = b.dataset.view;
+    try { localStorage.setItem('rp.view', state.view); } catch { /* storage unavailable */ }
+    draw();
+  });
   document.getElementById('grid').addEventListener('click', (e) => {
     const cell = e.target.closest('td.cell[data-period]');
     if (!cell || !state.run) return;
@@ -164,6 +178,7 @@ function renderChrome() {
 }
 
 function draw() {
+  document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view));
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }
 
