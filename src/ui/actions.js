@@ -30,7 +30,7 @@ const busy = (btn, on, label) => { btn.disabled = on; if (label) btn.textContent
 export function startMove(ctx) {
   const { mcp, issue, date, label, blockers = [], onDone } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
-  if (!isAllowed('issue', issue.id)) return toast('Test mode: only "Test Tom - ignore" can be moved for now.', 'bad');
+  if (!isAllowed('issue', issue.id)) return toast('This issue has no Notion id.', 'bad');
   const warnings = moveWarnings(issue, date, blockers);
   const sheet = openSheet(`
     <h3>Move "${esc(issue.name)}"</h3>
@@ -57,7 +57,7 @@ export function startMove(ctx) {
 export async function startFrEdit(ctx) {
   const { mcp, fr, golive, onDone } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
-  if (!isAllowed('fr', fr.id)) return toast('Test mode: only "Test Tom - ignore FR" can be edited for now.', 'bad');
+  if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
   let cur;
   try { cur = await readFrLive(mcp, fr.id); } catch (err) { closeSheet(); return toast(errText(err), 'bad'); }

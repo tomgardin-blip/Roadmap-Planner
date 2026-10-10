@@ -7,13 +7,12 @@ import { moveIssue, editFr, findOwner, adviseOwner } from '../src/data/writer.js
 const OTHER = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
 const fetched = (props) => ({ text: `<page>\n<properties>\n${JSON.stringify(props)}\n</properties>\n</page>` });
 
-test('guard: only the test issue and test FR are writable', () => {
-  assert.throws(() => W.issueDatesInput(OTHER, '2026-11-27', '2026-11-27'), /Test mode/);
-  assert.throws(() => W.frUpdateInput(OTHER, { priority: 'High' }), /Test mode/);
-  assert.throws(() => W.ownerCommentInput(OTHER, { ownerId: 'u', changes: [] }), /Test mode/);
-  assert.equal(W.isAllowed('issue', '3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1'), true);
-  assert.equal(W.isAllowed('fr', W.TEST_FR), true);
-  assert.equal(W.isAllowed('fr', W.TEST_ISSUE), false);
+test('guard: any issue or FR page id (unlocked 2026-10-10), nothing else', () => {
+  assert.equal(W.isAllowed('issue', OTHER), true);
+  assert.equal(W.isAllowed('fr', '3f5e32e8-f8c8-81d6-927b-d504b6f10e54'), true);
+  assert.equal(W.isAllowed('deal', OTHER), false);
+  assert.throws(() => W.issueDatesInput('not-an-id', '2026-11-27', '2026-11-27'), /Not a Notion issue id/);
+  assert.throws(() => W.frUpdateInput('', { priority: 'High' }), /Not a Notion fr id/);
 });
 
 test('issue write sends only Start and End', () => {
@@ -81,9 +80,9 @@ function fakeMcp({ page = {}, ownerEmail = null } = {}) {
   };
 }
 
-test('moveIssue: refuses non-test issues before any call', async () => {
+test('moveIssue: refuses a bad id before any call', async () => {
   const mcp = fakeMcp();
-  await assert.rejects(moveIssue(mcp, { issue: { id: OTHER }, start: '2026-11-27', end: '2026-11-27' }), /Test mode/);
+  await assert.rejects(moveIssue(mcp, { issue: { id: 'x' }, start: '2026-11-27', end: '2026-11-27' }), /Not a Notion/);
   assert.equal(mcp.calls.length, 0);
 });
 

@@ -1,14 +1,14 @@
 // Notion writes (CLAUDE.md > Notion writes). Pure builders for the MCP tool inputs plus the
 // allowlist guard; the calls themselves live in src/data/writer.js.
 // Allowed: issue Start/End, FR "Success Committed" and "Priority ", FR comments tagging the
-// owner, audit rows. Test pages only until Tom approves real ones.
+// owner, audit rows. Any issue or FR since Tom's approval on 2026-10-10 (field limits unchanged).
 
 export const TEST_ISSUE = '3f4e32e8f8c880ef9c6dc3a0c44b1af1';
 export const TEST_FR = '3f5e32e8f8c881d6927bd504b6f10e54';
 export const AUDIT_DS = '9b4b26f2-ea33-4578-89c2-252389cd5564';
 
-// Pages the planner may write. Widened only with Tom's explicit approval.
-export const ALLOWED = { issue: new Set([TEST_ISSUE]), fr: new Set([TEST_FR]) };
+// All issues and FRs are writable since Tom approved it on 2026-10-10 ("unlock all").
+// The guard still refuses anything that is not a Notion page id.
 
 export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'Top 3', 'High', 'Medium', 'Low', 'Needed after go-live'];
 export const GO_LIVE_PRIORITY = 'Needed for go-live';
@@ -18,9 +18,9 @@ const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
 const dashed = (id) => { const h = nid(id); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`; };
 
 export class NotAllowedError extends Error {
-  constructor(kind, id) { super(`Test mode: the planner only writes to the test ${kind}, not ${id}.`); this.code = 'not_allowed'; }
+  constructor(kind, id) { super(`Not a Notion ${kind} id: ${id}.`); this.code = 'not_allowed'; }
 }
-export const isAllowed = (kind, id) => ALLOWED[kind]?.has(nid(id)) || false;
+export const isAllowed = (kind, id) => (kind === 'issue' || kind === 'fr') && /^[0-9a-f]{32}$/.test(nid(id));
 export function assertAllowed(kind, id) { if (!isAllowed(kind, id)) throw new NotAllowedError(kind, id); }
 
 const dateProps = (name, iso) => (iso

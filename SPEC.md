@@ -212,11 +212,11 @@ Notion gotchas:
 **Test issue**
 
 - "Test Tom - ignore": https://app.notion.com/p/qargo/Test-Tom-ignore-3f4e32e8f8c880ef9c6dc3a0c44b1af1 (page ID `3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`), team Application Platform, no customer links, no effort.
-- All write-back testing happens on this issue only, until Tom explicitly approves writing to real issues. Only Start and End are written; never effort, team or status.
+- Write-back was tested on this issue; Tom approved writing to all real issues and FRs on 2026-10-10. Only Start and End are written on issues; never effort, team or status.
 
 **Test FR**
 
-- "Test Tom - ignore FR": https://app.notion.com/p/3f5e32e8f8c881d6927bd504b6f10e54 (page ID `3f5e32e8-f8c8-81d6-927b-d504b6f10e54`), linked to "Test Tom - ignore", no company. All FR writes and owner pings happen on this FR only until Tom approves real FRs. It has no company, so it has no Responsible Success: for this FR only, the ping goes to the viewer (test hook).
+- "Test Tom - ignore FR": https://app.notion.com/p/3f5e32e8f8c881d6927bd504b6f10e54 (page ID `3f5e32e8-f8c8-81d6-927b-d504b6f10e54`), linked to "Test Tom - ignore", no company. Used for testing FR writes and owner pings (real FRs unlocked 2026-10-10). It has no company, so it has no Responsible Success: for this FR only, the ping goes to the viewer (test hook).
 
 **Test writes panel**
 

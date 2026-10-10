@@ -33,7 +33,7 @@ function dateButtons(issue, horizon) {
   shown.issues.set(issue.id, issue);
   const can = isAllowed('issue', issue.id);
   const pot = issue.start && issue.start === issue.end;
-  const tip = (d) => (can ? `Set Start = End = ${formatDate(d)} in Notion` : `Sets Start = End = ${formatDate(d)}. Test mode: only "Test Tom - ignore" is writable for now`);
+  const tip = (d) => (can ? `Set Start = End = ${formatDate(d)} in Notion` : 'No Notion id');
   const btn = (d, label, cur) => `<button ${can ? '' : 'disabled'} class="${cur ? 'cur' : ''}" data-move="${d}" data-label="${label}" data-issue="${issue.id}" title="${tip(d)}">${label}</button>`;
   let h = '<div class="datebtns">';
   for (const q of horizon) for (const m of q.months) h += btn(m.lastFriday, m.label, pot && issue.end === m.lastFriday && issue.end !== q.lastFriday);
@@ -78,14 +78,14 @@ function frLine(f, cust, titleHtml) {
   shown.frs.set(f.id, f);
   const edit = isAllowed('fr', f.id)
     ? `<button class="fredit" data-fr-edit="${f.id}">Edit</button>`
-    : '<button class="fredit" disabled title="Test mode: only &quot;Test Tom - ignore FR&quot; is editable for now">Edit</button>';
+    : '';
   return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.status ? ` · ${esc(f.status)}` : ''}</div></li>`;
 }
 
 /** Drawer for the test pages: the write path end to end, on "Test Tom - ignore" and its FR. */
 export function renderTestPanel(el, { horizon, issue, fr, error }) {
   const body = error ? `<div class="placeholder">${esc(error)}</div>` : !issue ? '<div class="placeholder">Reading the test pages from Notion…</div>' : `
-    <div class="hint">Writes go only to these two test pages until Tom approves real ones. Every change lands in the Roadmap Planner Audit Log.</div>
+    <div class="hint">Safe place to try the write-back: these two pages are test pages. Every change lands in the Roadmap Planner Audit Log.</div>
     <h4>Test issue</h4>
     <div class="issue"><div class="t"><a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a></div>
       <div class="meta"><span class="tag">${issue.start || issue.end ? `${formatDate(issue.start)} → ${formatDate(issue.end)}` : 'No dates'}</span></div>
