@@ -37,7 +37,7 @@ export const SCORING_DEFAULTS = {
   // FRs linked to a parent issue do not count for its sub-tasks (decided 2026-10-10).
   inheritParentFRs: false,
   // Quick wins: scored issues with total effort (FE+BE+MOB) at or under this many days are
-  // listed apart from the main ranking. 2 is a default awaiting Tom's confirmation.
+  // listed apart from the main ranking. 2 confirmed by Tom 2026-10-10.
   quickWinMaxEffort: 2,
 };
 

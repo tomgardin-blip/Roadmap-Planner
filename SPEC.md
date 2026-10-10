@@ -256,7 +256,7 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 - [x] The default Lightdash row with customer tasks and deals is about 2.6 MB. Loads through the artifact's `mcp` capability (test publish, confirmed 2026-10-10).
 - [x] Scoring decisions (2026-10-10): every task type counts as an FR; each FR counts, also several from one customer on the same issue; FRs on a parent do not count for its sub-tasks; a customer with no deal size counts ×1 (rare). Only issues of the 4 teams with FE/BE/MOB effort are scored.
 - [x] The full backlog (non-default Lightdash rows, about 6 MB) loads on demand, not on open.
-- [ ] Quick wins: effort cut-off. Default 2 days total (FE+BE+MOB), option `quickWinMaxEffort`.
+- [x] Quick wins: effort cut-off 2 days total (FE+BE+MOB), confirmed 2026-10-10. Option `quickWinMaxEffort`.
 - [ ] Where does the planner audit log live: a new Notion database, or the artifact's own storage?
 - [ ] Should a move of a committed issue past its commit be blocked, or allowed with a mandatory reason?
 
