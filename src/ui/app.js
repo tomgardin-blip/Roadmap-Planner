@@ -9,14 +9,19 @@ import { horizon as buildHorizon } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
-import { loadLive, loadExtras, syncBaseline, explainError, NOTION } from '../data/live.js';
+import { loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, explainError, NOTION } from '../data/live.js';
+import { userName } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames } from './drawer.js';
-import { renderAtRisk, renderPrep, tabCounts } from './lists.js';
+import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames, setReadOnly } from './drawer.js';
+import { renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
+import { pushbackCandidates, overbookedCells } from '../pushback.js';
+import { weeklyLoadChanges, dismissedFrs } from '../history.js';
+import { estimateMessage } from '../estimate.js';
+import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
-import { startMove, startFrEdit, loadTestPages } from './actions.js';
+import { startMove, startFrEdit, loadTestPages, startDismiss, startEstimatePost } from './actions.js';
 import { closeSheet } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -33,7 +38,8 @@ function initialView() {
 }
 
 const state = {
-  tab: 'capacity', allFrTeams: false,
+  tab: 'capacity', allFrTeams: false, pbOverbooked: false, readOnly: false,
+  audit: null, auditError: null, owners: null, ownersLoading: false, users: new Map(), pushback: null,
   view: initialView(),
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
@@ -80,8 +86,8 @@ function shell() {
         <button class="on" data-tab="capacity">Capacity</button>
         <button data-tab="prep">Prep queues<span class="cnt" id="cntPrep"></span></button>
         <button data-tab="risk">At risk<span class="cnt" id="cntRisk"></span></button>
-        <button disabled title="v2">Pushback</button>
-        <button disabled title="v2">History</button>
+        <button data-tab="pushback">Pushback<span class="cnt" id="cntPb"></span></button>
+        <button data-tab="history">History</button>
       </nav>
       <div class="toolbar">
         <label class="fld">Team <select id="teamSel"><option value="all">All teams</option>${TEAMS.map((t) => `<option>${esc(t)}</option>`).join('')}</select></label>
@@ -110,6 +116,7 @@ function shell() {
   });
   document.getElementById('grid').addEventListener('change', (e) => {
     if (e.target.id === 'allFrTeams') { state.allFrTeams = e.target.checked; draw(); }
+    if (e.target.id === 'pbOverbooked') { state.pbOverbooked = e.target.checked; recompute(); draw(); }
   });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
   document.getElementById('viewSeg').addEventListener('click', (e) => {
@@ -147,9 +154,20 @@ function shell() {
       startMove({ mcp: state.mcp, issue, date: mv.dataset.move, label: mv.dataset.label, blockers, onDone: (r) => afterMove(issue, r) });
       return;
     }
+    const dm = e.target.closest('button[data-dismiss]');
+    if (dm) {
+      const c = state.pushback?.find((x) => x.fr.id === dm.dataset.dismiss);
+      if (c) startDismiss({ mcp: state.mcp, fr: c.fr, issue: c.issue, onDone: ({ reason }) => { state.audit = [{ category: 'Pushback override', frId: c.fr.id.replace(/-/g, '').toLowerCase(), itemName: c.fr.title, reason, at: new Date().toISOString(), field: 'Pushback' }, ...(state.audit || [])]; recompute(); draw(); } });
+      return;
+    }
+    if (e.target.closest('#estPost')) {
+      const groups = GROUPS.map((g) => ({ label: g.label, entries: state.queues?.[g.key].noEstimate || [] }));
+      startEstimatePost({ mcp: state.mcp, message: estimateMessage(groups) });
+      return;
+    }
     const fe = e.target.closest('button[data-fr-edit]');
     if (fe && !fe.disabled) {
-      const fr = shownFr(fe.dataset.frEdit);
+      const fr = shownFr(fe.dataset.frEdit) || state.pushback?.find((x) => x.fr.id === fe.dataset.frEdit)?.fr;
       startFrEdit({ mcp: state.mcp, fr, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r) });
     }
   });
@@ -236,7 +254,7 @@ function setConn(id, s) {
 function renderChrome() {
   const s = state.status || {};
   const mode = { live: '', snapshot: '<span class="pill">Lightdash snapshot</span>', fake: '<span class="pill fake">FAKE DATA</span>', loading: '' }[state.mode];
-  document.getElementById('modePill').innerHTML = mode;
+  document.getElementById('modePill').innerHTML = mode + (state.readOnly ? ' <span class="pill ro" title="You can view this planner. Ask Tom for Editor access to move issues or edit FRs.">Read only</span>' : '');
   setConn('connL', state.mode === 'live' ? s.lightdash : '');
   setConn('connN', state.mode === 'live' ? s.notion : '');
 
@@ -265,6 +283,22 @@ function renderChrome() {
   document.getElementById('banners').innerHTML = banners.join('');
 }
 
+/** FR id → committed date, from the customer_tasks blobs. */
+function taskCommittedMap(rows) {
+  const m = new Map();
+  for (const r of rows) for (const t of parseBlob(r.serve_engineering_capacity_customer_tasks)) if (t[8]) m.set(String(t[0]).replace(/-/g, '').toLowerCase(), String(t[8]).slice(0, 10));
+  return m;
+}
+
+/** COM/AM emails for the pushback list, loaded once when the tab first opens. */
+async function loadOwners() {
+  if (state.owners || state.ownersLoading || !state.mcp || !state.pushback) return;
+  state.ownersLoading = true;
+  try { state.owners = await loadOwnerEmails(state.mcp, [...new Set(state.pushback.map((c) => c.fr.id.replace(/-/g, '').toLowerCase()))]); } catch { state.owners = new Map(); }
+  state.ownersLoading = false;
+  if (state.tab === 'pushback') draw();
+}
+
 /** At-risk flags (from the run) and prep queues (once all FRs and the backlog are in). */
 function recompute() {
   if (!state.run) return;
@@ -273,6 +307,13 @@ function recompute() {
   state.queues = x.scores === 'ok' && x.backlog !== 'loading'
     ? prepQueues({ run: state.run, backlog: state.backlog, scores: state.scores, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], team: state.teamFilter })
     : null;
+  state.pushback = x.scores === 'ok' ? pushbackCandidates({
+    run: state.run, backlog: state.backlog, scores: state.scores, team: state.teamFilter,
+    taskCommitted: taskCommittedMap([...state.rows, ...x.taskRows]), dealSize: x.deals,
+    dismissed: state.audit ? dismissedFrs(state.audit) : new Set(), overbooked: state.pbOverbooked ? overbookedCells(state.grid) : null,
+  }) : null;
+  state.weekly = state.audit ? weeklyLoadChanges({ audit: state.audit, changes: state.status?.changed || [], issues: state.run.issues, now: NOW }) : null;
+  document.getElementById('cntPb').textContent = state.pushback ? state.pushback.length : '';
   const c = tabCounts(state.risk, state.queues);
   document.getElementById('cntRisk').textContent = c.risk ?? '';
   document.getElementById('cntPrep').textContent = c.prep ?? '';
@@ -287,7 +328,9 @@ function draw() {
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError }); return; }
-  if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams }); return; }
+  if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp }); return; }
+  if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { list: state.pushback, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, overbookedOnly: state.pbOverbooked, readOnly: state.readOnly, team: state.teamFilter }); return; }
+  if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }
 
@@ -319,7 +362,11 @@ async function boot() {
   }
   if (mcp) {
     state.mcp = mcp;
-    document.getElementById('testBtn').hidden = false;
+    // Read-only for anyone who cannot edit the artifact (Tom picks Editor/Viewer in Share).
+    const user = await window.claude.use('user').catch(() => null);
+    state.readOnly = !(await user?.canEdit?.().catch(() => false));
+    setReadOnly(state.readOnly);
+    document.getElementById('testBtn').hidden = state.readOnly;
     state.mode = 'live';
     state.status = { lightdash: 'loading', notion: 'loading' };
     renderChrome();
@@ -329,7 +376,14 @@ async function boot() {
       show(rows);
       loadExtras(mcp, status.overlay, onExtra);
       // Baseline from the Notion-overlaid rows, so first-seen effort is today's live value.
-      syncBaseline(mcp, state.run, quarterKeyOf(NOW))
+      loadAudit(mcp)
+        .then(async (audit) => {
+          state.audit = audit;
+          for (const id of new Set(audit.map((a) => a.by).filter(Boolean))) state.users.set(id, await userName(mcp, id));
+        })
+        .catch((err) => { state.auditError = explainError(NOTION, err); })
+        .finally(() => { recompute(); if (['history', 'pushback'].includes(state.tab)) draw(); });
+      syncBaseline(mcp, state.run, quarterKeyOf(NOW), { write: !state.readOnly })
         .then(({ baseline }) => { state.baseline = baseline; })
         .catch((err) => { state.baselineError = explainError(NOTION, err); })
         .finally(() => { recompute(); if (state.tab === 'risk') draw(); });

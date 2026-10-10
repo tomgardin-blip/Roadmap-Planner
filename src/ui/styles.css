@@ -273,3 +273,14 @@ details.more[open] > summary { display: none; }
 .lsec .cnt { font-weight: 700; color: var(--ink); background: var(--grey); border-radius: 999px; padding: 0 8px; }
 .lbody { padding: 0 12px 10px; }
 .issue .detail { font-size: 12px; color: var(--red-ink); margin-top: 4px; }
+.issue.pb .t .fredit { margin-left: 6px; }
+.htable { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+.htable th, .htable td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.htable .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hitem { margin: 1px 0; }
+.hrow { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.hwhen { font-variant-numeric: tabular-nums; }
+.warnt { color: var(--amb-ink); }
+.estbtn { margin-left: auto; }
+.pill.ro { background: var(--amb-bg); color: var(--amb-ink); }
+.smsg { width: 100%; box-sizing: border-box; font: 12px/1.45 ui-monospace, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); margin-top: 8px; }

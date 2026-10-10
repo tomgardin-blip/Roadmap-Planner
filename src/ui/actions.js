@@ -3,7 +3,8 @@
 
 import { formatDate } from '../periods.js';
 import { FR_PRIORITIES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
-import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, previewComment, whoAmI } from '../data/writer.js';
+import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, previewComment, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { ESTIMATE_CHANNEL } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -127,4 +128,33 @@ export async function loadTestPages(mcp) {
     issue: { id: TEST_ISSUE, name: issue.name || 'Test Tom - ignore', url: `https://app.notion.com/p/${TEST_ISSUE}`, start: issue.start, end: issue.end, committed: null, skillEfforts: {}, status: '' },
     fr: { id: TEST_FR, title: fr.name || 'Test Tom - ignore FR', url: `https://app.notion.com/p/${TEST_FR}`, priority: fr.priority, successCommitted: fr.successCommitted, dealId: null },
   };
+}
+
+/** "Not a pushback" with an optional reason, logged to the audit DB. */
+export function startDismiss({ mcp, fr, issue, onDone }) {
+  if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
+  const sheet = openSheet(`
+    <h3>Not a pushback</h3>
+    <div class="srow"><b>${esc(fr.title || 'FR')}</b> stays committed and leaves the pushback list. Logged in the audit log so Product can learn the call.</div>
+    <label class="sfld">Reason <span class="muted">(optional)</span><input id="sReason" type="text" maxlength="200" placeholder="e.g. real go-live blocker"></label>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Log it</button></div>`);
+  sheet.querySelector('#sSave').addEventListener('click', async (e) => {
+    busy(e.target, true, 'Saving…');
+    const reason = sheet.querySelector('#sReason').value.trim();
+    try { await dismissPushback(mcp, { fr, issue, reason }); closeSheet(); toast('Logged as not a pushback.'); onDone?.({ reason }); } catch (err) { busy(e.target, false, 'Log it'); toast(errText(err), 'bad'); }
+  });
+}
+
+/** Preview, edit, then post the No estimate list to Slack as the viewer. */
+export function startEstimatePost({ mcp, message }) {
+  if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
+  const sheet = openSheet(`
+    <h3>Post to ${ESTIMATE_CHANNEL.name}</h3>
+    <div class="srow muted">Posted as you, no tags. Edit before sending.</div>
+    <textarea id="sMsg" rows="14" class="smsg">${esc(message)}</textarea>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend">Post</button></div>`);
+  sheet.querySelector('#sSend').addEventListener('click', async (e) => {
+    busy(e.target, true, 'Posting…');
+    try { await postSlack(mcp, ESTIMATE_CHANNEL.id, sheet.querySelector('#sMsg').value); closeSheet(); toast(`Posted to ${ESTIMATE_CHANNEL.name}.`); } catch (err) { busy(e.target, false, 'Post'); toast(err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err), 'bad'); }
+  });
 }

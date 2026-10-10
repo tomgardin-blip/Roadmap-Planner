@@ -7,6 +7,10 @@ import { formatDate } from '../periods.js';
 import { pushOut, pullForward } from '../suggestions.js';
 import { isAllowed } from '../notion/writes.js';
 
+// Read-only mode (viewers who cannot edit the artifact): no write controls anywhere.
+let readOnly = false;
+export const setReadOnly = (v) => { readOnly = !!v; };
+
 // Issues and FRs rendered in the drawer, by id, for the write flows (src/ui/actions.js).
 const shown = { issues: new Map(), frs: new Map() };
 export const shownIssue = (id) => shown.issues.get(id);
@@ -31,6 +35,7 @@ function cellInfo(row, horizon, period) {
 
 function dateButtons(issue, horizon) {
   shown.issues.set(issue.id, issue);
+  if (readOnly) return '';
   const can = isAllowed('issue', issue.id);
   const pot = issue.start && issue.start === issue.end;
   const tip = (d) => (can ? `Set Start = End = ${formatDate(d)} in Notion` : 'No Notion id');
@@ -76,7 +81,7 @@ function frBlock(s) {
 
 function frLine(f, cust, titleHtml) {
   shown.frs.set(f.id, f);
-  const edit = isAllowed('fr', f.id)
+  const edit = !readOnly && isAllowed('fr', f.id)
     ? `<button class="fredit" data-fr-edit="${f.id}">Edit</button>`
     : '';
   return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.status ? ` · ${esc(f.status)}` : ''}</div></li>`;

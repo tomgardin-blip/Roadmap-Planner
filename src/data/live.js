@@ -4,6 +4,7 @@
 // Each source fails on its own: no Notion still renders Lightdash with a stale warning.
 
 import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE } from './notion.js';
+import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
 export const LIGHTDASH = 'Lightdash';
@@ -150,7 +151,7 @@ export async function loadLive(mcp) {
  * Read this quarter's effort baseline from Notion and add rows for committed issues seen for the
  * first time. Returns Map(issue id → baseline total), including the rows just written.
  */
-export async function syncBaseline(mcp, run, quarter) {
+export async function syncBaseline(mcp, run, quarter, { write = true } = {}) {
   const all = [];
   for (let offset = 0; offset < 10000; offset += BASELINE_PAGE_SIZE) {
     const page = await call(mcp, NOTION, 'notion-query-data-sources', baselineQueryInput(quarter, offset));
@@ -159,8 +160,36 @@ export async function syncBaseline(mcp, run, quarter) {
     if (!page?.has_more && results.length < BASELINE_PAGE_SIZE) break;
   }
   const baseline = parseBaseline(all);
-  const missing = missingBaselines(run, baseline);
+  const missing = write ? missingBaselines(run, baseline) : [];
   for (const input of baselineRowsInputs(missing, quarter)) await call(mcp, NOTION, 'notion-create-pages', input);
   for (const i of missing) baseline.set(i.id, totalEffort(i));
   return { baseline, added: missing.length };
+}
+
+/** The latest audit rows (newest first), up to `max`. */
+export async function loadAudit(mcp, max = 500) {
+  const all = [];
+  for (let offset = 0; offset < max; offset += AUDIT_PAGE_SIZE) {
+    const page = await call(mcp, NOTION, 'notion-query-data-sources', auditQueryInput(offset));
+    const results = page?.results || [];
+    all.push(...results);
+    if (!page?.has_more && results.length < AUDIT_PAGE_SIZE) break;
+  }
+  return parseAudit(all);
+}
+
+/** Map(FR id → Responsible Success email) for many FRs in one Lightdash query. */
+export async function loadOwnerEmails(mcp, frIds) {
+  const dashed = (id) => { const h = String(id).replace(/-/g, '').toLowerCase(); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`; };
+  const out = new Map();
+  for (let k = 0; k < frIds.length; k += 400) {
+    const rows = await runQuery(mcp, 'Roadmap Planner: pushback owners', {
+      exploreName: 'deals_extract',
+      dimensions: ['customer_tasks_customer_task_notion_page_id', 'customer_tasks_responsible_success_email'],
+      metrics: [], sorts: [], limit: 1000,
+      filters: { type: 'and', dimensions: [{ fieldId: 'customer_tasks_customer_task_notion_page_id', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: frIds.slice(k, k + 400).map(dashed) }] },
+    });
+    for (const r of rows || []) if (r.customer_tasks_responsible_success_email) out.set(String(r.customer_tasks_customer_task_notion_page_id).replace(/-/g, ''), r.customer_tasks_responsible_success_email);
+  }
+  return out;
 }

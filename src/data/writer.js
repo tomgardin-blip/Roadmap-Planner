@@ -110,3 +110,28 @@ export async function adviseOwner(mcp, { fr, owner, changes, reason, updateId: u
     reason, frId: fr.id, itemName: fr.title, ownerId: owner.id, updateId: uid || updateId(),
   });
 }
+
+/** "Not a pushback": logged override so Product can learn the judgment (SPEC, decided 2026-10-10). */
+export async function dismissPushback(mcp, { fr, issue, reason }) {
+  assertAllowed('fr', fr.id);
+  await audit(mcp, {
+    category: 'Pushback override', field: 'Pushback', before: 'Pushback candidate', after: 'Not a pushback',
+    reason, frId: fr.id, issueId: issue?.id, itemName: fr.title, updateId: updateId(),
+  });
+}
+
+/** Post a message to Slack as the viewer. */
+export async function postSlack(mcp, channelId, message) {
+  return call(mcp, 'Slack', 'slack_send_message', { channel_id: channelId, message });
+}
+
+const userNames = new Map();
+/** Notion user id → display name (cached). */
+export async function userName(mcp, id) {
+  if (!userNames.has(id)) {
+    const r = await call(mcp, NOTION, 'notion-get-users', { user_id: id }).catch(() => null);
+    const u = r?.results?.[0] || r;
+    userNames.set(id, u?.name || '');
+  }
+  return userNames.get(id);
+}

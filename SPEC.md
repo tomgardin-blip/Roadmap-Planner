@@ -260,6 +260,7 @@ Read the model from Lightdash, overlay live Notion, write to Notion, log every w
    - Issues edited in Notion that the loaded Lightdash rows don't have (new since the sync) are added when they have a date, routed by their Team property.
    - Not overlaid: Assigned to (Notion returns user ids, the engine routes by email), committed dates and customer links (formulas and rollups, Lightdash only). Load routing follows Lightdash's assignees until the next sync.
    - Every changed issue shows a "Live from Notion" tag with before → after. If Notion fails, the grid stays on Lightdash with a banner naming the fix.
+   - Also on open (v2): the latest 500 audit rows (History, pushback overrides) and, when the Pushback tab opens, the COM/AM email per committed FR from Lightdash.
 3. A date button writes Start/End to Notion, updates the grid immediately, and writes an audit row.
 4. A failed write retries, then queues in the browser with a visible banner until it lands (Liam's pattern).
 
