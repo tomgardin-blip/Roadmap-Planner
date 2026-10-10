@@ -137,8 +137,15 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 
 - One button per month (Oct, Nov, Dec, Jan…) and per quarter (Q4, Q1, Q2).
 - Sets Start = End = last Friday of that month or quarter and writes to Notion instantly.
-- Disabled with a warning when the target is after the committed date or before a "Blocked by" issue.
-- Every move asks for a short reason (one click for common ones: commit moved, estimate grew, capacity, dependency).
+- A target after the committed date is allowed with a warning (decided 2026-10-10, replaces "disabled"). Before a "Blocked by" issue: warning too.
+- Every move offers an optional short reason (one click for common ones: commit moved, estimate grew, capacity, dependency).
+
+**2b. FR edits and owner pings (decided 2026-10-10)**
+
+- Each FR in the drawer can change its committed date and its priority.
+- Committed date: always write "Success Committed". The FR's "Committed" is a formula: the earliest of Success Committed and, when priority is Needed for go-live, the deal's go-live date. The planner shows the resulting Committed after the edit.
+- Priority: write "Priority " (the property name ends in a space).
+- After a change: a prompt "Advise owner in Notion?" with the comment text (old → new, and the reason when one was entered). Send posts a Notion comment on the FR tagging its Responsible Success; Skip closes. The owner is "Responsible success email" from Lightdash (account manager when Live, onboarding manager when Onboarding), matched to a Notion user by email. No Responsible Success: no ping, never a fallback to sales.
 
 **3. Prep queues (per priority: Required for GO LIVE, Top 3)**
 
@@ -207,10 +214,14 @@ Notion gotchas:
 - "Test Tom - ignore": https://app.notion.com/p/qargo/Test-Tom-ignore-3f4e32e8f8c880ef9c6dc3a0c44b1af1 (page ID `3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`), team Application Platform, no customer links, no effort.
 - All write-back testing happens on this issue only, until Tom explicitly approves writing to real issues. Only Start and End are written; never effort, team or status.
 
+**Test FR**
+
+- "Test Tom - ignore FR": https://app.notion.com/p/3f5e32e8f8c881d6927bd504b6f10e54 (page ID `3f5e32e8-f8c8-81d6-927b-d504b6f10e54`), linked to "Test Tom - ignore", no company. All FR writes and owner pings happen on this FR only until Tom approves real FRs. It has no company, so it has no Responsible Success: for this FR only, the ping goes to the viewer (test hook).
+
 **History**
 
 - Daily dbt snapshots in `qargo-internal-bi.internal_bi_snapshots` (from 2026-10-06), used by Sander De Wilde's `roadmap-changes` skill. Daily cadence: same-day changes and reverts are invisible.
-- Planner writes its own audit log (who, when, before, after, reason), same pattern as Liam's History database.
+- Planner writes its own audit log, same pattern as Liam's History database: "Roadmap Planner Audit Log" (`collection://9b4b26f2-ea33-4578-89c2-252389cd5564`, under "Roadmap Planner Audit logs"). One row per change: category, field, before, after, reason, warning, issue or FR relation, item name, owner pinged, changed by, changed at, update id.
 
 ## Architecture and build path
 
@@ -264,8 +275,8 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 - [x] Scoring decisions (2026-10-10): every task type counts as an FR; each FR counts, also several from one customer on the same issue; FRs on a parent do not count for its sub-tasks; a customer with no deal size counts ×1 (rare). Only issues of the 4 teams with FE/BE/MOB effort are scored.
 - [x] The full backlog (non-default Lightdash rows, about 6 MB) loads on demand, not on open.
 - [x] Quick wins: effort cut-off 2 days total (FE+BE+MOB), confirmed 2026-10-10. Option `quickWinMaxEffort`.
-- [ ] Where does the planner audit log live: a new Notion database, or the artifact's own storage?
-- [ ] Should a move of a committed issue past its commit be blocked, or allowed with a mandatory reason?
+- [x] Audit log: a Notion database, "Roadmap Planner Audit Log" (decided 2026-10-10).
+- [x] Moving an issue past its commit: allowed, with a warning; reason optional (decided 2026-10-10).
 
 **Risks**
 

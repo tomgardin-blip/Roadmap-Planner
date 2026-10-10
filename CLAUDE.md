@@ -20,9 +20,13 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Verify per team and per skill (FE/BE/MOB) against Lightdash before trusting our numbers.
 
 ## Notion writes
-- Write ONLY to the test issue "Test Tom - ignore" (page ID `3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`) until Tom explicitly approves writing to real issues.
-- Write ONLY Start and End. Never effort, team, status or anything else.
-- Every Notion write produces an audit entry: who, when, issue, before, after, reason.
+- Test-only until Tom explicitly approves real pages: issue "Test Tom - ignore" (`3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`) and FR "Test Tom - ignore FR" (`3f5e32e8-f8c8-81d6-927b-d504b6f10e54`). The write module refuses any other page id.
+- Allowed writes (Tom, 2026-10-10), nothing else:
+  - Issues (Bugs and Features): Start and End only. Never effort, team, status.
+  - FRs (Customer Tasks): "Success Committed" and "Priority " only. Never the "Committed" formula or anything else.
+  - Comments on an FR that tag its Responsible Success, only when Tom clicks Send.
+  - Rows in the Roadmap Planner Audit Log (`collection://9b4b26f2-ea33-4578-89c2-252389cd5564`).
+- Every write produces an audit row: who, when, issue or FR, field, before, after, reason, warning.
 
 ## Working style
 - Ask Tom when in doubt.
