@@ -2,6 +2,7 @@
 // Rules that need data the planner cannot reach yet are listed in UNAVAILABLE, never guessed.
 
 import { issueTeams, TEAMS } from './capacity.js';
+import { effortGrowth } from './notion/baseline.js';
 
 const CLOSED = new Set(['Done', "Won't do", 'Duplicate']);
 const SKILLS = ['frontend', 'backend', 'mobile'];
@@ -14,20 +15,18 @@ export const RULES = [
   { key: 'dependency', label: 'Dependency in the wrong order' },
   { key: 'noTeam', label: 'No team: invisible in capacity' },
   { key: 'claudeReview', label: 'Claude estimate not reviewed' },
+  { key: 'effortGrowth', label: 'Effort grew 50% or more on a committed issue this quarter' },
 ];
 
-// SPEC rules the planner cannot evaluate from Lightdash or Notion today.
-export const UNAVAILABLE = [
-  { key: 'effortGrowth', label: 'Effort grew 50% or more on a committed issue this quarter', why: 'Needs an effort baseline from the start of the quarter. The daily snapshots live in BigQuery and are not exposed in Lightdash.' },
-  { key: 'lowConfidence', label: 'Claude estimate with low confidence', why: 'No confidence field exists on the issues.' },
-];
+// "Low confidence" was dropped by Tom on 2026-10-10 (no confidence field exists).
 
 /**
  * @param run      runCapacity() result (issue.committed is the effective committed date)
  * @param opts.team  'all' or one of TEAMS
+ * @param opts.baseline Map(issue id → quarter-start total effort), or null while loading
  * @returns { [ruleKey]: [{ issue, detail }] }
  */
-export function atRisk(run, { team = 'all' } = {}) {
+export function atRisk(run, { team = 'all', baseline = null } = {}) {
   const open = run.issues.filter((i) => i.id && !CLOSED.has(i.status) && !(i.type || '').includes('Holiday'));
   const blockedBy = new Map();
   for (const b of open) for (const id of b.blocks || []) (blockedBy.get(id) || blockedBy.set(id, []).get(id)).push(b);
@@ -54,6 +53,7 @@ export function atRisk(run, { team = 'all' } = {}) {
       out.noTeam.push({ issue: i, detail: `${effortOf(i)} d with dates, counted in no team` });
     }
   }
-  for (const k of Object.keys(out)) out[k].sort((a, b) => String(a.issue.committed || '9').localeCompare(String(b.issue.committed || '9')) || effortOf(b.issue) - effortOf(a.issue));
+  out.effortGrowth = baseline ? effortGrowth(open.filter(inScope), baseline) : null;
+  for (const k of Object.keys(out)) if (out[k]) out[k].sort((a, b) => String(a.issue.committed || '9').localeCompare(String(b.issue.committed || '9')) || effortOf(b.issue) - effortOf(a.issue));
   return out;
 }

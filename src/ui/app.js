@@ -9,7 +9,8 @@ import { horizon as buildHorizon } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
-import { loadLive, loadExtras } from '../data/live.js';
+import { loadLive, loadExtras, syncBaseline, explainError, NOTION } from '../data/live.js';
+import { quarterKeyOf } from '../notion/baseline.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames } from './drawer.js';
 import { renderAtRisk, renderPrep, tabCounts } from './lists.js';
@@ -39,6 +40,7 @@ const state = {
   // Background load (SPEC "Data flow"): scores need the uncommitted FRs, pull forward the unplanned backlog.
   extra: { scores: 'loading', backlog: 'loading', scoresError: null, backlogError: null, deals: new Map(), taskRows: [], featureRows: [] },
   scores: null, backlog: [], drawer: null, dealNames: new Map(), dealGolive: new Map(),
+  baseline: null, baselineError: null,
   mcp: null, test: null, // test: null (closed) or { issue, fr, error } for the Test writes drawer
 };
 
@@ -266,7 +268,7 @@ function renderChrome() {
 /** At-risk flags (from the run) and prep queues (once all FRs and the backlog are in). */
 function recompute() {
   if (!state.run) return;
-  state.risk = atRisk(state.run, { team: state.teamFilter });
+  state.risk = atRisk(state.run, { team: state.teamFilter, baseline: state.baseline });
   const x = state.extra;
   state.queues = x.scores === 'ok' && x.backlog !== 'loading'
     ? prepQueues({ run: state.run, backlog: state.backlog, scores: state.scores, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], team: state.teamFilter })
@@ -284,7 +286,7 @@ function draw() {
   document.getElementById('viewSeg').hidden = !onGrid;
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
-  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading' }); return; }
+  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError }); return; }
   if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }
@@ -326,10 +328,16 @@ async function boot() {
     if (rows) {
       show(rows);
       loadExtras(mcp, status.overlay, onExtra);
+      // Baseline from the Notion-overlaid rows, so first-seen effort is today's live value.
+      syncBaseline(mcp, state.run, quarterKeyOf(NOW))
+        .then(({ baseline }) => { state.baseline = baseline; })
+        .catch((err) => { state.baselineError = explainError(NOTION, err); })
+        .finally(() => { recompute(); if (state.tab === 'risk') draw(); });
     } else { renderChrome(); document.getElementById('grid').innerHTML = ''; }
     return;
   }
   state.mode = Array.isArray(window.__RP_ROWS__) ? 'snapshot' : 'fake';
+  state.baselineError = 'only kept on the live page.';
   show(state.mode === 'snapshot' ? window.__RP_ROWS__ : fakeLightdashRows(horizon));
   // Local preview: a saved backlog ({deals, tasks, features} Lightdash rows) if given, else none.
   const ex = window.__RP_EXTRA__ || {};

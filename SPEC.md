@@ -171,7 +171,8 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Built 2026-10-10 (src/atrisk.js), for issues routed to our 4 teams (no-team rule: all issues):
   - Commit dates are the engine's effective commit (earliest of the issue, its FRs and what it blocks).
   - Dependency: a "Blocked by" issue that ends after this issue starts (pot issues: Start = End), or has no dates.
-  - Not checked yet, shown as such: effort growth (no effort baseline reachable from Lightdash or Notion) and low confidence (no confidence field).
+  - Effort growth (decided 2026-10-10, the "alternative path"): the planner keeps its own baseline in the Notion database "Roadmap Planner Effort Baseline" (`collection://62afe97a-fdaf-4007-af81-5d1e1498661e`). On every live open it reads this quarter's rows and adds one row per committed issue of our 4 teams with effort that has none yet (its effort when first seen). Flag: effort now ≥ 1.5 × baseline. History starts 10 Oct 2026, so Q4 2026 growth is measured from then. Baseline rows are the record themselves; no audit row.
+  - "Low confidence" dropped (Tom, 2026-10-10): no confidence field exists.
 
 **5. Pushback candidates:** ranked list (see Scoring), with the COM/AM to contact.
 
@@ -281,8 +282,9 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 **Open questions**
 
 - [x] Can Claude Code publish to the claude.ai artifact runtime with `mcp`? Yes, confirmed 2026-10-09.
-- [ ] Effort-growth rule: needs a quarter-start effort baseline. The daily snapshots (BigQuery internal_bi_snapshots) are not in Lightdash. Expose them as an explore, or keep a baseline in Notion?
-- [ ] "Low confidence" Claude estimates: there is no confidence field. Drop the condition, or add a field?
+- [x] Effort-growth baseline: kept by the planner in Notion (decided 2026-10-10).
+- [x] "Low confidence" condition dropped (2026-10-10).
+- [x] Publish: the artifact is private to Tom; sharing is Tom's call from the Share menu, not yet (2026-10-10).
 - [ ] How often does the Lightdash capacity dataset refresh? Decides how much the live Notion overlay must cover.
 - [x] Who owns the capacity planner's math? Sander De Wilde. We use his engine file unchanged and swap in each new export.
 - [x] How does the planner app build `emailToName`, `settings` and `config.teams`? Confirmed from Sander's app export (9 Oct 2026): email → title, `{daysPerMonth: 10.2, horizon: 12, startMonth: '2026-07'}`, `buildTeams(allocation, TEAM_DISPLAY_ORDER)`. Copied into `src/capacity.js`.

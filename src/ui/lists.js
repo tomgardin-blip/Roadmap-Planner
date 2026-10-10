@@ -1,7 +1,7 @@
 // List screens: At risk and Prep queues. Built from src/atrisk.js and src/prep.js; every card
 // carries the same date buttons and FR edit as the drawer.
 
-import { RULES, UNAVAILABLE } from '../atrisk.js';
+import { RULES } from '../atrisk.js';
 import { GROUPS } from '../prep.js';
 import { listCard, frCard } from './drawer.js';
 
@@ -20,14 +20,16 @@ function capped(items, render, key) {
   return head + (rest ? `<details class="more" data-more="${key}"><summary>Show all ${items.length}</summary>${rest}</details>` : '');
 }
 
-export function renderAtRisk(el, { risk, horizon, scores, loading }) {
-  const total = RULES.reduce((a, r) => a + risk[r.key].length, 0);
+export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError }) {
+  const baselineNote = baselineError ? `Effort baseline unavailable: ${baselineError}` : 'Reading the effort baseline from Notion…';
+  const total = RULES.reduce((a, r) => a + (risk[r.key]?.length || 0), 0);
   let h = `<div class="lhead"><b>At risk</b><span class="lsub">${total} flags across ${RULES.length} rules${loading ? ' · scores loading' : ''}. Commit dates are effective commits (earliest of the issue, its FRs and what it blocks).</span></div>`;
   for (const r of RULES) {
     const list = risk[r.key];
-    h += section(`risk-${r.key}`, r.label, list.length, list.length ? `${days(list)} d` : '', capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
+    if (!list) { h += section(`risk-${r.key}`, r.label, '…', baselineNote, `<div class="placeholder">${baselineNote}</div>`); continue; }
+    const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10 Oct 2026)' : list.length ? `${days(list)} d` : '';
+    h += section(`risk-${r.key}`, r.label, list.length, sub, capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
   }
-  h += `<div class="lhead small"><b>Not checked yet</b></div>${UNAVAILABLE.map((u) => `<div class="placeholder"><b>${esc(u.label)}.</b> ${esc(u.why)}</div>`).join('')}`;
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
 
@@ -47,7 +49,7 @@ export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams })
 }
 
 export function tabCounts(risk, queues) {
-  const r = risk ? RULES.reduce((a, x) => a + risk[x.key].length, 0) : null;
+  const r = risk ? RULES.reduce((a, x) => a + (risk[x.key]?.length || 0), 0) : null;
   const p = queues ? GROUPS.reduce((a, g) => a + queues[g.key].noEstimate.length + queues[g.key].notPlanned.length, 0) : null;
   return { risk: r, prep: p };
 }

@@ -27,6 +27,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
   - FRs (Customer Tasks): "Success Committed" and "Priority " only. Never the "Committed" formula or anything else.
   - Comments on an FR that tag its Responsible Success, only when Tom clicks Send.
   - Rows in the Roadmap Planner Audit Log (`collection://9b4b26f2-ea33-4578-89c2-252389cd5564`).
+  - Rows in the Roadmap Planner Effort Baseline (`collection://62afe97a-fdaf-4007-af81-5d1e1498661e`), written automatically on open; no audit row (they are the record).
 - Every write produces an audit row: who, when, issue or FR, field, before, after, reason, warning.
 
 ## Working style

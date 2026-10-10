@@ -4,6 +4,7 @@
 // Each source fails on its own: no Notion still renders Lightdash with a stale warning.
 
 import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE } from './notion.js';
+import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
 export const LIGHTDASH = 'Lightdash';
 export const NOTION = 'Notion';
@@ -143,4 +144,23 @@ export async function loadLive(mcp) {
     status.notionError = explainError(NOTION, err);
   }
   return { rows, status };
+}
+
+/**
+ * Read this quarter's effort baseline from Notion and add rows for committed issues seen for the
+ * first time. Returns Map(issue id → baseline total), including the rows just written.
+ */
+export async function syncBaseline(mcp, run, quarter) {
+  const all = [];
+  for (let offset = 0; offset < 10000; offset += BASELINE_PAGE_SIZE) {
+    const page = await call(mcp, NOTION, 'notion-query-data-sources', baselineQueryInput(quarter, offset));
+    const results = page?.results || [];
+    all.push(...results);
+    if (!page?.has_more && results.length < BASELINE_PAGE_SIZE) break;
+  }
+  const baseline = parseBaseline(all);
+  const missing = missingBaselines(run, baseline);
+  for (const input of baselineRowsInputs(missing, quarter)) await call(mcp, NOTION, 'notion-create-pages', input);
+  for (const i of missing) baseline.set(i.id, totalEffort(i));
+  return { baseline, added: missing.length };
 }
