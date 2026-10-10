@@ -192,6 +192,18 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .sugg .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--muted); align-items: center; }
 .sugg .eff { font-variant-numeric: tabular-nums; margin-left: auto; }
 .sugg .eff b { color: var(--ink); }
+.frs { margin-top: 6px; font-size: 11px; color: var(--muted); }
+.frs.none { opacity: .7; }
+.frs summary { cursor: pointer; list-style: none; display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.frs summary::-webkit-details-marker { display: none; }
+.frs summary::after { content: '▾'; font-size: 10px; }
+.frs[open] summary::after { content: '▴'; }
+.frs summary b { color: var(--ink); }
+.frs .gl { color: var(--red-ink); font-weight: 700; }
+.frs ul { list-style: none; margin: 6px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.frs li { padding: 6px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
+.frs li .frt { color: var(--muted); margin-top: 2px; }
+.frs .mult { font-weight: 700; color: var(--ok-ink); }
 .coverline { margin: 8px 0 10px; padding-top: 6px; border-top: 2px solid var(--ok-ink); color: var(--ok-ink); font-size: 11px; font-weight: 700; }
 .coverline.bad { border-top-color: var(--red-ink); color: var(--red-ink); }
 .issue .eff { font-variant-numeric: tabular-nums; }

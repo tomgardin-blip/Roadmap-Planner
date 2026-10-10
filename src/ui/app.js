@@ -7,7 +7,7 @@
 
 import { horizon as buildHorizon } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
-import { scoreRows, dealSizeMap } from '../scoring.js';
+import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { loadLive, loadExtras } from '../data/live.js';
 import { renderGrid } from './grid.js';
@@ -25,7 +25,7 @@ const state = {
   rows: null, // default Lightdash rows (overlaid)
   // Background load (SPEC "Data flow"): scores need the uncommitted FRs, pull forward the unplanned backlog.
   extra: { scores: 'loading', backlog: 'loading', scoresError: null, backlogError: null, deals: new Map(), taskRows: [], featureRows: [] },
-  scores: null, backlog: [], drawer: null,
+  scores: null, backlog: [], drawer: null, dealNames: new Map(),
 };
 
 function themeToggle() {
@@ -107,7 +107,7 @@ function renderDrawer() {
   if (!state.drawer || !state.run) return;
   openDrawer(document.getElementById('drawer'), {
     run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
-    scores: state.scores, backlog: state.backlog, extra: state.extra, ...state.drawer,
+    scores: state.scores, backlog: state.backlog, extra: state.extra, names: state.dealNames, ...state.drawer,
   });
 }
 
@@ -169,6 +169,7 @@ function draw() {
 
 function show(rows) {
   state.rows = rows;
+  state.dealNames = dealNameMap(rows);
   state.run = runCapacity(rows, { now: NOW });
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);

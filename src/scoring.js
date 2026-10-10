@@ -123,11 +123,18 @@ export function scoreFeatures(features, tasks, dealSize = new Map(), opts = {}) 
     const id = nid(f[0]);
     const frs = [...links.get(id)].map((tid) => {
       const t = taskById.get(tid);
-      return { id: tid, priority: t[4], status: t[5], type: t[3], dealId: t[6] };
+      return { id: tid, title: t[2], url: t[1], priority: t[4], status: t[5], type: t[3], dealId: t[6] };
     });
     out.set(id, { id, ...scoreIssue({ fe: f[15], be: f[14], mob: f[30] }, frs, dealSize, o) });
   }
   return out;
+}
+
+/** Map(dealId → company name) from the deals blob of Lightdash rows (for showing FRs). */
+export function dealNameMap(rows) {
+  const m = new Map();
+  for (const r of rows || []) for (const d of parseBlob(r.serve_engineering_capacity_deals ?? r.deals)) if (d[0]) m.set(nid(d[0]), d[2] || d[6] || '');
+  return m;
 }
 
 /** Map(dealId → GBP) from deals_extract rows ({deals_extract_notion_page_id, deals_extract_onboarding_deal_size_gbp}). */

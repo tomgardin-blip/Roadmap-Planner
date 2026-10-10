@@ -48,6 +48,28 @@ function whenOf(issue) {
   return !issue.start && !issue.end ? (issue.committed ? 'No dates (TBD)' : 'Not planned') : pot ? `Pot · ${formatDate(issue.end)}` : `${formatDate(issue.start)} → ${formatDate(issue.end)}`;
 }
 
+let dealNames = new Map();
+const nidOf = (x) => String(x || '').replace(/-/g, '').toLowerCase();
+const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
+
+/**
+ * Bird's-eye FR count (with go-live and Top 3 counts), tap to see each FR with its priority,
+ * customer and deal-size multiplier. Native <details>, so it works on touch without JS.
+ */
+function frBlock(s) {
+  if (!s) return '';
+  if (!s.frs.length) return '<div class="frs none">0 FRs</div>';
+  const gl = s.frs.filter((f) => GO_LIVE.has(f.priority)).length;
+  const t3 = s.frs.filter((f) => f.priority === 'Top 3').length;
+  const sum = [`<b>${s.frs.length} FR${s.frs.length === 1 ? '' : 's'}</b>`, `${s.customers} customer${s.customers === 1 ? '' : 's'}`, gl && `<span class="gl">${gl} go-live</span>`, t3 && `${t3} Top 3`].filter(Boolean).join(' · ');
+  const rows = [...s.frs].sort((a, b) => b.points - a.points || String(a.priority).localeCompare(String(b.priority))).map((f) => {
+    const cust = dealNames.get(nidOf(f.dealId)) || 'No customer';
+    const t = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || 'FR')}</a>` : esc(f.title || 'FR');
+    return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}<div class="frt">${t}${f.status ? ` · ${esc(f.status)}` : ''}</div></li>`;
+  }).join('');
+  return `<details class="frs"><summary>${sum}</summary><ul>${rows}</ul></details>`;
+}
+
 /** Compact row for a suggestion list. */
 function suggestion(x, skill, label) {
   const { issue } = x;
@@ -59,7 +81,7 @@ function suggestion(x, skill, label) {
     `<span class="tag">${whenOf(issue)}</span>`,
     issue.status ? `<span class="tag">${esc(issue.status)}</span>` : '',
   ].join('');
-  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div></div>`;
+  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score)}</div>`;
 }
 
 function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
@@ -107,11 +129,13 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
   const title = issue.url && !issue.url.includes('example.invalid')
     ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
   return `<div class="issue"><div class="t">${title}</div>
-    <div class="meta">${tags}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span><span>${(issue.customers || []).length} FRs</span></div>
+    <div class="meta">${tags}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span></div>
+    ${frBlock(score)}
     ${dateButtons(issue, horizon)}</div>`;
 }
 
-export function openDrawer(el, { run, grid, horizon, changes = [], scores = null, backlog = [], extra = {}, team, skill, period }) {
+export function openDrawer(el, { run, grid, horizon, changes = [], scores = null, backlog = [], extra = {}, names = new Map(), team, skill, period }) {
+  dealNames = names;
   const byId = new Map(changes.map((c) => [c.id, c]));
   const row = grid.rows.find((r) => r.team === team && r.skill === skill);
   const { label, c } = cellInfo(row, horizon, period);
