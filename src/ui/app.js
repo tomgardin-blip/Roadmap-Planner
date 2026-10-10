@@ -91,9 +91,8 @@ function shell() {
       <div class="toolbar">
         <label class="fld">Team <select id="teamSel"><option value="all">All teams</option>${TEAMS.map((t) => `<option>${esc(t)}</option>`).join('')}</select></label>
         <span class="legend">
-          <span><span class="sw ok"></span>within ±2 d</span>
-          <span><span class="sw amber"></span>±2 to 5 d</span>
-          <span><span class="sw red"></span>over ±5 d</span>
+          <span><span class="sw ok"></span>at or under capacity</span>
+          <span><span class="sw red"></span>over capacity</span>
           <span>· quarter totals only</span>
         </span>
         <span class="seg" id="viewSeg"><button data-view="quarters">Quarters</button><button data-view="months">Months</button></span>

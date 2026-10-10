@@ -19,11 +19,11 @@ const row = (g, team, skill) => g.rows.find((r) => r.team === team && r.skill ==
 const TP = 'Transport Planning';
 const fe = (id, extra = {}) => A({ id, title: `Eng ${id}`, email: `${id}@example.invalid`, team: TP, fe: 1, hol26: 0, hol27: 0, ...extra });
 
-test('thresholds: quarter ±2 / ±5, months scaled', () => {
-  assert.equal(cellStatus(42, 40), 'ok');
-  assert.equal(cellStatus(44.9, 40), 'amber');
-  assert.equal(cellStatus(45.1, 40), 'red');
-  assert.equal(cellStatus(31, 30, 1 / 3), 'amber');
+test('colour: over capacity red, at or under green (Tom, 2026-10-10)', () => {
+  assert.equal(cellStatus(113.1, 128.9), 'ok');
+  assert.equal(cellStatus(40, 40), 'ok');
+  assert.equal(cellStatus(40.1, 40), 'red');
+  assert.equal(cellStatus(0, 40), 'ok');
 });
 
 test('full-time FE, no holidays: 3 days/week; Q4 from this week = 12 weeks = 36, Q1 = 13 weeks = 39', () => {

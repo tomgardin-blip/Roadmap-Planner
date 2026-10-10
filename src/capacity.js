@@ -20,13 +20,11 @@ export const TEAM_DISPLAY_ORDER = [
 ];
 export const ALLOCATION_SETTINGS = { daysPerMonth: 10.2, horizon: 12, startMonth: '2026-07' };
 
-// SPEC.md > Capacity grid: quarter totals green within ±2 days, amber to ±5,
-// red beyond. Month cells pass scale = month capacity / quarter capacity.
+// SPEC.md > Capacity grid (Tom, 2026-10-10): over capacity = red, at or under = green.
+// `scale` is unused since months are neutral; kept so callers need not change.
 export function cellStatus(planned, capacity, scale = 1) {
-  const diff = Math.abs(planned - capacity);
-  if (diff <= 2 * scale + 1e-9) return 'ok';
-  if (diff <= 5 * scale + 1e-9) return 'amber';
-  return 'red';
+  void scale;
+  return planned > capacity + 1e-9 ? 'red' : 'ok';
 }
 
 /** Lightdash returns prefixed column names; the engine reads bare ones. */

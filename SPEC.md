@@ -128,7 +128,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Pot: every issue with Start = End, at quarter level, including committed issues placed on a month's last Friday.
   - TBD: committed issues with no dates (see Capacity).
   - Total: months + pot + TBD against the quarter's capacity, as the planner's quarter cards.
-- Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
+- Each cell: planned days vs capacity. Quarter totals: red when over capacity, green when at or under (Tom, 2026-10-10; replaces the ±2 / ±5 bands, which coloured large free capacity red).
 - Month cells are neutral (no colour): with pot work at quarter level, month load alone says little. Only quarter totals are coloured. Decided 2026-10-09, replaces the earlier "scaled month thresholds".
 - Click a cell: the issues in it, sorted by committed date then score.
 - Views: Quarters (team × skill × quarter totals only, default on phones) and Months (the full grid, default on desktop). The choice is remembered per viewer. Decided 2026-10-10.
