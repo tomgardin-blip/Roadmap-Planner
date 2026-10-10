@@ -62,7 +62,15 @@ export function runCapacity(lightdashRows, { now = new Date() } = {}) {
     alloc.people.forEach((p) => { if (p.email) emailToName[p.email] = p.name; });
     const { computed } = Engine.compute({ issues, config: { teams, emailToName } }, alloc, { now });
     const teamIdByLabel = Object.fromEntries(teams.map((t) => [t.label, t.id]));
-    return { issues, customerTasks, computed, teamIdByLabel, now };
+    // email → our team labels the person is allocated to (any period), for issueTeams().
+    const labelById = Object.fromEntries(teams.map((t) => [t.id, t.label]));
+    const teamsByEmail = {};
+    alloc.people.forEach((p) => {
+      if (!p.email) return;
+      const labels = p.allocations.map((a) => labelById[a.teamId]).filter((l) => TEAMS.includes(l));
+      if (labels.length) teamsByEmail[p.email] = [...new Set(labels)];
+    });
+    return { issues, customerTasks, computed, teamIdByLabel, teamsByEmail, now };
   });
 }
 
@@ -166,6 +174,23 @@ export function cellIssues(run, team, skill, period) {
       if (!ca && cb) return 1;
       return b.days - a.days;
     });
+}
+
+/** Engine issues from Lightdash rows without running compute (for backlog rows outside the grid). */
+export function toIssues(lightdashRows) {
+  return quiet(() => Engine.transformRows(toEngineRows(lightdashRows)).issues);
+}
+
+/**
+ * Our teams an issue counts for, routed like the engine: its assignees' allocation teams
+ * plus its Team property (matched case-insensitively).
+ */
+export function issueTeams(run, issue) {
+  const out = new Set();
+  const prop = String(issue.team || '').trim().toLowerCase();
+  for (const t of TEAMS) if (t.toLowerCase() === prop) out.add(t);
+  for (const e of issue.assignedTo || []) for (const t of run.teamsByEmail?.[e] || []) out.add(t);
+  return out;
 }
 
 /** Open issues with effort and a date but no team and no assignee: they count in no team's load (SPEC.md > Risks). */
