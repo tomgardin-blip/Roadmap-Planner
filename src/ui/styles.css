@@ -185,6 +185,15 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 .tag.qtr { background: var(--qtr-bg); color: var(--qtr-ink); }
 .tag.blocked { background: var(--red-bg); color: var(--red-ink); }
 .tag.score { background: var(--ok-bg); color: var(--ok-ink); }
+.tag.qw { background: var(--amb-bg); color: var(--amb-ink); }
+.drawer .hint { font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
+.sugg { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; background: var(--card); }
+.sugg .t { font-weight: 600; font-size: 12px; }
+.sugg .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--muted); align-items: center; }
+.sugg .eff { font-variant-numeric: tabular-nums; margin-left: auto; }
+.sugg .eff b { color: var(--ink); }
+.coverline { margin: 8px 0 10px; padding-top: 6px; border-top: 2px solid var(--ok-ink); color: var(--ok-ink); font-size: 11px; font-weight: 700; }
+.coverline.bad { border-top-color: var(--red-ink); color: var(--red-ink); }
 .issue .eff { font-variant-numeric: tabular-nums; }
 .issue .eff b { color: var(--ink); }
 .datebtns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }

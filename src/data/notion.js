@@ -67,8 +67,9 @@ export function parseOverlay(results) {
  * a report: which issues changed, and issues edited in Notion that Lightdash has not
  * loaded yet (new since the sync, or outside the loaded rows) — those are added as
  * minimal rows when they have a date, so their effort is not invisible.
+ * addMissing: false only patches (for the backlog rows, whose missing issues are in the default row).
  */
-export function applyOverlay(lightdashRows, overlay) {
+export function applyOverlay(lightdashRows, overlay, { addMissing = true } = {}) {
   const seen = new Set();
   const changed = [];
   const rows = lightdashRows.map((r) => {
@@ -94,7 +95,7 @@ export function applyOverlay(lightdashRows, overlay) {
 
   const added = [];
   const extra = [];
-  for (const o of overlay.values()) {
+  for (const o of addMissing ? overlay.values() : []) {
     if (seen.has(o.id) || !(o.start || o.end)) continue;
     if (['Done', "Won't do", 'Duplicate'].includes(o.status)) continue;
     const f = new Array(35).fill(null);

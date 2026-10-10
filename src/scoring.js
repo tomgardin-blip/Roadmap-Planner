@@ -156,4 +156,12 @@ export function rankIssues(items, opts = {}) {
   };
 }
 
+/** Score from Lightdash rows (any mix of default and extra rows): features and tasks blobs are concatenated. */
+export function scoreRows(rows, dealSize = new Map(), opts = {}) {
+  const col = (r, n) => parseBlob(r[`serve_engineering_capacity_${n}`] ?? r[n]);
+  const features = rows.flatMap((r) => col(r, 'features'));
+  const tasks = rows.flatMap((r) => col(r, 'customer_tasks'));
+  return scoreFeatures(features, tasks, dealSize, opts);
+}
+
 export { parseBlob };

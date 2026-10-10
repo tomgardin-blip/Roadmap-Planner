@@ -125,7 +125,10 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Each cell: planned days vs capacity. Quarter totals: green within ±2 days, amber to ±5, red beyond.
 - Month cells are neutral (no colour): with pot work at quarter level, month load alone says little. Only quarter totals are coloured. Decided 2026-10-09, replaces the earlier "scaled month thresholds".
 - Click a cell: the issues in it, sorted by committed date then score.
-- Overbooked cell: suggested issues to push out (lowest score, no commit, quick-win fillers first). Underbooked cell: suggested issues to pull forward (highest score that fits).
+- Suggestions sit on quarter totals only (months are neutral). Rules decided 2026-10-10:
+  - Over capacity, push out: the quarter's issues with no commit and not in progress (Implementing, To implement this week, To test, Production Ready). Quick wins first, then lowest score. Full list, with a line where the overbooking is covered.
+  - Under capacity, pull forward: issues of that team and skill planned after the quarter or not planned, whose effort in that skill fits the free days, not Blocked/on hold and no open "Blocked by". Committed issues first, because pulling them forward buys margin: planned after their commit first, then by committed date. Then the rest by highest score.
+  - Quick wins that fit: uncommitted quick wins, own section, highest score first.
 
 **2. Date buttons on every issue**
 
@@ -212,7 +215,8 @@ Read the model from Lightdash, overlay live Notion, write to Notion, log every w
 
 **Data flow**
 
-1. On open: load the full model from Lightdash (features, FRs, allocations, deals, deal size).
+1. On open: load the default Lightdash row (planned or committed features, committed FRs, allocations, deals). The grid renders from this.
+   - Then in the background (decided 2026-10-10): deal sizes of £25k and over, the uncommitted FRs (non-default row, about 4 MB) for the scores, then the unplanned features (about 1.7 MB) for pull-forward. The default row only holds committed FRs, about a third of the demand on planned issues, so scores wait for the background load. Each step fails on its own with a pill naming it.
 2. Then read live from Notion every issue edited since Lightdash's last sync (the latest `_extracted_at` in the loaded rows), and patch Start, End, Effort FE/BE/MOB, Team and Status onto the Lightdash rows before the engine runs. Lightdash is a synced copy and lags; Notion values win. Decided 2026-10-09: "edited since the sync" instead of "all issues in the 3 visible quarters", because unedited issues already match Lightdash and the edited set also catches issues moved into or out of the window.
    - An empty effort counts as 0 on both sides (Lightdash stores 0, Notion null).
    - Issues edited in Notion that the loaded Lightdash rows don't have (new since the sync) are added when they have a date, routed by their Team property.

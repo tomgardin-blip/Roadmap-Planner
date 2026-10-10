@@ -69,3 +69,10 @@ test('empty effort (Lightdash 0, Notion null) is not a change', () => {
   const { changed } = applyOverlay(lightdash, parseOverlay([notionRow(ID1, { 'Effort MOB': null, 'Effort BE': null })]));
   assert.deepEqual(changed, []);
 });
+
+test('applyOverlay addMissing:false only patches, never adds rows', () => {
+  const ov = parseOverlay([notionRow(ID2)]);
+  const r = applyOverlay(rows([Fr({ id: ID1, team: 'Transport Planning', fe: 1 })]), ov, { addMissing: false });
+  assert.equal(r.added.length, 0);
+  assert.equal(r.rows.length, 1);
+});

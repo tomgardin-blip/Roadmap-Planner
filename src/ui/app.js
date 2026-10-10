@@ -6,9 +6,10 @@
 // All three run through the same capacity engine.
 
 import { horizon as buildHorizon } from '../periods.js';
-import { buildGrid, runCapacity, issuesWithoutTeam, TEAMS } from '../capacity.js';
+import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
+import { scoreRows, dealSizeMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
-import { loadLive } from '../data/live.js';
+import { loadLive, loadExtras } from '../data/live.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer } from './drawer.js';
 import { LOGO } from './logo.js';
@@ -19,7 +20,13 @@ const NOW = new Date(ty, tm - 1, td, 12);
 const horizon = buildHorizon(TODAY);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const state = { teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [] };
+const state = {
+  teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
+  rows: null, // default Lightdash rows (overlaid)
+  // Background load (SPEC "Data flow"): scores need the uncommitted FRs, pull forward the unplanned backlog.
+  extra: { scores: 'loading', backlog: 'loading', scoresError: null, backlogError: null, deals: new Map(), taskRows: [], featureRows: [] },
+  scores: null, backlog: [], drawer: null,
+};
 
 function themeToggle() {
   const root = document.documentElement;
@@ -83,15 +90,41 @@ function shell() {
     if (!cell || !state.run) return;
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     cell.classList.add('sel');
-    openDrawer(document.getElementById('drawer'), { run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [], ...cell.dataset });
+    state.drawer = { ...cell.dataset };
+    renderDrawer();
   });
   document.getElementById('drawer').addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) {
       closeDrawer(document.getElementById('drawer'));
+      state.drawer = null;
       document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     }
   });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(document.getElementById('drawer')); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrawer(document.getElementById('drawer')); state.drawer = null; } });
+}
+
+function renderDrawer() {
+  if (!state.drawer || !state.run) return;
+  openDrawer(document.getElementById('drawer'), {
+    run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
+    scores: state.scores, backlog: state.backlog, extra: state.extra, ...state.drawer,
+  });
+}
+
+function rescore() {
+  const x = state.extra;
+  state.scores = scoreRows([...state.rows, ...x.taskRows, ...x.featureRows], x.deals);
+  state.backlog = x.featureRows.length ? toIssues(x.featureRows) : [];
+  renderChrome();
+  renderDrawer();
+}
+
+function onExtra(step, p) {
+  const x = state.extra;
+  if (p.error) { x[step] = 'error'; x[`${step}Error`] = p.error; }
+  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; }
+  else { x.backlog = 'ok'; x.featureRows = p.features; }
+  if (x.scores === 'ok') rescore(); else { renderChrome(); renderDrawer(); }
 }
 
 function setConn(id, s) {
@@ -114,6 +147,13 @@ function renderChrome() {
     const days = state.noTeam.reduce((a, i) => a + (i.skillEfforts.frontend || 0) + (i.skillEfforts.backend || 0) + (i.skillEfforts.mobile || 0), 0);
     pills.push(`<span class="pill warn" title="Issues with effort and dates but no team or assignee count in no team's load"><b>${state.noTeam.length}</b> with no team · ${Math.round(days)} d invisible</span>`);
   }
+  const x = state.extra;
+  if (state.run) {
+    const sc = { loading: 'Scores loading…', ok: 'Scores ready', error: 'Scores unavailable' }[x.scores];
+    const bl = x.scores === 'ok' ? { loading: ' · backlog loading…', ok: '', error: ' · backlog unavailable' }[x.backlog] : '';
+    const warn = x.scores === 'error' || x.backlog === 'error';
+    pills.push(`<span class="pill ${warn ? 'warn' : ''}" title="${esc([x.scoresError, x.backlogError].filter(Boolean).join(' ') || 'FR demand and the unplanned backlog load in the background after the grid.')}">${sc}${bl}</span>`);
+  }
   pills.push(`<span class="pill">Today <b>${esc(TODAY)}</b></span>`);
   document.getElementById('pills').innerHTML = pills.join(' ');
 
@@ -128,6 +168,7 @@ function draw() {
 }
 
 function show(rows) {
+  state.rows = rows;
   state.run = runCapacity(rows, { now: NOW });
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);
@@ -154,12 +195,18 @@ async function boot() {
     renderChrome();
     const { rows, status } = await loadLive(mcp);
     state.status = status;
-    if (rows) show(rows);
-    else { renderChrome(); document.getElementById('grid').innerHTML = ''; }
+    if (rows) {
+      show(rows);
+      loadExtras(mcp, status.overlay, onExtra);
+    } else { renderChrome(); document.getElementById('grid').innerHTML = ''; }
     return;
   }
   state.mode = Array.isArray(window.__RP_ROWS__) ? 'snapshot' : 'fake';
   show(state.mode === 'snapshot' ? window.__RP_ROWS__ : fakeLightdashRows(horizon));
+  // Local preview: a saved backlog ({deals, tasks, features} Lightdash rows) if given, else none.
+  const ex = window.__RP_EXTRA__ || {};
+  onExtra('scores', { deals: ex.deals || [], tasks: ex.tasks || [] });
+  onExtra('backlog', { features: ex.features || [] });
 }
 
 boot();

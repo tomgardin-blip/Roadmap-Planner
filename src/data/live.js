@@ -41,19 +41,8 @@ async function call(mcp, server, tool, input) {
   }
 }
 
-export async function loadLightdashRows(mcp) {
-  const input = {
-    projectUuid: PROJECT,
-    title: 'Roadmap Planner: engineering capacity',
-    description: 'Default row of serve_engineering_capacity for the Roadmap Planner',
-    queryConfig: {
-      exploreName: 'serve_engineering_capacity',
-      // Customer tasks feed the engine's effective committed date (earliest of the issue and its FRs); deals name the customers.
-      dimensions: ['serve_engineering_capacity_features', 'serve_engineering_capacity_engineering_team_allocations', 'serve_engineering_capacity_customer_tasks', 'serve_engineering_capacity_deals'],
-      metrics: [], sorts: [], limit: 2,
-      filters: { type: 'and', dimensions: [{ fieldId: 'serve_engineering_capacity_is_default', fieldType: 'boolean', fieldFilterType: 'boolean', operator: 'equals', values: [true] }] },
-    },
-  };
+async function runQuery(mcp, title, queryConfig) {
+  const input = { projectUuid: PROJECT, title, description: `${title} (Roadmap Planner)`, queryConfig };
   let res = (await call(mcp, LIGHTDASH, 'run_metric_query', input))?.result;
   for (let i = 0; res && res.status !== 'done' && i < 20; i++) {
     if (res.status === 'error' || res.status === 'cancelled' || res.status === 'expired') throw { code: 'tool_error', message: `query ${res.status}` };
@@ -62,6 +51,58 @@ export async function loadLightdashRows(mcp) {
   }
   if (!res || !Array.isArray(res.rows)) throw { code: 'tool_error', message: 'unexpected Lightdash response' };
   return res.rows;
+}
+
+const isDefault = (v) => ({ type: 'and', dimensions: [{ fieldId: 'serve_engineering_capacity_is_default', fieldType: 'boolean', fieldFilterType: 'boolean', operator: 'equals', values: [v] }] });
+
+/** Default row: planned or committed features, allocations, committed customer tasks, deals. */
+export function loadLightdashRows(mcp) {
+  return runQuery(mcp, 'Roadmap Planner: engineering capacity', {
+    exploreName: 'serve_engineering_capacity',
+    // Customer tasks feed the engine's effective committed date (earliest of the issue and its FRs); deals name the customers.
+    dimensions: ['serve_engineering_capacity_features', 'serve_engineering_capacity_engineering_team_allocations', 'serve_engineering_capacity_customer_tasks', 'serve_engineering_capacity_deals'],
+    metrics: [], sorts: [], limit: 2, filters: isDefault(true),
+  });
+}
+
+/** One column of the non-default row: 'customer_tasks' (uncommitted FRs, ~4 MB) or 'features' (unplanned backlog, ~1.7 MB). */
+export function loadExtraColumn(mcp, column) {
+  return runQuery(mcp, `Roadmap Planner: backlog ${column}`, {
+    exploreName: 'serve_engineering_capacity',
+    dimensions: [`serve_engineering_capacity_${column}`],
+    metrics: [], sorts: [], limit: 2, filters: isDefault(false),
+  });
+}
+
+/** Deal sizes of £25k and over: everything else counts ×1, so smaller deals are not needed. */
+export function loadDealSizes(mcp) {
+  return runQuery(mcp, 'Roadmap Planner: deal sizes', {
+    exploreName: 'deals_extract',
+    dimensions: ['deals_extract_notion_page_id', 'deals_extract_onboarding_deal_size_gbp'],
+    metrics: [], sorts: [{ fieldId: 'deals_extract_onboarding_deal_size_gbp', descending: true }], limit: 5000,
+    filters: { type: 'and', dimensions: [{ fieldId: 'deals_extract_onboarding_deal_size_gbp', fieldType: 'number', fieldFilterType: 'number', operator: 'greaterThanOrEqual', values: [25000] }] },
+  });
+}
+
+/**
+ * Background load after the grid renders (decided 2026-10-10): deal sizes + uncommitted FRs
+ * first (scores), then the unplanned features (pull-forward backlog). The Notion overlay is
+ * applied to the backlog rows too. onStep(name, payload | {error}) reports each step.
+ */
+export async function loadExtras(mcp, overlay, onStep) {
+  try {
+    const [deals, tasks] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks')];
+    onStep('scores', { deals, tasks });
+  } catch (err) {
+    onStep('scores', { error: explainError(LIGHTDASH, err) });
+  }
+  try {
+    let features = await loadExtraColumn(mcp, 'features');
+    if (overlay) features = applyOverlay(features, overlay, { addMissing: false }).rows;
+    onStep('backlog', { features });
+  } catch (err) {
+    onStep('backlog', { error: explainError(LIGHTDASH, err) });
+  }
 }
 
 export async function loadOverlay(mcp, since) {
@@ -92,6 +133,7 @@ export async function loadLive(mcp) {
   try {
     const overlay = await loadOverlay(mcp, status.syncedAt || '1970-01-01T00:00:00Z');
     const patched = applyOverlay(rows, overlay);
+    status.overlay = overlay;
     rows = patched.rows;
     status.changed = patched.changed;
     status.added = patched.added;
