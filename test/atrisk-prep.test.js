@@ -45,6 +45,8 @@ test('prep queues: no issue, no estimate, not planned; highest group wins; other
     F({ id: 'unpl', team: TP, be: 3 }),
     F({ id: 'onGrid', team: TP, be: 3, start: '2026-11-27', end: '2026-11-27' }),
     F({ id: 'both', team: TP }),
+    F({ id: 'otherTeam', team: 'Integration Hub' }),
+    F({ id: 'orphan' }),
   ];
   const tasks = [
     T('gl1', 'Needed for go-live', 'est0'),
@@ -52,12 +54,14 @@ test('prep queues: no issue, no estimate, not planned; highest group wins; other
     T('gl2', 'Needed 1 month before', 'onGrid'),
     T('t32', 'Top 3', 'both'), T('gl3', 'Needed for go-live', 'both'),
     T('lonely', 'Top 3'),
+    T('gl4', 'Needed for go-live', 'otherTeam'), T('gl5', 'Needed for go-live', 'orphan'),
     T('hi', 'High'),
   ];
   const rows = rowsOf(feats, tasks);
   const run = runCapacity(rows, { now: NOW });
   const q = prepQueues({ run, scores: scoreRows(rows), taskRows: rows, featureRows: rows });
-  assert.deepEqual(ids(q.goLive.noEstimate), ['both', 'est0']);
+  assert.deepEqual(ids(q.goLive.noEstimate), ['both', 'est0', 'orphan']);
+  assert.equal(q.goLive.noEstimate.find((e) => e.issue.id === 'orphan').noTeam, true);
   assert.deepEqual(ids(q.top3.notPlanned), ['unpl']);
   assert.deepEqual(ids(q.top3.noIssue), ['lonely']);
   assert.deepEqual(ids(q.goLive.notPlanned), []);

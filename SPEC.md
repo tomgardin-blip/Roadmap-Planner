@@ -152,6 +152,12 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - No eng issue: FRs needing Product to create or link one.
 - No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate.
 - Not planned: estimated, not on the grid. The to-do list.
+- Built 2026-10-10 (src/prep.js):
+  - Groups: "Required for GO LIVE" = FR priority Needed for go-live or Needed 1 month before; "Top 3" = Top 3. An issue sits under its highest-priority FR.
+  - Scope: issues routed to our 4 teams, plus issues with no team and no assignee (tagged "No team"). Other teams' issues are left out.
+  - No eng issue lists only FRs assigned to Engineering by default (most go-live FRs without an issue are integration requests assigned to Onboarding); a checkbox shows all.
+  - Not planned includes committed issues with no dates (TBD), which also show under At risk.
+  - Needs all FRs and the unplanned backlog, so it fills in after the background load.
 
 **4. At risk**
 
@@ -162,6 +168,10 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Dependency planned in the wrong order ("Blocked by" issue ends later).
 - No team set, so invisible in capacity.
 - Effort is a Claude estimate not yet reviewed (status "Claude - to review"), especially with low confidence.
+- Built 2026-10-10 (src/atrisk.js), for issues routed to our 4 teams (no-team rule: all issues):
+  - Commit dates are the engine's effective commit (earliest of the issue, its FRs and what it blocks).
+  - Dependency: a "Blocked by" issue that ends after this issue starts (pot issues: Start = End), or has no dates.
+  - Not checked yet, shown as such: effort growth (no effort baseline reachable from Lightdash or Notion) and low confidence (no confidence field).
 
 **5. Pushback candidates:** ranked list (see Scoring), with the COM/AM to contact.
 
@@ -271,6 +281,8 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 **Open questions**
 
 - [x] Can Claude Code publish to the claude.ai artifact runtime with `mcp`? Yes, confirmed 2026-10-09.
+- [ ] Effort-growth rule: needs a quarter-start effort baseline. The daily snapshots (BigQuery internal_bi_snapshots) are not in Lightdash. Expose them as an explore, or keep a baseline in Notion?
+- [ ] "Low confidence" Claude estimates: there is no confidence field. Drop the condition, or add a field?
 - [ ] How often does the Lightdash capacity dataset refresh? Decides how much the live Notion overlay must cover.
 - [x] Who owns the capacity planner's math? Sander De Wilde. We use his engine file unchanged and swap in each new export.
 - [x] How does the planner app build `emailToName`, `settings` and `config.teams`? Confirmed from Sander's app export (9 Oct 2026): email → title, `{daysPerMonth: 10.2, horizon: 12, startMonth: '2026-07'}`, `buildTeams(allocation, TEAM_DISPLAY_ORDER)`. Copied into `src/capacity.js`.

@@ -164,6 +164,36 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
     ${dateButtons(issue, horizon)}</div>`;
 }
 
+export const setDealNames = (m) => { dealNames = m; };
+
+/** Issue card for the list screens (at risk, prep queues): same tags, FRs and date buttons as the drawer. */
+export function listCard(issue, horizon, score, detail, extraTags = '') {
+  const eff = ['FE', 'BE', 'MOB'].map((s) => { const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0; return v ? `${s} ${fmt(v)}` : null; }).filter(Boolean).join(' · ') || 'No effort';
+  const late = issue.committed && issue.end && issue.end > issue.committed;
+  const tags = [
+    issue.committed ? `<span class="tag ${late ? 'late' : 'commit'}">${late ? 'After commit ' : 'Commit '}${formatDate(issue.committed)}</span>` : '',
+    `<span class="tag">${whenOf(issue)}</span>`,
+    scoreTag(score),
+    issue.team ? `<span class="tag">${esc(issue.team)}</span>` : '',
+    issue.status ? `<span class="tag ${issue.status === 'Blocked/on hold' ? 'blocked' : ''}">${esc(issue.status)}</span>` : '',
+    extraTags,
+  ].join('');
+  const title = issue.url ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
+  return `<div class="issue"><div class="t">${title}</div>
+    <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
+    ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
+    ${frBlock(score)}
+    ${dateButtons(issue, horizon)}</div>`;
+}
+
+/** FR card for the "no engineering issue" queue. */
+export function frCard(fr) {
+  const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
+  const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
+  const status = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team', fr.status].filter(Boolean).join(' · ');
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, status }, cust, title)}</ul></div>`;
+}
+
 export function openDrawer(el, { run, grid, horizon, changes = [], scores = null, backlog = [], extra = {}, names = new Map(), team, skill, period }) {
   dealNames = names;
   const byId = new Map(changes.map((c) => [c.id, c]));

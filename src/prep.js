@@ -40,7 +40,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     const g = groupOf(t[4]);
     if (!g) continue;
     const hasFeature = t[7] && String(t[7]).replace(/[[\]"\s]/g, '').length;
-    if (!hasFeature && !linked.has(id)) out[g].noIssue.push({ fr: { id, title: t[2], url: t[1], priority: t[4], status: t[5], dealId: t[6], committed: t[8] } });
+    if (!hasFeature && !linked.has(id)) out[g].noIssue.push({ fr: { id, title: t[2], url: t[1], priority: t[4], status: t[5], dealId: t[6], committed: t[8], assignedTeam: t[9] || null } });
   }
   const seen = new Set();
   for (const i of [...run.issues, ...backlog]) {
@@ -52,8 +52,10 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     const g = GROUPS.find((x) => groups.includes(x.key)).key;
     const teams = issueTeams(run, i);
     const ours = [...teams].some((x) => TEAMS.includes(x));
-    if (team !== 'all' ? !teams.has(team) : !(ours || !teams.size)) continue;
-    const entry = { issue: i, frs: frs.filter((f) => groupOf(f.priority)), noTeam: !teams.size };
+    // Truly unrouted: no Team property and no assignee. Other teams' issues are out of scope.
+    const noTeam = !i.team && !(i.assignedTo || []).length;
+    if (team !== 'all' ? !teams.has(team) : !(ours || noTeam)) continue;
+    const entry = { issue: i, frs: frs.filter((f) => groupOf(f.priority)), noTeam };
     if (effortOf(i) === 0) out[g].noEstimate.push(entry);
     else if (!(i.start || i.end)) out[g].notPlanned.push(entry);
   }

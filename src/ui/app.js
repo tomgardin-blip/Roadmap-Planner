@@ -11,7 +11,10 @@ import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { loadLive, loadExtras } from '../data/live.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr } from './drawer.js';
+import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames } from './drawer.js';
+import { renderAtRisk, renderPrep, tabCounts } from './lists.js';
+import { atRisk } from '../atrisk.js';
+import { prepQueues } from '../prep.js';
 import { startMove, startFrEdit, loadTestPages } from './actions.js';
 import { closeSheet } from './sheet.js';
 import { parseBlob } from '../scoring.js';
@@ -29,6 +32,7 @@ function initialView() {
 }
 
 const state = {
+  tab: 'capacity', allFrTeams: false,
   view: initialView(),
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
@@ -71,9 +75,9 @@ function shell() {
         <span class="connwrap"><span class="connicon" id="connL" title="Lightdash">L</span><span class="connicon" id="connN" title="Notion">N</span></span>
       </div>
       <nav class="tabs">
-        <button class="on">Capacity</button>
-        <button disabled title="Checkpoint 6">Prep queues</button>
-        <button disabled title="Checkpoint 6">At risk</button>
+        <button class="on" data-tab="capacity">Capacity</button>
+        <button data-tab="prep">Prep queues<span class="cnt" id="cntPrep"></span></button>
+        <button data-tab="risk">At risk<span class="cnt" id="cntRisk"></span></button>
         <button disabled title="v2">Pushback</button>
         <button disabled title="v2">History</button>
       </nav>
@@ -95,7 +99,16 @@ function shell() {
     <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Total = months + pot + TBD, as the planner's quarter cards. The current quarter counts from this week.</div>
     <aside class="drawer" id="drawer"></aside>`;
 
-  document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; draw(); });
+  document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; recompute(); draw(); });
+  document.querySelector('nav.tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-tab]');
+    if (!b || b.disabled) return;
+    state.tab = b.dataset.tab;
+    draw();
+  });
+  document.getElementById('grid').addEventListener('change', (e) => {
+    if (e.target.id === 'allFrTeams') { state.allFrTeams = e.target.checked; draw(); }
+  });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
   document.getElementById('viewSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-view]');
@@ -200,7 +213,9 @@ function rescore() {
   const x = state.extra;
   state.scores = scoreRows([...state.rows, ...x.taskRows, ...x.featureRows], x.deals);
   state.backlog = x.featureRows.length ? toIssues(x.featureRows) : [];
+  recompute();
   renderChrome();
+  if (state.tab !== 'capacity') draw();
   renderDrawer();
 }
 
@@ -209,7 +224,7 @@ function onExtra(step, p) {
   if (p.error) { x[step] = 'error'; x[`${step}Error`] = p.error; }
   else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; }
   else { x.backlog = 'ok'; x.featureRows = p.features; }
-  if (x.scores === 'ok') rescore(); else { renderChrome(); renderDrawer(); }
+  if (x.scores === 'ok') rescore(); else { recompute(); renderChrome(); if (state.tab !== 'capacity') draw(); renderDrawer(); }
 }
 
 function setConn(id, s) {
@@ -248,8 +263,29 @@ function renderChrome() {
   document.getElementById('banners').innerHTML = banners.join('');
 }
 
+/** At-risk flags (from the run) and prep queues (once all FRs and the backlog are in). */
+function recompute() {
+  if (!state.run) return;
+  state.risk = atRisk(state.run, { team: state.teamFilter });
+  const x = state.extra;
+  state.queues = x.scores === 'ok' && x.backlog !== 'loading'
+    ? prepQueues({ run: state.run, backlog: state.backlog, scores: state.scores, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], team: state.teamFilter })
+    : null;
+  const c = tabCounts(state.risk, state.queues);
+  document.getElementById('cntRisk').textContent = c.risk ?? '';
+  document.getElementById('cntPrep').textContent = c.prep ?? '';
+}
+
 function draw() {
   document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view));
+  document.querySelectorAll('nav.tabs button[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab));
+  const onGrid = state.tab === 'capacity';
+  document.querySelector('.toolbar .legend').hidden = !onGrid;
+  document.getElementById('viewSeg').hidden = !onGrid;
+  document.querySelector('.note').hidden = !onGrid;
+  const main = document.getElementById('grid');
+  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading' }); return; }
+  if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }
 
@@ -260,6 +296,8 @@ function show(rows) {
   state.run = runCapacity(rows, { now: NOW });
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);
+  setDealNames(state.dealNames);
+  recompute();
   renderChrome();
   draw();
 }
