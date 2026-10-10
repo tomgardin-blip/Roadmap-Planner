@@ -75,3 +75,13 @@ test('prep queues include the unplanned backlog', () => {
   const q = prepQueues({ run, backlog: toIssues(extra), scores: scoreRows([...rows, ...extra]), taskRows: rows, featureRows: [...rows, ...extra] });
   assert.deepEqual(ids(q.goLive.notPlanned), ['bk']);
 });
+
+test('prep queues: only FRs of signed customers count when a signed set is given', () => {
+  const S = (id, priority, features, deal) => Object.assign(T(id, priority, features), { 6: deal });
+  const rows = rowsOf([F({ id: 'i1', team: TP }), F({ id: 'i2', team: TP })],
+    [S('a', 'Top 3', 'i1', 'won'), S('b', 'Top 3', 'i2', 'prospect'), S('c', 'Top 3', null, 'prospect'), S('d', 'Top 3', null, 'won'), S('e', 'Top 3', null, null)]);
+  const run = runCapacity(rows, { now: NOW });
+  const q = prepQueues({ run, scores: scoreRows(rows), taskRows: rows, featureRows: rows, signed: new Set(['won']) });
+  assert.deepEqual(ids(q.top3.noEstimate), ['i1']);
+  assert.deepEqual(ids(q.top3.noIssue), ['d']);
+});

@@ -3,6 +3,8 @@
 //   noEstimate: linked issues with no FE/BE/MOB effort
 //   notPlanned: linked issues with effort but no Start/End (not on the month/pot grid)
 // An issue sits in the highest group among its linked FRs.
+// Only FRs of signed customers count (HubSpot deal status Closed-Won; Tom, 2026-10-10) when
+// `signed` is given; FRs with no customer are dropped then too.
 
 import { issueTeams, TEAMS } from './capacity.js';
 
@@ -24,7 +26,8 @@ const blob = (r, n) => { const v = r[`serve_engineering_capacity_${n}`]; return 
  * @param taskRows Lightdash rows carrying customer_tasks (default + extra)
  * @param featureRows Lightdash rows carrying features (default + extra), for FR → issue links
  */
-export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRows = [], team = 'all' }) {
+export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRows = [], team = 'all', signed = null }) {
+  const isSigned = (dealId) => !signed || (!!dealId && signed.has(nid(dealId)));
   const out = Object.fromEntries(GROUPS.map((g) => [g.key, { noIssue: [], noEstimate: [], notPlanned: [] }]));
   // FR ids linked to any feature, from both sides.
   const linked = new Set();
@@ -38,7 +41,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     if (seenTask.has(id)) continue;
     seenTask.add(id);
     const g = groupOf(t[4]);
-    if (!g) continue;
+    if (!g || !isSigned(t[6])) continue;
     const hasFeature = t[7] && String(t[7]).replace(/[[\]"\s]/g, '').length;
     if (!hasFeature && !linked.has(id)) out[g].noIssue.push({ fr: { id, title: t[2], url: t[1], priority: t[4], status: t[5], dealId: t[6], committed: t[8], assignedTeam: t[9] || null } });
   }
@@ -46,7 +49,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
   for (const i of [...run.issues, ...backlog]) {
     if (!i.id || seen.has(i.id) || CLOSED.has(i.status) || i.isParent) continue;
     seen.add(i.id);
-    const frs = scores?.get(i.id)?.frs || [];
+    const frs = (scores?.get(i.id)?.frs || []).filter((f) => isSigned(f.dealId));
     const groups = frs.map((f) => groupOf(f.priority)).filter(Boolean);
     if (!groups.length) continue;
     const g = GROUPS.find((x) => groups.includes(x.key)).key;

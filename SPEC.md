@@ -164,6 +164,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - No eng issue lists only FRs assigned to Engineering by default (most go-live FRs without an issue are integration requests assigned to Onboarding); a checkbox shows all.
   - Not planned includes committed issues with no dates (TBD), which also show under At risk.
   - Needs all FRs and the unplanned backlog, so it fills in after the background load.
+  - Signed customers only (Tom, 2026-10-10): an FR counts in the prep queues only when its customer's HubSpot deal status is Closed-Won (Lightdash deals_extract_deal_status). FRs with no customer are left out too. Go-live "No eng issue" for Engineering drops from 88 to 17.
 
 **4. At risk**
 

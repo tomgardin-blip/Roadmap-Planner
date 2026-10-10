@@ -76,6 +76,16 @@ export function loadExtraColumn(mcp, column) {
   });
 }
 
+/** Deals of signed customers (HubSpot deal status Closed-Won): Set of deal ids, no dashes. */
+export async function loadSignedDeals(mcp) {
+  const rows = await runQuery(mcp, 'Roadmap Planner: signed deals', {
+    exploreName: 'deals_extract', dimensions: ['deals_extract_notion_page_id'], metrics: [], sorts: [], limit: 5000,
+    filters: { type: 'and', dimensions: [{ fieldId: 'deals_extract_deal_status', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: ['Closed-Won'] }] },
+  });
+  return signedSet(rows);
+}
+export const signedSet = (rows) => new Set((rows || []).map((r) => String(r.deals_extract_notion_page_id || '').replace(/-/g, '').toLowerCase()).filter(Boolean));
+
 /** Deal sizes of £25k and over: everything else counts ×1, so smaller deals are not needed. */
 export function loadDealSizes(mcp) {
   return runQuery(mcp, 'Roadmap Planner: deal sizes', {
@@ -93,8 +103,8 @@ export function loadDealSizes(mcp) {
  */
 export async function loadExtras(mcp, overlay, onStep) {
   try {
-    const [deals, tasks] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks')];
-    onStep('scores', { deals, tasks });
+    const [deals, tasks, signed] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp)];
+    onStep('scores', { deals, tasks, signed });
   } catch (err) {
     onStep('scores', { error: explainError(LIGHTDASH, err) });
   }
