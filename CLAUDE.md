@@ -32,7 +32,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Read-only viewers (cannot edit the artifact) write nothing: no buttons, no baseline rows.
 
 ## Other writes
-- Slack: only the "No estimate" list to #dev_effort_estimate (`C0C1CPJKZKK`), as the viewer, after an editable preview, when they click Post. No tags.
+- Slack: only the "No estimate" issues the viewer ticks, to #dev_effort_estimate (`C0C1CPJKZKK`), as the viewer, after an editable preview, when they click Post. No tags.
 
 ## Working style
 - Ask Tom when in doubt.

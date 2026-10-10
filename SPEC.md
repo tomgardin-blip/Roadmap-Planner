@@ -156,7 +156,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 **3. Prep queues (per priority: Required for GO LIVE, Top 3)**
 
 - No eng issue: FRs needing Product to create or link one.
-- No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate (private, `C0C1CPJKZKK`), as the viewer, no tags, after an editable preview (decided 2026-10-10).
+- No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate (private, `C0C1CPJKZKK`), as the viewer, no tags, after an editable preview (decided 2026-10-10). Tom ticks which issues to post (none ticked by default); the message is rebuilt from the selection.
 - Not planned: estimated, not on the grid. The to-do list.
 - Built 2026-10-10 (src/prep.js):
   - Groups: "Required for GO LIVE" = FR priority Needed for go-live or Needed 1 month before; "Top 3" = Top 3. An issue sits under its highest-priority FR.

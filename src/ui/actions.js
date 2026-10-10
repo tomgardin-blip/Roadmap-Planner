@@ -4,7 +4,7 @@
 import { formatDate } from '../periods.js';
 import { FR_PRIORITIES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
 import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, previewComment, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
-import { ESTIMATE_CHANNEL } from '../estimate.js';
+import { ESTIMATE_CHANNEL, estimateMessage } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -145,16 +145,43 @@ export function startDismiss({ mcp, fr, issue, onDone }) {
   });
 }
 
-/** Preview, edit, then post the No estimate list to Slack as the viewer. */
-export function startEstimatePost({ mcp, message }) {
+/**
+ * Pick which "No estimate" issues to post (none ticked by default, Tom 2026-10-10), preview and
+ * edit the text, then post to Slack as the viewer. groups: [{ label, entries: [{ issue, frs }] }].
+ */
+export function startEstimatePost({ mcp, groups }) {
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
+  const list = groups.filter((g) => g.entries.length).map((g) => `
+    <div class="pickgrp"><div class="pickhead"><b>${esc(g.label)}</b> <span class="muted">(${g.entries.length})</span>
+      <button type="button" class="chip" data-pickall="${esc(g.label)}">All</button><button type="button" class="chip" data-picknone="${esc(g.label)}">None</button></div>
+      ${g.entries.map((e) => `<label class="pickrow" data-grp="${esc(g.label)}"><input type="checkbox" data-pick="${e.issue.id}">
+        <span><b>${esc(e.issue.name)}</b><span class="muted"> · ${esc(e.issue.team || 'No team')} · ${e.frs.length} FR${e.frs.length === 1 ? '' : 's'}${e.issue.committed ? ` · commit ${fd(e.issue.committed)}` : ''}</span></span></label>`).join('')}
+    </div>`).join('');
   const sheet = openSheet(`
     <h3>Post to ${ESTIMATE_CHANNEL.name}</h3>
-    <div class="srow muted">Posted as you, no tags. Edit before sending.</div>
-    <textarea id="sMsg" rows="14" class="smsg">${esc(message)}</textarea>
-    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend">Post</button></div>`);
+    <div class="srow muted">Tick the issues to post. Posted as you, no tags. Changing the selection rebuilds the text below.</div>
+    <div class="picklist">${list || '<div class="placeholder">No issues without an estimate.</div>'}</div>
+    <div class="srow"><b id="pickCount">0</b> selected</div>
+    <textarea id="sMsg" rows="10" class="smsg" placeholder="Tick issues above to build the message"></textarea>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend" disabled>Post</button></div>`);
+  const rebuild = () => {
+    const picked = new Set([...sheet.querySelectorAll('input[data-pick]:checked')].map((x) => x.dataset.pick));
+    sheet.querySelector('#pickCount').textContent = picked.size;
+    sheet.querySelector('#sMsg').value = picked.size ? estimateMessage(groups.map((g) => ({ label: g.label, entries: g.entries.filter((e) => picked.has(e.issue.id)) }))) : '';
+    sheet.querySelector('#sSend').disabled = !picked.size;
+  };
+  sheet.addEventListener('change', (e) => { if (e.target.matches('input[data-pick]')) rebuild(); });
+  sheet.addEventListener('click', (e) => {
+    const all = e.target.closest('[data-pickall]'); const none = e.target.closest('[data-picknone]');
+    const grp = (all || none)?.dataset.pickall || (all || none)?.dataset.picknone;
+    if (!grp) return;
+    sheet.querySelectorAll(`.pickrow[data-grp="${CSS.escape(grp)}"] input`).forEach((x) => { x.checked = !!all; });
+    rebuild();
+  });
   sheet.querySelector('#sSend').addEventListener('click', async (e) => {
+    const text = sheet.querySelector('#sMsg').value.trim();
+    if (!text) return;
     busy(e.target, true, 'Posting…');
-    try { await postSlack(mcp, ESTIMATE_CHANNEL.id, sheet.querySelector('#sMsg').value); closeSheet(); toast(`Posted to ${ESTIMATE_CHANNEL.name}.`); } catch (err) { busy(e.target, false, 'Post'); toast(err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err), 'bad'); }
+    try { await postSlack(mcp, ESTIMATE_CHANNEL.id, text); closeSheet(); toast(`Posted to ${ESTIMATE_CHANNEL.name}.`); } catch (err) { busy(e.target, false, 'Post'); toast(err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err), 'bad'); }
   });
 }

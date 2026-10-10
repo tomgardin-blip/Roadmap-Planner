@@ -284,3 +284,8 @@ details.more[open] > summary { display: none; }
 .estbtn { margin-left: auto; }
 .pill.ro { background: var(--amb-bg); color: var(--amb-ink); }
 .smsg { width: 100%; box-sizing: border-box; font: 12px/1.45 ui-monospace, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); margin-top: 8px; }
+.picklist { max-height: 42vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; padding: 4px 8px; }
+.pickgrp { padding: 6px 0; }
+.pickhead { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 4px; position: sticky; top: 0; background: var(--card); padding: 2px 0; }
+.pickrow { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.pickrow input { margin-top: 2px; }

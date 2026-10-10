@@ -17,7 +17,6 @@ import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealN
 import { renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
 import { pushbackCandidates, overbookedCells } from '../pushback.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
-import { estimateMessage } from '../estimate.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
@@ -162,7 +161,7 @@ function shell() {
     }
     if (e.target.closest('#estPost')) {
       const groups = GROUPS.map((g) => ({ label: g.label, entries: state.queues?.[g.key].noEstimate || [] }));
-      startEstimatePost({ mcp: state.mcp, message: estimateMessage(groups) });
+      startEstimatePost({ mcp: state.mcp, groups });
       return;
     }
     const fe = e.target.closest('button[data-fr-edit]');
