@@ -71,7 +71,7 @@ Each eng issue gets a score: demand from its linked FRs divided by FE+BE+MOB eff
 **Score formula (v1 default, tunable in the tool)**
 
 - Demand = sum over linked open FRs of (priority weight × customer revenue multiplier).
-- Score = demand ÷ (Effort FE + Effort BE + Effort MOB).
+- Score = demand ÷ (Effort FE + Effort BE + Effort MOB). No effort = unscored (not ranked). Effort but no weighted FRs = score 0.
 - Feature development is free for customers, so there is no cost term. Customer revenue does count.
 
 | FR priority | Weight |
@@ -252,7 +252,13 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 - [x] Who owns the capacity planner's math? Sander De Wilde. We use his engine file unchanged and swap in each new export.
 - [x] How does the planner app build `emailToName`, `settings` and `config.teams`? Confirmed from Sander's app export (9 Oct 2026): email → title, `{daysPerMonth: 10.2, horizon: 12, startMonth: '2026-07'}`, `buildTeams(allocation, TEAM_DISPLAY_ORDER)`. Copied into `src/capacity.js`.
 - [x] Engine version: the app export of 9 Oct 2026 carries the same engine file as the 27 Aug export (byte-identical).
-- [ ] The default Lightdash row with customer tasks and deals is about 2.6 MB. Confirm it loads through the artifact's `mcp` capability (first test publish).
+- [x] The default Lightdash row with customer tasks and deals is about 2.6 MB. Loads through the artifact's `mcp` capability (test publish, confirmed 2026-10-10).
+- [ ] Scoring: which task types count as an FR? Default: all (Feature request, Integration request, Onboarding task). Option `types` in `src/scoring.js`.
+- [ ] Scoring: several FRs from the same customer on one issue: each counts, or one per customer at its highest weight? Default: each counts. Option `perCustomerOnce`.
+- [ ] Scoring: customers with no deal size count ×1 (as under 25k)? Default: yes. Option `unknownDealMultiplier`.
+- [ ] Scoring: FRs with no priority weigh 0? Default: yes. Option `unknownPriorityWeight`.
+- [ ] Scoring: FRs linked to a parent issue also count for its sub-tasks? Parents carry no effort, so they are never scored. Default: no. Option `inheritParentFRs`.
+- [ ] Scoring: scoring the full backlog (Top 3 planning, not-planned queue) needs the non-default Lightdash rows (about 4 MB tasks, 1.7 MB features) on top of the default row. Load on open, or on demand?
 - [ ] Where does the planner audit log live: a new Notion database, or the artifact's own storage?
 - [ ] Should a move of a committed issue past its commit be blocked, or allowed with a mandatory reason?
 
