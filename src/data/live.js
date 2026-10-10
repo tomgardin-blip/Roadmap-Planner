@@ -29,7 +29,7 @@ export function explainError(server, err) {
   }
 }
 
-async function call(mcp, server, tool, input) {
+export async function call(mcp, server, tool, input) {
   try {
     return (await mcp.callTool(server, tool, input, { cache: false })).payload;
   } catch (err) {
@@ -41,7 +41,7 @@ async function call(mcp, server, tool, input) {
   }
 }
 
-async function runQuery(mcp, title, queryConfig) {
+export async function runQuery(mcp, title, queryConfig) {
   const input = { projectUuid: PROJECT, title, description: `${title} (Roadmap Planner)`, queryConfig };
   let res = (await call(mcp, LIGHTDASH, 'run_metric_query', input))?.result;
   for (let i = 0; res && res.status !== 'done' && i < 20; i++) {
