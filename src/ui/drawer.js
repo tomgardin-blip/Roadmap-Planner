@@ -5,6 +5,12 @@
 import { cellIssues } from '../capacity.js';
 import { formatDate } from '../periods.js';
 import { pushOut, pullForward } from '../suggestions.js';
+import { isAllowed } from '../notion/writes.js';
+
+// Issues and FRs rendered in the drawer, by id, for the write flows (src/ui/actions.js).
+const shown = { issues: new Map(), frs: new Map() };
+export const shownIssue = (id) => shown.issues.get(id);
+export const shownFr = (id) => shown.frs.get(id);
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n) => (Math.round(n * 10) / 10).toString();
@@ -24,17 +30,15 @@ function cellInfo(row, horizon, period) {
 }
 
 function dateButtons(issue, horizon) {
+  shown.issues.set(issue.id, issue);
+  const can = isAllowed('issue', issue.id);
   const pot = issue.start && issue.start === issue.end;
+  const tip = (d) => (can ? `Set Start = End = ${formatDate(d)} in Notion` : `Sets Start = End = ${formatDate(d)}. Test mode: only "Test Tom - ignore" is writable for now`);
+  const btn = (d, label, cur) => `<button ${can ? '' : 'disabled'} class="${cur ? 'cur' : ''}" data-move="${d}" data-label="${label}" data-issue="${issue.id}" title="${tip(d)}">${label}</button>`;
   let h = '<div class="datebtns">';
-  for (const q of horizon) for (const m of q.months) {
-    const cur = pot && issue.end === m.lastFriday && issue.end !== q.lastFriday;
-    h += `<button disabled class="${cur ? 'cur' : ''}" title="Sets Start = End = ${formatDate(m.lastFriday)} (checkpoint 5)">${m.label}</button>`;
-  }
+  for (const q of horizon) for (const m of q.months) h += btn(m.lastFriday, m.label, pot && issue.end === m.lastFriday && issue.end !== q.lastFriday);
   h += '<span class="sep"></span>';
-  for (const q of horizon) {
-    const cur = pot && issue.end === q.lastFriday;
-    h += `<button disabled class="${cur ? 'cur' : ''}" title="Sets Start = End = ${formatDate(q.lastFriday)} (checkpoint 5)">${q.shortLabel}</button>`;
-  }
+  for (const q of horizon) h += btn(q.lastFriday, q.shortLabel, pot && issue.end === q.lastFriday);
   return h + '</div>';
 }
 
@@ -65,9 +69,31 @@ function frBlock(s) {
   const rows = [...s.frs].sort((a, b) => b.points - a.points || String(a.priority).localeCompare(String(b.priority))).map((f) => {
     const cust = dealNames.get(nidOf(f.dealId)) || 'No customer';
     const t = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || 'FR')}</a>` : esc(f.title || 'FR');
-    return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}<div class="frt">${t}${f.status ? ` · ${esc(f.status)}` : ''}</div></li>`;
+    return frLine(f, cust, t);
   }).join('');
   return `<details class="frs"><summary>${sum}</summary><ul>${rows}</ul></details>`;
+}
+
+function frLine(f, cust, titleHtml) {
+  shown.frs.set(f.id, f);
+  const edit = isAllowed('fr', f.id)
+    ? `<button class="fredit" data-fr-edit="${f.id}">Edit</button>`
+    : '<button class="fredit" disabled title="Test mode: only &quot;Test Tom - ignore FR&quot; is editable for now">Edit</button>';
+  return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.status ? ` · ${esc(f.status)}` : ''}</div></li>`;
+}
+
+/** Drawer for the test pages: the write path end to end, on "Test Tom - ignore" and its FR. */
+export function renderTestPanel(el, { horizon, issue, fr, error }) {
+  const body = error ? `<div class="placeholder">${esc(error)}</div>` : !issue ? '<div class="placeholder">Reading the test pages from Notion…</div>' : `
+    <div class="hint">Writes go only to these two test pages until Tom approves real ones. Every change lands in the Roadmap Planner Audit Log.</div>
+    <h4>Test issue</h4>
+    <div class="issue"><div class="t"><a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a></div>
+      <div class="meta"><span class="tag">${issue.start || issue.end ? `${formatDate(issue.start)} → ${formatDate(issue.end)}` : 'No dates'}</span></div>
+      ${dateButtons(issue, horizon)}</div>
+    <h4>Test FR</h4>
+    <div class="issue"><ul class="frlist">${frLine({ ...fr, status: fr.successCommitted ? `Success Committed ${formatDate(fr.successCommitted)}` : 'No Success Committed' }, 'No customer', `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title)}</a>`)}</ul></div>`;
+  el.innerHTML = `<div class="dh"><b>Test writes</b><span class="sub">Notion write-back</span><span class="spacer"></span><button class="hx" data-close aria-label="Close">×</button></div><div class="dbody">${body}</div>`;
+  el.classList.add('open');
 }
 
 /** Compact row for a suggestion list. */

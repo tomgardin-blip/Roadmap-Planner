@@ -11,7 +11,10 @@ import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { loadLive, loadExtras } from '../data/live.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer } from './drawer.js';
+import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr } from './drawer.js';
+import { startMove, startFrEdit, loadTestPages } from './actions.js';
+import { closeSheet } from './sheet.js';
+import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
 
 const TODAY = new URLSearchParams(location.search).get('today') || new Date().toISOString().slice(0, 10);
@@ -31,7 +34,8 @@ const state = {
   rows: null, // default Lightdash rows (overlaid)
   // Background load (SPEC "Data flow"): scores need the uncommitted FRs, pull forward the unplanned backlog.
   extra: { scores: 'loading', backlog: 'loading', scoresError: null, backlogError: null, deals: new Map(), taskRows: [], featureRows: [] },
-  scores: null, backlog: [], drawer: null, dealNames: new Map(),
+  scores: null, backlog: [], drawer: null, dealNames: new Map(), dealGolive: new Map(),
+  mcp: null, test: null, // test: null (closed) or { issue, fr, error } for the Test writes drawer
 };
 
 function themeToggle() {
@@ -63,6 +67,7 @@ function shell() {
         <span id="modePill"></span>
         <span class="spacer"></span>
         <span id="pills"></span>
+        <button id="testBtn" class="testbtn" hidden title="Try the Notion write-back on the test pages">Test writes</button>
         <span class="connwrap"><span class="connicon" id="connL" title="Lightdash">L</span><span class="connicon" id="connN" title="Notion">N</span></span>
       </div>
       <nav class="tabs">
@@ -105,19 +110,85 @@ function shell() {
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     cell.classList.add('sel');
     state.drawer = { ...cell.dataset };
+    state.test = null;
     renderDrawer();
   });
   document.getElementById('drawer').addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) {
       closeDrawer(document.getElementById('drawer'));
       state.drawer = null;
+      state.test = null;
       document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     }
   });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrawer(document.getElementById('drawer')); state.drawer = null; } });
+  document.getElementById('testBtn').addEventListener('click', openTest);
+  // Write flows (delegated: buttons live in the drawer and the sheet).
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-sheet-close]')) { closeSheet(); return; }
+    const mv = e.target.closest('button[data-move]');
+    if (mv && !mv.disabled) {
+      const issue = shownIssue(mv.dataset.issue);
+      const blockers = (state.run?.issues || []).filter((i) => (i.blocks || []).includes(issue.id) && !['Done', "Won't do", 'Duplicate'].includes(i.status));
+      startMove({ mcp: state.mcp, issue, date: mv.dataset.move, label: mv.dataset.label, blockers, onDone: (r) => afterMove(issue, r) });
+      return;
+    }
+    const fe = e.target.closest('button[data-fr-edit]');
+    if (fe && !fe.disabled) {
+      const fr = shownFr(fe.dataset.frEdit);
+      startFrEdit({ mcp: state.mcp, fr, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r) });
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('rp-sheet')) { closeSheet(); return; }
+    closeDrawer(document.getElementById('drawer')); state.drawer = null; state.test = null;
+  });
+}
+
+async function openTest() {
+  state.drawer = null;
+  state.test = {};
+  renderDrawer();
+  try { state.test = await loadTestPages(state.mcp); } catch (err) { state.test = { error: `Could not read the test pages: ${err?.message || err?.code || 'unknown error'}` }; }
+  renderDrawer();
+}
+
+/** Patch a feature row's Start/End in the loaded rows so the grid follows the write. */
+function afterMove(issue, { after }) {
+  let hit = false;
+  state.rows = state.rows.map((r) => {
+    const blob = r.serve_engineering_capacity_features;
+    if (blob == null) return r;
+    const feats = parseBlob(blob).map((f) => {
+      if (String(f[0]).replace(/-/g, '').toLowerCase() !== issue.id) return f;
+      hit = true;
+      const g = f.slice(); g[24] = after.start; g[25] = after.end; return g;
+    });
+    return hit ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
+  });
+  if (hit) show(state.rows);
+  if (state.test) openTest(); else renderDrawer();
+}
+
+/** Patch an FR's priority in the loaded task rows and rescore. */
+function afterFrEdit(fr, { changes }) {
+  const pr = changes.find((c) => c.field === 'Priority');
+  if (pr) {
+    const patch = (rows) => rows.map((r) => {
+      const blob = r.serve_engineering_capacity_customer_tasks;
+      if (blob == null) return r;
+      const tasks = parseBlob(blob).map((t) => (String(t[0]).replace(/-/g, '').toLowerCase() === fr.id ? Object.assign(t.slice(), { 4: pr.after }) : t));
+      return { ...r, serve_engineering_capacity_customer_tasks: JSON.stringify(tasks) };
+    });
+    state.rows = patch(state.rows);
+    state.extra.taskRows = patch(state.extra.taskRows);
+    if (state.extra.scores === 'ok') rescore();
+  }
+  if (state.test) openTest();
 }
 
 function renderDrawer() {
+  if (state.test) { renderTestPanel(document.getElementById('drawer'), { horizon, ...state.test }); return; }
   if (!state.drawer || !state.run) return;
   openDrawer(document.getElementById('drawer'), {
     run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
@@ -185,6 +256,7 @@ function draw() {
 function show(rows) {
   state.rows = rows;
   state.dealNames = dealNameMap(rows);
+  state.dealGolive = new Map(rows.flatMap((r) => parseBlob(r.serve_engineering_capacity_deals)).filter((d) => d[0] && d[5]).map((d) => [String(d[0]).replace(/-/g, '').toLowerCase(), String(d[5]).slice(0, 10)]));
   state.run = runCapacity(rows, { now: NOW });
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);
@@ -206,6 +278,8 @@ async function boot() {
     return;
   }
   if (mcp) {
+    state.mcp = mcp;
+    document.getElementById('testBtn').hidden = false;
     state.mode = 'live';
     state.status = { lightdash: 'loading', notion: 'loading' };
     renderChrome();

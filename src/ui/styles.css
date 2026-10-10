@@ -235,3 +235,27 @@ details.more[open] > summary { display: none; }
   .grid td.lead .tsum { display: none; }
   .drawer { width: 100vw; }
 }
+
+/* Write flows: sheet, toast, FR edit */
+#rp-sheet { position: fixed; inset: 0; z-index: 60; }
+#rp-sheet .sheet-bg { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+#rp-sheet .sheet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: min(520px, 100%); max-height: 90vh; overflow: auto; background: var(--card); color: var(--ink); border-radius: 14px 14px 0 0; padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
+@media (min-width: 701px) { #rp-sheet .sheet { bottom: auto; top: 12vh; border-radius: 14px; } }
+#rp-sheet h3 { margin: 0 0 10px; font-size: 15px; }
+.srow { font-size: 13px; margin: 6px 0; }
+.swarn { font-size: 12px; margin: 6px 0; padding: 6px 8px; border-radius: 8px; background: var(--amb-bg); color: var(--amb-ink); }
+.squote { font-size: 13px; padding: 8px 10px; border-left: 3px solid var(--green-dark); background: var(--grey); border-radius: 6px; margin: 8px 0; white-space: pre-wrap; }
+.sfld { display: block; font-size: 12px; font-weight: 600; margin: 12px 0 0; }
+.sfld input, .sfld select { display: block; width: 100%; margin-top: 4px; padding: 7px 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); box-sizing: border-box; }
+.muted { color: var(--muted); font-weight: 400; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { padding: 3px 9px; font-size: 12px; border-radius: 999px; }
+.chip.on, .chip.on:focus { background: var(--navy) !important; color: #fff !important; border-color: var(--navy) !important; outline: none; }
+.sact { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.sact .primary { background: var(--green-dark); border-color: var(--green-dark); color: #fff; font-weight: 700; }
+.toast { position: fixed; left: 50%; top: 16px; transform: translate(-50%, -20px); opacity: 0; pointer-events: none; z-index: 70; max-width: min(560px, calc(100% - 32px)); padding: 10px 14px; border-radius: 10px; background: var(--navy); color: #fff; font-size: 13px; transition: all .2s; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.bad { background: var(--red-ink); }
+.fredit { float: right; padding: 1px 8px; font-size: 11px; border-radius: 6px; }
+.frlist { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.testbtn { padding: 4px 10px; font-size: 12px; border-radius: 8px; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.4); margin-right: 8px; }

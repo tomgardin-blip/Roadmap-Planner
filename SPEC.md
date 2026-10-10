@@ -218,6 +218,10 @@ Notion gotchas:
 
 - "Test Tom - ignore FR": https://app.notion.com/p/3f5e32e8f8c881d6927bd504b6f10e54 (page ID `3f5e32e8-f8c8-81d6-927b-d504b6f10e54`), linked to "Test Tom - ignore", no company. All FR writes and owner pings happen on this FR only until Tom approves real FRs. It has no company, so it has no Responsible Success: for this FR only, the ping goes to the viewer (test hook).
 
+**Test writes panel**
+
+- A "Test writes" button in the header (live page only) opens the test issue and the test FR, read live from Notion, with the same date buttons and FR edit as everywhere else. It exists because the test pages carry no effort and so never show up in a grid cell.
+
 **History**
 
 - Daily dbt snapshots in `qargo-internal-bi.internal_bi_snapshots` (from 2026-10-06), used by Sander De Wilde's `roadmap-changes` skill. Daily cadence: same-day changes and reverts are invisible.
