@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { revenueMultiplier, priorityWeight, scoreIssue, scoreFeatures, dealSizeMap, idList } from '../src/scoring.js';
+import { rankIssues, revenueMultiplier, priorityWeight, scoreIssue, scoreFeatures, dealSizeMap, idList } from '../src/scoring.js';
 import { featureRow as F } from '../src/data/fake.js';
 
 // Synthetic data only. Expected values worked out by hand from SPEC's tables.
@@ -91,4 +91,20 @@ test('idList handles JSON arrays, comma strings, dashes and null', () => {
   assert.deepEqual(idList('["A-1","b-2"]'), ['a1', 'b2']);
   assert.deepEqual(idList('a-1, b'), ['a1', 'b']);
   assert.deepEqual(idList(null), []);
+});
+
+test('rankIssues: quick wins (effort <= 2 by default) apart, unscored out, score 0 last in main', () => {
+  const items = [
+    { id: 'tiny', effort: 0.5, score: 40 },
+    { id: 'big', effort: 14, score: 31 },
+    { id: 'edge', effort: 2, score: 10 },
+    { id: 'zero', effort: 5, score: 0 },
+    { id: 'zeroSmall', effort: 1, score: 0 },
+    { id: 'none', effort: 0, score: null },
+    { id: 'mid', effort: 4, score: 50 },
+  ];
+  const r = rankIssues(items);
+  assert.deepEqual(r.main.map((x) => x.id), ['mid', 'big', 'zeroSmall', 'zero']);
+  assert.deepEqual(r.quickWins.map((x) => x.id), ['tiny', 'edge']);
+  assert.deepEqual(rankIssues(items, { quickWinMaxEffort: 1 }).quickWins.map((x) => x.id), ['tiny']);
 });

@@ -25,17 +25,20 @@ export const REVENUE_BANDS = [[75000, 2], [25000, 1.5], [0, 1]];
 export const CLOSED_TASK_STATUSES = new Set(['Done', 'Closed', 'Cancelled', "Won't do", 'No longer needed', 'Duplicate']);
 
 export const SCORING_DEFAULTS = {
-  // Task types that count as an FR. null = every type (Feature request, Integration request, ...).
+  // Task types that count as an FR. null = every type (decided 2026-10-10).
   types: null,
-  // true: each FR counts, also several from the same customer on one issue.
-  // false: one customer counts once per issue, at its highest weight.
+  // false: each FR counts, also several from the same customer on one issue (decided 2026-10-10).
+  // true: one customer counts once per issue, at its highest weight.
   perCustomerOnce: false,
   // Weight for a task with no priority set.
   unknownPriorityWeight: 0,
-  // Multiplier for a customer with no deal size.
+  // Multiplier for a customer with no deal size: same as under 25k (rare, decided 2026-10-10).
   unknownDealMultiplier: 1,
-  // true: FRs linked to a parent issue also count for each of its sub-tasks.
+  // FRs linked to a parent issue do not count for its sub-tasks (decided 2026-10-10).
   inheritParentFRs: false,
+  // Quick wins: scored issues with total effort (FE+BE+MOB) at or under this many days are
+  // listed apart from the main ranking. 2 is a default awaiting Tom's confirmation.
+  quickWinMaxEffort: 2,
 };
 
 export function revenueMultiplier(gbp, unknown = SCORING_DEFAULTS.unknownDealMultiplier) {
@@ -135,6 +138,22 @@ export function dealSizeMap(rows) {
     if (r.deals_extract_notion_page_id && v != null && v !== '') m.set(nid(r.deals_extract_notion_page_id), Number(v));
   }
   return m;
+}
+
+/**
+ * Split scored issues into the main ranking and quick wins, each by score high to low.
+ * Unscored issues (no effort) are left out. Score 0 (no demand) is never a quick win: it sits at
+ * the bottom of the main list, whatever its effort.
+ * items: [{ score, effort, ... }]
+ */
+export function rankIssues(items, opts = {}) {
+  const { quickWinMaxEffort } = { ...SCORING_DEFAULTS, ...opts };
+  const byScore = (a, b) => b.score - a.score || a.effort - b.effort;
+  const scored = items.filter((x) => x.score != null);
+  return {
+    main: scored.filter((x) => x.effort > quickWinMaxEffort || x.score === 0).sort(byScore),
+    quickWins: scored.filter((x) => x.effort <= quickWinMaxEffort && x.score > 0).sort(byScore),
+  };
 }
 
 export { parseBlob };

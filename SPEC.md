@@ -96,6 +96,7 @@ Needed 1 month before is more urgent than Needed for go-live, but the committed 
 
 - Replaces the current "5+ linked FRs" rule.
 - High score + low effort = quick-win fillers. These fill the last few days of a quarter and are first to move out when a quarter overbooks.
+- Quick wins are shown as their own list, apart from the main ranking (decided 2026-10-10): a tiny issue with one go-live FR scores high by design, and whether it is worth doing needs Tom's judgment. Main ranking = scored issues above the effort cut-off, plus every score-0 issue at the bottom. Quick wins = score above 0 at or under the cut-off.
 
 **Pushback candidates**
 
@@ -253,12 +254,9 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 - [x] How does the planner app build `emailToName`, `settings` and `config.teams`? Confirmed from Sander's app export (9 Oct 2026): email → title, `{daysPerMonth: 10.2, horizon: 12, startMonth: '2026-07'}`, `buildTeams(allocation, TEAM_DISPLAY_ORDER)`. Copied into `src/capacity.js`.
 - [x] Engine version: the app export of 9 Oct 2026 carries the same engine file as the 27 Aug export (byte-identical).
 - [x] The default Lightdash row with customer tasks and deals is about 2.6 MB. Loads through the artifact's `mcp` capability (test publish, confirmed 2026-10-10).
-- [ ] Scoring: which task types count as an FR? Default: all (Feature request, Integration request, Onboarding task). Option `types` in `src/scoring.js`.
-- [ ] Scoring: several FRs from the same customer on one issue: each counts, or one per customer at its highest weight? Default: each counts. Option `perCustomerOnce`.
-- [ ] Scoring: customers with no deal size count ×1 (as under 25k)? Default: yes. Option `unknownDealMultiplier`.
-- [ ] Scoring: FRs with no priority weigh 0? Default: yes. Option `unknownPriorityWeight`.
-- [ ] Scoring: FRs linked to a parent issue also count for its sub-tasks? Parents carry no effort, so they are never scored. Default: no. Option `inheritParentFRs`.
-- [ ] Scoring: scoring the full backlog (Top 3 planning, not-planned queue) needs the non-default Lightdash rows (about 4 MB tasks, 1.7 MB features) on top of the default row. Load on open, or on demand?
+- [x] Scoring decisions (2026-10-10): every task type counts as an FR; each FR counts, also several from one customer on the same issue; FRs on a parent do not count for its sub-tasks; a customer with no deal size counts ×1 (rare). Only issues of the 4 teams with FE/BE/MOB effort are scored.
+- [x] The full backlog (non-default Lightdash rows, about 6 MB) loads on demand, not on open.
+- [ ] Quick wins: effort cut-off. Default 2 days total (FE+BE+MOB), option `quickWinMaxEffort`.
 - [ ] Where does the planner audit log live: a new Notion database, or the artifact's own storage?
 - [ ] Should a move of a committed issue past its commit be blocked, or allowed with a mandatory reason?
 
