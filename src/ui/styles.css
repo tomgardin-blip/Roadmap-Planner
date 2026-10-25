@@ -99,7 +99,7 @@ button {
   font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 8px;
   border: 1px solid #dcdcda; background: var(--card); color: var(--ink); cursor: pointer;
 }
-button:hover:not(:disabled) { background: var(--grey); }
+@media (hover: hover) { button:hover:not(:disabled) { background: var(--grey); } }
 button:disabled { opacity: .45; cursor: default; }
 .legend { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
 .legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 4px; }
@@ -157,10 +157,10 @@ table.grid { border-collapse: separate; border-spacing: 0; font-size: 12px; tabl
 /* Side drawer, same treatment as Liam's .drawer */
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 48; width: 560px; max-width: 100vw;
-  background: var(--paper); box-shadow: -10px 0 24px rgba(0,0,0,.18);
+  background: var(--paper);
   display: flex; flex-direction: column; transform: translateX(100%); transition: transform .2s ease;
 }
-.drawer.open { transform: translateX(0); }
+.drawer.open { transform: translateX(0); box-shadow: -10px 0 24px rgba(0,0,0,.18); }
 .drawer .dh { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 9px 16px; background: var(--navy); color: #fff; }
 .drawer .dh b { font-size: 14px; font-weight: 600; }
 .drawer .dh .sub { color: rgba(255,255,255,.6); font-size: 12px; }
@@ -227,15 +227,6 @@ details.more[open] > summary { display: none; }
 .grid td.cell.tbd .d { color: var(--tbd-ink); }
 .grid td.cell.pot { background: var(--qtot); } .grid td.cell.pot .d { color: var(--muted); font-weight: 600; }
 .issue .t a { color: inherit; text-decoration: none; } .issue .t a:hover { text-decoration: underline; }
-@media (max-width: 640px) {
-  .topbar .tsub { display: none; }
-  .grid col.c-team { width: 96px; } .grid col.c-skill { width: 44px; }
-  .grid th.lead2, .grid td.lead2 { left: 96px; padding: 0 6px; }
-  .grid td.lead { padding: 8px 6px; font-size: 11px; }
-  .grid td.lead .tsum { display: none; }
-  .drawer { width: 100vw; }
-}
-
 /* Write flows: sheet, toast, FR edit */
 #rp-sheet { position: fixed; inset: 0; z-index: 60; }
 #rp-sheet .sheet-bg { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
@@ -289,3 +280,78 @@ details.more[open] > summary { display: none; }
 .pickhead { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 4px; position: sticky; top: 0; background: var(--card); padding: 2px 0; }
 .pickrow { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .pickrow input { margin-top: 2px; }
+
+.note > summary { cursor: pointer; font-weight: 600; }
+.ticon { display: none; }
+/* Hover outlines only where there is a pointer: on touch they stick after a tap. */
+@media (hover: none) {
+  .grid td.cell:hover { box-shadow: none; }
+  .grid td.cell.sel { box-shadow: inset 0 0 0 2px var(--navy); }
+}
+/* Phones (same breakpoint as the default Quarters view in app.js). */
+@media (max-width: 700px) {
+  /* Top bar: one line of brand + actions, status pills in a strip that scrolls sideways. */
+  .topbar { gap: 8px; padding: 8px 12px; row-gap: 6px; }
+  .topbar .tsub, .topbar .brandbar { display: none; }
+  .topbar .logo { height: 16px; }
+  .topbar .brandtitle { font-size: 13px; }
+  #pills { order: 10; flex: 1 0 100%; display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; margin: 0 -12px; padding: 0 12px; }
+  #pills::-webkit-scrollbar { display: none; }
+  #pills .pill { flex: 0 0 auto; }
+  .testbtn { padding: 4px 8px; font-size: 11px; margin-right: 0; }
+  .tabs { padding: 0 8px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { padding: 10px 10px 9px; }
+  /* Toolbar: team, view switch and theme on one row; the legend is the colours themselves. */
+  .toolbar { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
+  .toolbar .legend { display: none; }
+  label.fld { font-size: 0; gap: 0; min-width: 0; flex: 1 1 auto; }
+  label.fld select { flex: 1 1 auto; min-width: 0; width: 100%; }
+  .toolbar .spacer { display: none; }
+  .toolbar .seg { flex: 0 0 auto; }
+  #themeBtn { flex: 0 0 auto; padding: 6px 9px; line-height: 0; }
+  #themeBtn .tlabel { display: none; } #themeBtn .ticon { display: inline; }
+  /* iOS zooms into form fields under 16px. */
+  select, input[type="text"], input[type="date"], textarea, .sfld input, .sfld select { font-size: 16px; }
+  .smsg { font-size: 13px; }
+  .note { padding: 8px 12px; max-height: 40vh; overflow: auto; }
+  .banner { margin: 0 12px 8px; }
+
+  /* Grid */
+  .grid col.c-team { width: 92px; } .grid col.c-skill { width: 42px; }
+  .grid th.lead2, .grid td.lead2 { left: 92px; padding: 0 6px; }
+  .grid td.lead { padding: 8px 6px; font-size: 11px; }
+  .grid td.lead .tsum { display: none; }
+  .grid thead th { padding: 6px 4px; }
+  .grid td.cell .n .cap { display: block; font-size: 10px; }
+  .grid td.cell { height: 52px; }
+  .grid.quarters col.c-team { width: 24%; } .grid.quarters col.c-skill { width: 11%; }
+  .grid.quarters td.cell .n { font-size: 14px; }
+  /* Months: fixed column widths so the table scrolls sideways instead of squashing. */
+  /* 92 + 42 lead + 3 quarters × (3 × 64 + 2 × 54 + 84): fixed layout needs the real width. */
+  .grid:not(.quarters) { min-width: 1286px; width: 1286px; }
+  .grid:not(.quarters) col:not([class]) { width: 64px; }
+  .grid:not(.quarters) col.c-pot { width: 54px; } .grid:not(.quarters) col.c-qt { width: 84px; }
+  .grid td.cell .d { font-size: 9px; }
+
+  /* Drawer and sheets */
+  .drawer { width: 100vw; }
+  .drawer .dh { padding: 8px 12px; }
+  .drawer .dh .hx { width: 36px; height: 36px; font-size: 22px; }
+  .drawer .dsum { padding: 8px 12px; gap: 6px; }
+  .drawer .dsum .stat { flex: 1 1 0; min-width: 0; padding: 6px 8px; }
+  .drawer .dbody { padding: 10px 12px calc(24px + env(safe-area-inset-bottom)); }
+  .datebtns button { padding: 6px 10px; font-size: 12px; }
+  #rp-sheet .sheet { padding-bottom: calc(20px + env(safe-area-inset-bottom)); max-height: 92vh; }
+  .sact button { padding: 9px 16px; font-size: 14px; }
+  .chip { padding: 6px 12px; font-size: 13px; }
+  .picklist { max-height: 36vh; }
+
+  /* Lists */
+  .lists { padding: 10px 12px 40px; }
+  .lsec > summary { flex-wrap: wrap; row-gap: 2px; }
+  .estbtn { margin-left: 0; width: 100%; }
+  .hrow { grid-template-columns: 1fr; gap: 2px; }
+  .htable { display: block; overflow-x: auto; }
+}
+}

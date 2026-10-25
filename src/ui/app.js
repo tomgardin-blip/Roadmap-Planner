@@ -97,12 +97,12 @@ function shell() {
         </span>
         <span class="seg" id="viewSeg"><button data-view="quarters">Quarters</button><button data-view="months">Months</button></span>
         <span class="spacer" style="flex:1"></span>
-        <button id="themeBtn" title="Light / dark">Theme</button>
+        <button id="themeBtn" title="Light / dark"><span class="tlabel">Theme</span><svg class="ticon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
       </div>
       <div id="banners"></div>
     </header>
     <main class="gridwrap" id="grid"><div class="loading">Loading capacity from Lightdash…</div></main>
-    <div class="note">Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Total = months + pot + TBD, as the planner's quarter cards. The current quarter counts from this week.</div>
+    <details class="note"><summary>How these numbers work</summary>Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Total = months + pot + TBD, as the planner's quarter cards. The current quarter counts from this week.</details>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; recompute(); draw(); });
@@ -117,6 +117,8 @@ function shell() {
     if (e.target.id === 'pbOverbooked') { state.pbOverbooked = e.target.checked; recompute(); draw(); }
   });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
+  // Footnote open on desktop, folded on phones where it would cover half the grid.
+  document.querySelector('.note').open = !matchMedia('(max-width: 700px)').matches;
   document.getElementById('viewSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-view]');
     if (!b) return;
