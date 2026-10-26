@@ -9,7 +9,8 @@ import { horizon as buildHorizon } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
-import { loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
+import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
+import { loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
 import { userName } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { renderGrid } from './grid.js';
@@ -44,6 +45,7 @@ const state = {
   extra: { scores: 'loading', backlog: 'loading', scoresError: null, backlogError: null, deals: new Map(), taskRows: [], featureRows: [] },
   scores: null, backlog: [], drawer: null, dealNames: new Map(), dealGolive: new Map(),
   baseline: null, baselineError: null,
+  feed: null, feedError: null, // Sander's capacity feed (latest run) or null
   mcp: null, test: null, // test: null (closed) or { issue, fr, error } for the Test writes drawer
 };
 
@@ -261,6 +263,15 @@ function renderChrome() {
     pills.push(`<span class="pill ${warn ? 'warn' : ''}" title="${esc([x.scoresError, x.backlogError].filter(Boolean).join(' ') || 'FR demand and the unplanned backlog load in the background after the grid.')}">${sc}${bl}</span>`);
   }
   pills.push(`<span class="pill">Today <b>${esc(TODAY)}</b></span>`);
+  if (state.mode === 'live' && state.run) {
+    // Where capacity comes from: Sander's daily run of the data app's engine, or our own copy.
+    const src = state.run.capacitySource;
+    if (src) pills.push(`<span class="pill" title="Capacity from the data app's own engine (Sander's daily run${src.engine ? `, engine ${esc(src.engine)}` : ''}). Demand from the planner's engine copy.">Capacity ${esc(fmtTime(src.run))}</span>`);
+    else {
+      const why = !CAPACITY_DS ? 'Sander\'s capacity feed is not set up yet' : state.feedError ? `Capacity feed unreadable: ${state.feedError}` : state.feed ? `Sander's capacity feed is stale (last run ${fmtTime(state.feed.run)})` : 'Sander\'s capacity feed has no runs yet';
+      pills.push(`<span class="pill warn" title="${esc(why)}. Capacity comes from the planner's own copy of the engine (9 Oct export) and can differ from the data app per skill.">Capacity: own engine copy</span>`);
+    }
+  }
   document.getElementById('pills').innerHTML = pills.join(' ');
 
   const banners = [];
@@ -322,6 +333,7 @@ function show(rows) {
   state.dealNames = dealNameMap(rows);
   state.dealGolive = new Map(rows.flatMap((r) => parseBlob(r.serve_engineering_capacity_deals)).filter((d) => d[0] && d[5]).map((d) => [String(d[0]).replace(/-/g, '').toLowerCase(), String(d[5]).slice(0, 10)]));
   state.run = runCapacity(rows, { now: NOW });
+  if (state.feed && feedAgeDays(state.feed) <= FEED_MAX_AGE_DAYS) applyFeed(state.run, state.feed);
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);
   setDealNames(state.dealNames);
@@ -353,7 +365,11 @@ async function boot() {
     state.mode = 'live';
     state.status = { lightdash: 'loading', notion: 'loading' };
     renderChrome();
-    const { rows, status } = await loadLive(mcp);
+    const [{ rows, status }, feed] = await Promise.all([
+      loadLive(mcp),
+      loadCapacityFeed(mcp).catch((err) => { state.feedError = explainError(NOTION, err); return null; }),
+    ]);
+    state.feed = feed;
     state.status = status;
     if (rows) {
       show(rows);

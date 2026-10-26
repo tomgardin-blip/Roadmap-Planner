@@ -279,6 +279,7 @@ Read the model from Lightdash, overlay live Notion, write to Notion, log every w
 **Reuse, don't rebuild**
 
 - Capacity math: from the Lightdash capacity planner.
+- Capacity feed (Tom, 2026-10-27, to stop needing Sander's engine exports): Sander's daily roadmap-changes-report skill already runs the data app's own engine. It also writes capacity per team × skill × week to a Notion table "Roadmap Planner Capacity" (one row per team × skill per run: Name, Run datetime, Team = engine team id, Skill = backend/frontend/mobile, Weeks = JSON {week Monday YYYY-MM-DD: days, net of holidays, as computed.capWeekTeamSkill}, Engine = version/commit). The planner takes capacity from the latest run; demand stays with our engine copy (it matches). A run older than 3 days, or no table, falls back to our own copy with a warning pill "Capacity: own engine copy"; a fresh run shows "Capacity <run time>". Status: planner side built; the table still needs Tom's go to be created (under "Roadmap Planner Audit logs"), then Sander adds the write step.
 - Committed date logic: from `int_customer_tasks` / `int_engineering_features`.
 - Change detection: from Sander's snapshots and `roadmap-changes` definitions (can defer, must pull forward, committed not planned).
 
