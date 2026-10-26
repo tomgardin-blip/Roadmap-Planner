@@ -4,6 +4,7 @@
 // Each source fails on its own: no Notion still renders Lightdash with a stale warning.
 
 import { CAPACITY_DS, feedQueryInput, parseFeed } from './capacityFeed.js';
+import { parseComments } from '../notion/comments.js';
 import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
@@ -203,6 +204,19 @@ export async function loadCapacityFeed(mcp) {
   if (!CAPACITY_DS) return null;
   const r = await call(mcp, NOTION, 'notion-query-data-sources', feedQueryInput());
   return parseFeed(r?.results);
+}
+
+/** Notion comments of FRs, 4 at a time. → Map(frId → { count, last } | { error }). */
+export async function loadFrComments(mcp, frIds) {
+  const out = new Map();
+  const queue = [...frIds];
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try { out.set(id, parseComments((await call(mcp, NOTION, 'notion-get-comments', { page_id: id }))?.text)); } catch (err) { out.set(id, { error: explainError(NOTION, err) }); }
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  return out;
 }
 
 export async function loadAudit(mcp, max = 500) {

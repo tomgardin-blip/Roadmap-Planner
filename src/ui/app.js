@@ -10,7 +10,7 @@ import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../c
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
-import { loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
+import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
 import { userName } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { renderGrid } from './grid.js';
@@ -45,6 +45,7 @@ const state = {
   extra: { scores: 'loading', backlog: 'loading', scoresError: null, backlogError: null, deals: new Map(), taskRows: [], featureRows: [] },
   scores: null, backlog: [], drawer: null, dealNames: new Map(), dealGolive: new Map(),
   baseline: null, baselineError: null,
+  frComments: new Map(), frCommentsLoading: false, // Notion comments of No-engineering-issue FRs
   feed: null, feedError: null, // Sander's capacity feed (latest run) or null
   mcp: null, test: null, // test: null (closed) or { issue, fr, error } for the Test writes drawer
 };
@@ -216,6 +217,23 @@ function afterMoves(done) {
 }
 
 /** Bulk bar: shows while issues are ticked; same month / quarter buttons as on a card. */
+/** Notion comments for the No-engineering-issue FRs on screen, read once per FR in the background. */
+function loadComments() {
+  if (!state.mcp || !state.queues || state.frCommentsLoading) return;
+  const ids = [...new Set(GROUPS.flatMap((g) => state.queues[g.key].noIssue)
+    .filter((e) => state.allFrTeams || e.fr.assignedTeam === 'Engineering').map((e) => e.fr.id))].filter((id) => !state.frComments.has(id));
+  if (!ids.length) return;
+  state.frCommentsLoading = true;
+  loadFrComments(state.mcp, ids)
+    .then(async (m) => {
+      for (const [id, c] of m) {
+        if (c.last?.by) { if (!state.users.has(c.last.by)) state.users.set(c.last.by, await userName(state.mcp, c.last.by)); c.last.name = state.users.get(c.last.by) || ''; }
+        state.frComments.set(id, c);
+      }
+    })
+    .finally(() => { state.frCommentsLoading = false; if (state.tab === 'prep') draw(); });
+}
+
 function renderBulkBar() {
   const bar = document.getElementById('bulkbar');
   const n = selectedIssues().length;
@@ -360,7 +378,7 @@ function draw() {
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort }); return; }
-  if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort }); return; }
+  if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { list: state.pushback, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, overbookedOnly: state.pbOverbooked, readOnly: state.readOnly, team: state.teamFilter }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);

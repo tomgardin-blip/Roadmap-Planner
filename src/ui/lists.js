@@ -47,7 +47,7 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
 
-export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly, sort = 'value' }) {
+export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly, sort = 'value', comments = new Map() }) {
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
     ${readOnly ? '' : '<button class="estbtn" id="estPost" title="Post the No estimate issues to #product-create-ei-skill-trigger after a preview">Post No estimate to #product-create-ei-skill-trigger</button>'}
@@ -56,7 +56,15 @@ export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, r
     const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, 'commit') }; // Not planned: always by committed date (Tom, 2026-10-26)
     const noIssue = allFrTeams ? q.noIssue : q.noIssue.filter((e) => e.fr.assignedTeam === 'Engineering');
     h += `<h3 class="lgroup">${esc(g.label)}</h3>`;
-    h += section(`prep-${g.key}-noIssue`, 'No engineering issue', noIssue.length, 'Product to create or link one', capped(noIssue, (e) => frCard(e.fr), `${g.key}-noIssue`));
+    // FRs with Notion comments first: the product-feature skill usually ran but found or made no issue,
+    // so they need a manual check (Tom, 2026-10-26). Then the ones without comments.
+    const cm = (e) => comments.get(e.fr.id);
+    const withC = noIssue.filter((e) => cm(e)?.count > 0);
+    const rest = noIssue.filter((e) => !(cm(e)?.count > 0));
+    const sub = (label, n) => `<div class="lsubhead">${esc(label)} <span class="cnt">${n}</span></div>`;
+    const body = (withC.length ? sub('Has comments: check manually', withC.length) + capped(withC, (e) => frCard(e.fr, cm(e)), `${g.key}-noIssueC`) : '')
+      + (withC.length && rest.length ? sub('No comments yet', rest.length) : '') + capped(rest, (e) => frCard(e.fr, cm(e)), `${g.key}-noIssue`);
+    h += section(`prep-${g.key}-noIssue`, 'No engineering issue', noIssue.length, withC.length ? `Product to create or link one · ${withC.length} with comments` : 'Product to create or link one', noIssue.length ? body : '<div class="placeholder">None.</div>');
     h += section(`prep-${g.key}-noEstimate`, 'No estimate', q.noEstimate.length, 'Issue without FE/BE/MOB effort', capped(q.noEstimate, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-noEstimate`));
     h += section(`prep-${g.key}-notPlanned`, 'Not planned', q.notPlanned.length, q.notPlanned.length ? `${days(q.notPlanned)} d · the to-do list, by committed date` : 'the to-do list', capped(q.notPlanned, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-notPlanned`), true);
   }

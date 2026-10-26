@@ -204,11 +204,20 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
 }
 
 /** FR card for the "no engineering issue" queue. */
-export function frCard(fr) {
+export function frCard(fr, comments) {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
   const status = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team', fr.status].filter(Boolean).join(' · ');
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, status }, cust, title)}</ul></div>`;
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, status }, cust, title)}</ul>${commentLine(comments)}</div>`;
+}
+
+// Comments on the FR in Notion: count, and the latest one (who, when, first words).
+function commentLine(c) {
+  if (c === undefined) return '<div class="cmt muted">Comments loading…</div>';
+  if (!c || c.error) return `<div class="cmt muted">Comments unavailable${c?.error ? `: ${esc(c.error)}` : ''}</div>`;
+  if (!c.count) return '<div class="cmt muted">No comments</div>';
+  const t = c.last.text.length > 220 ? `${c.last.text.slice(0, 220)}…` : c.last.text;
+  return `<div class="cmt"><span class="tag qw">💬 ${c.count} comment${c.count === 1 ? '' : 's'}</span> <span class="muted">Latest${c.last.name ? ` by ${esc(c.last.name)}` : ''}${c.last.at ? `, ${formatDate(c.last.at.slice(0, 10))}` : ''}:</span> ${esc(t)}</div>`;
 }
 
 export function openDrawer(el, { run, grid, horizon, changes = [], scores = null, backlog = [], extra = {}, names = new Map(), team, skill, period }) {
