@@ -54,6 +54,50 @@ export function startMove(ctx) {
   });
 }
 
+/**
+ * Bulk move (Tom, 2026-10-26): Start = End = date on several issues, one reason for all. Each issue is
+ * its own Notion write and audit row, in order; stops at the first failure and says how far it got.
+ * ctx: { mcp, items: [{ issue, blockers }], date, label, onDone(results) }
+ */
+export function startBulkMove(ctx) {
+  const { mcp, items, date, label, onDone } = ctx;
+  if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
+  const ok = items.filter((x) => isAllowed('issue', x.issue.id));
+  if (!ok.length) return toast('Nothing selected that can be moved.', 'bad');
+  const rows = ok.map(({ issue, blockers }) => {
+    const w = moveWarnings(issue, date, blockers);
+    return `<div class="pickrow"><span><b>${esc(issue.name)}</b><span class="muted"> · now ${issue.start || issue.end ? `${fd(issue.start)} → ${fd(issue.end)}` : 'no dates'}</span>${w.map((x) => `<div class="warnt">⚠ ${esc(x)}</div>`).join('')}</span></div>`;
+  }).join('');
+  const nWarn = ok.filter(({ issue, blockers }) => moveWarnings(issue, date, blockers).length).length;
+  const sheet = openSheet(`
+    <h3>Move ${ok.length} issue${ok.length === 1 ? '' : 's'}</h3>
+    <div class="srow">Start = End = <b>${fd(date)}</b> (${esc(label)}) on each</div>
+    ${nWarn ? `<div class="swarn">⚠ ${nWarn} with a warning, shown below. Allowed; each is logged.</div>` : ''}
+    <div class="picklist">${rows}</div>
+    ${reasonField()}
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Move ${ok.length}</button></div>`);
+  wireReason(sheet);
+  sheet.querySelector('#sSave').addEventListener('click', async (e) => {
+    const reason = sheet.querySelector('#sReason').value.trim();
+    const done = [];
+    for (let i = 0; i < ok.length; i++) {
+      busy(e.target, true, `Moving ${i + 1}/${ok.length}…`);
+      try {
+        const r = await moveIssue(mcp, { issue: ok[i].issue, start: date, end: date, reason, blockers: ok[i].blockers });
+        done.push({ issue: ok[i].issue, r });
+      } catch (err) {
+        busy(e.target, false, `Move ${ok.length}`);
+        toast(`${done.length} of ${ok.length} moved. Stopped at "${ok[i].issue.name}": ${errText(err)}`, 'bad');
+        if (done.length) onDone?.(done);
+        return;
+      }
+    }
+    closeSheet();
+    toast(`Moved ${done.length} issue${done.length === 1 ? '' : 's'} to ${fd(date)}. Each logged.`);
+    onDone?.(done);
+  });
+}
+
 /** FR edit: Success Committed and Priority. ctx: { mcp, fr: {id, title, dealId}, golive, onDone } */
 export async function startFrEdit(ctx) {
   const { mcp, fr, golive, onDone } = ctx;

@@ -14,14 +14,14 @@ import { loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOw
 import { userName } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames, setReadOnly } from './drawer.js';
+import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
 import { pushbackCandidates, overbookedCells } from '../pushback.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
-import { startMove, startFrEdit, loadTestPages, startDismiss, startEstimatePost } from './actions.js';
+import { startMove, startBulkMove, startFrEdit, loadTestPages, startDismiss, startEstimatePost } from './actions.js';
 import { closeSheet } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -97,6 +97,7 @@ function shell() {
     </header>
     <main class="gridwrap" id="grid"><div class="loading">Loading capacity from Lightdash…</div></main>
     <details class="note"><summary>How these numbers work</summary>Same layout and numbers as the Lightdash engineering capacity planner, computed by its own engine with Notion edits since the last Lightdash sync applied on top. Per skill: spare effort days, capacity minus demand (green = room left, red = overbooked). Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level (demand only, so negative). TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Qtr = months + pot + TBD. Card header: demand / spare for the quarter. The current quarter counts from this week. Tap any number to see the issues behind it.</details>
+    <div class="bulkbar" id="bulkbar" hidden></div>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; recompute(); draw(); });
@@ -112,6 +113,13 @@ function shell() {
     if (e.target.id === 'pbOverbooked') { state.pbOverbooked = e.target.checked; recompute(); draw(); }
   });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches?.('input.bsel')) return;
+    toggleSelected(e.target.dataset.bsel, e.target.checked);
+    // The same issue can show in several lists: keep every copy of its box in step.
+    document.querySelectorAll(`input.bsel[data-bsel="${e.target.dataset.bsel}"]`).forEach((x) => { x.checked = e.target.checked; });
+    renderBulkBar();
+  });
   // Footnote open on desktop, folded on phones where it would cover half the grid.
   document.querySelector('.note').open = !matchMedia('(max-width: 700px)').matches;
   document.getElementById('grid').addEventListener('click', (e) => {
@@ -138,10 +146,16 @@ function shell() {
     const mv = e.target.closest('button[data-move]');
     if (mv && !mv.disabled) {
       const issue = shownIssue(mv.dataset.issue);
-      const blockers = (state.run?.issues || []).filter((i) => (i.blocks || []).includes(issue.id) && !['Done', "Won't do", 'Duplicate'].includes(i.status));
-      startMove({ mcp: state.mcp, issue, date: mv.dataset.move, label: mv.dataset.label, blockers, onDone: (r) => afterMove(issue, r) });
+      startMove({ mcp: state.mcp, issue, date: mv.dataset.move, label: mv.dataset.label, blockers: blockersOf(issue), onDone: (r) => afterMove(issue, r) });
       return;
     }
+    const bm = e.target.closest('button[data-bulkmove]');
+    if (bm) {
+      const items = selectedIssues().map((id) => shownIssue(id)).filter(Boolean).map((issue) => ({ issue, blockers: blockersOf(issue) }));
+      startBulkMove({ mcp: state.mcp, items, date: bm.dataset.bulkmove, label: bm.dataset.label, onDone: (done) => { done.forEach(({ issue }) => toggleSelected(issue.id, false)); afterMoves(done); renderBulkBar(); } });
+      return;
+    }
+    if (e.target.closest('[data-bulkclear]')) { clearSelected(); document.querySelectorAll('input.bsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); return; }
     const dm = e.target.closest('button[data-dismiss]');
     if (dm) {
       const c = state.pushback?.find((x) => x.fr.id === dm.dataset.dismiss);
@@ -175,20 +189,44 @@ async function openTest() {
 }
 
 /** Patch a feature row's Start/End in the loaded rows so the grid follows the write. */
-function afterMove(issue, { after }) {
+function blockersOf(issue) {
+  return (state.run?.issues || []).filter((i) => (i.blocks || []).includes(issue.id) && !['Done', "Won't do", 'Duplicate'].includes(i.status));
+}
+
+function afterMove(issue, r) { afterMoves([{ issue, r }]); }
+
+/** Patch the new dates into the loaded rows and redraw once. done: [{ issue, r: { after } }] */
+function afterMoves(done) {
+  const next = new Map(done.map(({ issue, r }) => [issue.id, r.after]));
   let hit = false;
   state.rows = state.rows.map((r) => {
     const blob = r.serve_engineering_capacity_features;
     if (blob == null) return r;
+    let changed = false;
     const feats = parseBlob(blob).map((f) => {
-      if (String(f[0]).replace(/-/g, '').toLowerCase() !== issue.id) return f;
-      hit = true;
+      const after = next.get(String(f[0]).replace(/-/g, '').toLowerCase());
+      if (!after) return f;
+      hit = changed = true;
       const g = f.slice(); g[24] = after.start; g[25] = after.end; return g;
     });
-    return hit ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
+    return changed ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
   });
   if (hit) show(state.rows);
   if (state.test) openTest(); else renderDrawer();
+}
+
+/** Bulk bar: shows while issues are ticked; same month / quarter buttons as on a card. */
+function renderBulkBar() {
+  const bar = document.getElementById('bulkbar');
+  const n = selectedIssues().length;
+  bar.hidden = !n || state.readOnly;
+  if (bar.hidden) return;
+  const btn = (d, label) => `<button data-bulkmove="${d}" data-label="${label}" title="Set Start = End = ${d} on the ${n} selected">${label}</button>`;
+  let h = `<span class="bcount"><b>${n}</b> selected</span><span class="datebtns">`;
+  for (const q of horizon) for (const m of q.months) h += btn(m.lastFriday, m.label);
+  h += '<span class="sep"></span>';
+  for (const q of horizon) h += btn(q.lastFriday, q.shortLabel);
+  bar.innerHTML = `${h}</span><button class="bclear" data-bulkclear>Clear</button>`;
 }
 
 /** Patch an FR's priority in the loaded task rows and rescore. */

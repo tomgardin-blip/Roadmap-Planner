@@ -15,12 +15,14 @@ const LIMIT = 30;
 export function sortEntries(list, scores, mode = 'value') {
   const commit = (e) => String(e.issue?.committed || '9');
   const byCommit = (a, b) => commit(a).localeCompare(commit(b));
-  if (mode === 'commit') return [...list].sort(byCommit);
   const s = (e) => scores?.get(e.issue?.id);
   const key = (e) => { const x = s(e); return x ? [x.score != null ? 1 : 0, x.score ?? x.demand ?? 0] : [0, -1]; };
-  return [...list].sort((a, b) => { const ka = key(a), kb = key(b); return kb[0] - ka[0] || kb[1] - ka[1] || byCommit(a, b); });
+  const byValue = (a, b) => { const ka = key(a), kb = key(b); return kb[0] - ka[0] || kb[1] - ka[1]; };
+  // Committed date first, then customer value, so equal dates still show the most valuable first.
+  if (mode === 'commit') return [...list].sort((a, b) => byCommit(a, b) || byValue(a, b));
+  return [...list].sort((a, b) => byValue(a, b) || byCommit(a, b));
 }
-const sortSel = (mode) => `<label class="lchk lsort">Sort <select id="listSort"><option value="value" ${mode !== 'commit' ? 'selected' : ''}>Customer value (score), highest first</option><option value="commit" ${mode === 'commit' ? 'selected' : ''}>Committed date, earliest first</option></select></label>`;
+const sortSel = (mode, note = '') => `<label class="lchk lsort">Sort${note} <select id="listSort"><option value="value" ${mode !== 'commit' ? 'selected' : ''}>Customer value (score), highest first</option><option value="commit" ${mode === 'commit' ? 'selected' : ''}>Committed date, earliest first</option></select></label>`;
 
 function section(id, title, count, sub, body, open = false) {
   return `<details class="lsec" ${open ? 'open' : ''} id="${id}"><summary><b>${esc(title)}</b><span class="cnt">${count}</span>${sub ? `<span class="lsub">${esc(sub)}</span>` : ''}</summary><div class="lbody">${body}</div></details>`;
@@ -49,14 +51,14 @@ export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, r
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
     ${readOnly ? '' : '<button class="estbtn" id="estPost" title="Post the No estimate issues to #product-create-ei-skill-trigger after a preview">Post No estimate to #product-create-ei-skill-trigger</button>'}
-    <label class="lchk"><input type="checkbox" id="allFrTeams" ${allFrTeams ? 'checked' : ''}> No-issue list: include FRs not assigned to Engineering</label>${sortSel(sort)}</div>`;
+    <label class="lchk"><input type="checkbox" id="allFrTeams" ${allFrTeams ? 'checked' : ''}> No-issue list: include FRs not assigned to Engineering</label>${sortSel(sort, ' No estimate')}</div>`;
   for (const g of GROUPS) {
-    const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, sort) };
+    const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, 'commit') }; // Not planned: always by committed date (Tom, 2026-10-26)
     const noIssue = allFrTeams ? q.noIssue : q.noIssue.filter((e) => e.fr.assignedTeam === 'Engineering');
     h += `<h3 class="lgroup">${esc(g.label)}</h3>`;
     h += section(`prep-${g.key}-noIssue`, 'No engineering issue', noIssue.length, 'Product to create or link one', capped(noIssue, (e) => frCard(e.fr), `${g.key}-noIssue`));
     h += section(`prep-${g.key}-noEstimate`, 'No estimate', q.noEstimate.length, 'Issue without FE/BE/MOB effort', capped(q.noEstimate, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-noEstimate`));
-    h += section(`prep-${g.key}-notPlanned`, 'Not planned', q.notPlanned.length, q.notPlanned.length ? `${days(q.notPlanned)} d · the to-do list` : 'the to-do list', capped(q.notPlanned, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-notPlanned`), true);
+    h += section(`prep-${g.key}-notPlanned`, 'Not planned', q.notPlanned.length, q.notPlanned.length ? `${days(q.notPlanned)} d · the to-do list, by committed date` : 'the to-do list', capped(q.notPlanned, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-notPlanned`), true);
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

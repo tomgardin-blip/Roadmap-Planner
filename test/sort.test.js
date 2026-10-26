@@ -10,5 +10,5 @@ test('lists sort by customer value: score, then demand of unscored, then committ
   ]);
   const list = [e('noEff2'), e('lo', '2027-02-01'), e('none'), e('tie', '2026-12-01'), e('hi'), e('noEff')];
   assert.deepEqual(sortEntries(list, scores).map((x) => x.issue.id), ['hi', 'tie', 'lo', 'noEff', 'noEff2', 'none']);
-  assert.deepEqual(sortEntries(list, scores, 'commit').map((x) => x.issue.id).slice(0, 2), ['tie', 'lo']);
+  assert.deepEqual(sortEntries(list, scores, 'commit').map((x) => x.issue.id), ['tie', 'lo', 'hi', 'noEff', 'noEff2', 'none']);
 });

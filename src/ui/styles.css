@@ -316,3 +316,15 @@ table.qt { width: 100%; border-collapse: collapse; font-size: 12px; font-variant
   .qt th:first-child { width: 22%; }
   .qt { font-size: 11.5px; }
 }
+
+/* Bulk select (tick boxes on issue cards, bar at the bottom) */
+input.bsel { width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px; accent-color: var(--navy); cursor: pointer; }
+.bulkbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 55; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100% - 24px); padding: 10px 14px; border-radius: 12px; background: var(--navy); color: #fff; box-shadow: 0 8px 28px rgba(0,0,0,.3); }
+.bulkbar .datebtns { margin: 0; }
+.bulkbar .datebtns button, .bulkbar .bclear { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.25); }
+@media (hover: hover) { .bulkbar .datebtns button:hover, .bulkbar .bclear:hover { background: rgba(255,255,255,.25); } }
+.bulkbar .datebtns .sep { background: rgba(255,255,255,.3); }
+.lists, .drawer .dbody { padding-bottom: 96px; }
+@media (min-width: 701px) { .bulkbar { flex-wrap: nowrap; } .bulkbar .datebtns { flex-wrap: nowrap; } }
+@media (max-width: 700px) { .bulkbar { bottom: calc(8px + env(safe-area-inset-bottom)); padding: 8px 10px; gap: 6px; } }

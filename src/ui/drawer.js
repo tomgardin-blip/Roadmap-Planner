@@ -14,6 +14,16 @@ export const setReadOnly = (v) => { readOnly = !!v; };
 // Issues and FRs rendered in the drawer, by id, for the write flows (src/ui/actions.js).
 const shown = { issues: new Map(), frs: new Map() };
 export const shownIssue = (id) => shown.issues.get(id);
+
+// Bulk select (Tom, 2026-10-26): ticked issues, moved together from the bulk bar. Survives redraws.
+const selected = new Set();
+export const selectedIssues = () => [...selected];
+export const toggleSelected = (id, on) => { if (on) selected.add(id); else selected.delete(id); };
+export const clearSelected = () => selected.clear();
+function selBox(issue) {
+  if (readOnly || !isAllowed('issue', issue.id)) return '';
+  return `<input type="checkbox" class="bsel" data-bsel="${issue.id}" ${selected.has(issue.id) ? 'checked' : ''} title="Select to move several issues at once" aria-label="Select ${esc(issue.name)}">`;
+}
 export const shownFr = (id) => shown.frs.get(id);
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -165,7 +175,7 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
   ].join('');
   const title = issue.url && !issue.url.includes('example.invalid')
     ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
-  return `<div class="issue"><div class="t">${title}</div>
+  return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
     <div class="meta">${tags}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span></div>
     ${frBlock(score)}
     ${dateButtons(issue, horizon)}</div>`;
@@ -186,7 +196,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
     extraTags,
   ].join('');
   const title = issue.url ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
-  return `<div class="issue"><div class="t">${title}</div>
+  return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
     <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
     ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
     ${frBlock(score)}
