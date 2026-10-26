@@ -31,15 +31,9 @@ const NOW = new Date(ty, tm - 1, td, 12);
 const horizon = buildHorizon(TODAY);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function initialView() {
-  try { const v = localStorage.getItem('rp.view'); if (v === 'quarters' || v === 'months') return v; } catch { /* storage unavailable */ }
-  return matchMedia('(max-width: 700px)').matches ? 'quarters' : 'months';
-}
-
 const state = {
   tab: 'capacity', allFrTeams: false, pbOverbooked: false, readOnly: false,
   audit: null, auditError: null, owners: null, ownersLoading: false, users: new Map(), pushback: null,
-  view: initialView(),
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
   // Background load (SPEC "Data flow"): scores need the uncommitted FRs, pull forward the unplanned backlog.
@@ -90,19 +84,13 @@ function shell() {
       </nav>
       <div class="toolbar">
         <label class="fld">Team <select id="teamSel"><option value="all">All teams</option>${TEAMS.map((t) => `<option>${esc(t)}</option>`).join('')}</select></label>
-        <span class="legend">
-          <span><span class="sw ok"></span>at or under capacity</span>
-          <span><span class="sw red"></span>over capacity</span>
-          <span>· quarter totals only</span>
-        </span>
-        <span class="seg" id="viewSeg"><button data-view="quarters">Quarters</button><button data-view="months">Months</button></span>
         <span class="spacer" style="flex:1"></span>
         <button id="themeBtn" title="Light / dark"><span class="tlabel">Theme</span><svg class="ticon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
       </div>
       <div id="banners"></div>
     </header>
     <main class="gridwrap" id="grid"><div class="loading">Loading capacity from Lightdash…</div></main>
-    <details class="note"><summary>How these numbers work</summary>Load / capacity in effort days, computed by the Lightdash planner's own engine, with Notion edits since the last Lightdash sync applied on top. Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level. TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Total = months + pot + TBD, as the planner's quarter cards. The current quarter counts from this week.</details>
+    <details class="note"><summary>How these numbers work</summary>Same layout and numbers as the Lightdash engineering capacity planner, computed by its own engine with Notion edits since the last Lightdash sync applied on top. Per skill: spare effort days, capacity minus demand (green = room left, red = overbooked). Months: dated work (Start ≠ End) by working day; a week counts in the month of its Friday. Pot: issues with Start = End, at quarter level (demand only, so negative). TBD: committed issues with no dates, in the quarter of their committed date (overdue ones in the current quarter). Qtr = months + pot + TBD. Card header: demand / spare for the quarter. The current quarter counts from this week. Tap any number to see the issues behind it.</details>
     <aside class="drawer" id="drawer"></aside>`;
 
   document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; recompute(); draw(); });
@@ -119,13 +107,6 @@ function shell() {
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
   // Footnote open on desktop, folded on phones where it would cover half the grid.
   document.querySelector('.note').open = !matchMedia('(max-width: 700px)').matches;
-  document.getElementById('viewSeg').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-view]');
-    if (!b) return;
-    state.view = b.dataset.view;
-    try { localStorage.setItem('rp.view', state.view); } catch { /* storage unavailable */ }
-    draw();
-  });
   document.getElementById('grid').addEventListener('click', (e) => {
     const cell = e.target.closest('td.cell[data-period]');
     if (!cell || !state.run) return;
@@ -320,11 +301,8 @@ function recompute() {
 }
 
 function draw() {
-  document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view));
   document.querySelectorAll('nav.tabs button[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab));
   const onGrid = state.tab === 'capacity';
-  document.querySelector('.toolbar .legend').hidden = !onGrid;
-  document.getElementById('viewSeg').hidden = !onGrid;
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError }); return; }
