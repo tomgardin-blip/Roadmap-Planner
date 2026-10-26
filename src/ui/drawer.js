@@ -50,7 +50,9 @@ function dateButtons(issue, horizon) {
 const FIELD_LABEL = { start: 'Start', end: 'End', fe: 'FE', be: 'BE', mob: 'MOB', team: 'Team', status: 'Status' };
 const showVal = (k, v) => (v == null || v === '' ? '–' : (k === 'start' || k === 'end') ? formatDate(v) : String(v));
 
-const scoreTag = (s) => (s ? `<span class="tag score" title="Demand ${fmt(s.demand)} ÷ effort ${fmt(s.effort)} d · ${s.frCount} FRs, ${s.customers} customers">Score ${fmt(s.score ?? 0)}</span>` : '');
+// Hover (or long-press) explains the score: the formula and this issue's own numbers.
+const SCORE_HOW = 'Score = customer demand ÷ effort days (FE + BE + MOB). Demand: each open FR adds its priority weight (Needed for go-live / 1 month before 10, Top 3 5, High 3, Medium 2, Low 1, others 0) × the customer\'s deal size (≥ £75k ×2, ≥ £25k ×1.5, else ×1). Higher = more customer value per day of work.';
+const scoreTag = (s) => (s ? `<span class="tag score" tabindex="0" title="${SCORE_HOW}&#10;&#10;This issue: demand ${fmt(s.demand)} ÷ effort ${fmt(s.effort)} d = ${fmt(s.score ?? 0)} · ${s.frCount} FRs, ${s.customers} customers">Score ${fmt(s.score ?? 0)}</span>` : '');
 
 function whenOf(issue) {
   const pot = issue.start && issue.start === issue.end;

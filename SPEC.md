@@ -166,6 +166,8 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Not planned includes committed issues with no dates (TBD), which also show under At risk.
   - Needs all FRs and the unplanned backlog, so it fills in after the background load.
   - Signed customers only (Tom, 2026-10-10): an FR counts in the prep queues only when its customer's HubSpot deal status is Closed-Won (Lightdash deals_extract_deal_status). FRs with no customer are left out too. Go-live "No eng issue" for Engineering drops from 88 to 17.
+  - No integration requests (Tom, 2026-10-26): FRs of type "Integration request" (Palletline, Pallex, TPN and other connector work) do not count in the prep queues. On 26 Oct data: GO LIVE no issue 27 → 26, no estimate 30 → 14, not planned 42 → 41; Top 3 no issue 62 → 55, no estimate 132 → 129, not planned 56 → 51. Scoring and Pushback still count every FR type.
+  - Every Score tag explains itself on hover or long-press: the formula (demand ÷ FE+BE+MOB days, priority weights, deal-size multipliers) and the issue's own demand, effort and score (Tom, 2026-10-26).
 
 **4. At risk**
 

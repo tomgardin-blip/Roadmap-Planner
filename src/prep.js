@@ -5,6 +5,7 @@
 // An issue sits in the highest group among its linked FRs.
 // Only FRs of signed customers count (HubSpot deal status Closed-Won; Tom, 2026-10-10) when
 // `signed` is given; FRs with no customer are dropped then too.
+// Integration requests are left out: connector work, not the 4 product teams' (Tom, 2026-10-26).
 
 import { issueTeams, TEAMS } from './capacity.js';
 
@@ -13,6 +14,7 @@ export const GROUPS = [
   { key: 'top3', label: 'Top 3', priorities: ['Top 3'] },
 ];
 const CLOSED = new Set(['Done', "Won't do", 'Duplicate']);
+export const EXCLUDED_FR_TYPES = new Set(['Integration request']);
 const SKILLS = ['frontend', 'backend', 'mobile'];
 const effortOf = (i) => SKILLS.reduce((a, s) => a + (i.skillEfforts?.[s] || 0), 0);
 const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
@@ -41,7 +43,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     if (seenTask.has(id)) continue;
     seenTask.add(id);
     const g = groupOf(t[4]);
-    if (!g || !isSigned(t[6])) continue;
+    if (!g || !isSigned(t[6]) || EXCLUDED_FR_TYPES.has(t[3])) continue;
     const hasFeature = t[7] && String(t[7]).replace(/[[\]"\s]/g, '').length;
     if (!hasFeature && !linked.has(id)) out[g].noIssue.push({ fr: { id, title: t[2], url: t[1], priority: t[4], status: t[5], dealId: t[6], committed: t[8], assignedTeam: t[9] || null } });
   }
@@ -49,7 +51,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
   for (const i of [...run.issues, ...backlog]) {
     if (!i.id || seen.has(i.id) || CLOSED.has(i.status) || i.isParent) continue;
     seen.add(i.id);
-    const frs = (scores?.get(i.id)?.frs || []).filter((f) => isSigned(f.dealId));
+    const frs = (scores?.get(i.id)?.frs || []).filter((f) => isSigned(f.dealId) && !EXCLUDED_FR_TYPES.has(f.type));
     const groups = frs.map((f) => groupOf(f.priority)).filter(Boolean);
     if (!groups.length) continue;
     const g = GROUPS.find((x) => groups.includes(x.key)).key;

@@ -85,3 +85,14 @@ test('prep queues: only FRs of signed customers count when a signed set is given
   assert.deepEqual(ids(q.top3.noEstimate), ['i1']);
   assert.deepEqual(ids(q.top3.noIssue), ['d']);
 });
+
+test('prep queues leave out Integration requests (connector work)', () => {
+  const I = (id, priority, features) => Object.assign(T(id, priority, features), { 3: 'Integration request' });
+  const rows = rowsOf([F({ id: 'pl' }), F({ id: 'mixed', team: TP })],
+    [I('int1', 'Needed for go-live', 'pl'), I('int2', 'Top 3'), I('int3', 'Needed for go-live', 'mixed'), T('fr', 'Top 3', 'mixed')]);
+  const run = runCapacity(rows, { now: NOW });
+  const q = prepQueues({ run, scores: scoreRows(rows), taskRows: rows, featureRows: rows });
+  assert.deepEqual(ids(q.goLive.noEstimate), []);
+  assert.deepEqual(ids(q.top3.noEstimate), ['mixed']);
+  assert.deepEqual(ids(q.top3.noIssue), []);
+});
