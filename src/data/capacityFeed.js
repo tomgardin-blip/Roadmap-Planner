@@ -4,8 +4,8 @@
 // engine exports. Demand stays with our engine copy (it matches). No feed, or a stale one: our own
 // engine's capacity, with a warning.
 
-// Notion data source of "Roadmap Planner Capacity". null until the table exists: the feed is skipped.
-export const CAPACITY_DS = null;
+// Notion data source of "Roadmap Planner Capacity" (created 2026-10-27 under "Roadmap Planner Audit logs").
+export const CAPACITY_DS = 'f060b93c-ecf8-4254-9b1d-cf5fc55b4c2c';
 export const FEED_MAX_AGE_DAYS = 3;
 const SKILLS = new Set(['backend', 'frontend', 'mobile']);
 

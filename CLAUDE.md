@@ -28,6 +28,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
   - Comments on an FR that tag its Responsible Success, only when Tom clicks Send.
   - Rows in the Roadmap Planner Audit Log (`collection://9b4b26f2-ea33-4578-89c2-252389cd5564`).
   - Rows in the Roadmap Planner Effort Baseline (`collection://62afe97a-fdaf-4007-af81-5d1e1498661e`), written automatically on open; no audit row (they are the record).
+- Roadmap Planner Capacity (`collection://f060b93c-ecf8-4254-9b1d-cf5fc55b4c2c`): read-only for the planner. Only Sander's roadmap-changes-report skill writes it (capacity per team × skill × week, daily).
 - Every write produces an audit row: who, when, issue or FR, field, before, after, reason, warning. "Not a pushback" is an audit row of its own (category "Pushback override").
 - Read-only viewers (cannot edit the artifact) write nothing: no buttons, no baseline rows.
 
