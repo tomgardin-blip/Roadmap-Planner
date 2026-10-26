@@ -10,6 +10,18 @@ const SK = ['frontend', 'backend', 'mobile'];
 const days = (list) => Math.round(list.reduce((a, e) => a + SK.reduce((b, s) => b + (e.issue?.skillEfforts?.[s] || 0), 0), 0));
 const LIMIT = 30;
 
+// Default order (Tom, 2026-10-26): highest customer value first. Scored issues by score; issues with
+// no effort (no score) by their demand; ties by committed date. 'commit' restores the old order.
+export function sortEntries(list, scores, mode = 'value') {
+  const commit = (e) => String(e.issue?.committed || '9');
+  const byCommit = (a, b) => commit(a).localeCompare(commit(b));
+  if (mode === 'commit') return [...list].sort(byCommit);
+  const s = (e) => scores?.get(e.issue?.id);
+  const key = (e) => { const x = s(e); return x ? [x.score != null ? 1 : 0, x.score ?? x.demand ?? 0] : [0, -1]; };
+  return [...list].sort((a, b) => { const ka = key(a), kb = key(b); return kb[0] - ka[0] || kb[1] - ka[1] || byCommit(a, b); });
+}
+const sortSel = (mode) => `<label class="lchk lsort">Sort <select id="listSort"><option value="value" ${mode !== 'commit' ? 'selected' : ''}>Customer value (score), highest first</option><option value="commit" ${mode === 'commit' ? 'selected' : ''}>Committed date, earliest first</option></select></label>`;
+
 function section(id, title, count, sub, body, open = false) {
   return `<details class="lsec" ${open ? 'open' : ''} id="${id}"><summary><b>${esc(title)}</b><span class="cnt">${count}</span>${sub ? `<span class="lsub">${esc(sub)}</span>` : ''}</summary><div class="lbody">${body}</div></details>`;
 }
@@ -20,12 +32,12 @@ function capped(items, render, key) {
   return head + (rest ? `<details class="more" data-more="${key}"><summary>Show all ${items.length}</summary>${rest}</details>` : '');
 }
 
-export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError }) {
+export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError, sort = 'value' }) {
   const baselineNote = baselineError ? `Effort baseline unavailable: ${baselineError}` : 'Reading the effort baseline from Notion…';
   const total = RULES.reduce((a, r) => a + (risk[r.key]?.length || 0), 0);
-  let h = `<div class="lhead"><b>At risk</b><span class="lsub">${total} flags across ${RULES.length} rules${loading ? ' · scores loading' : ''}. Commit dates are effective commits (earliest of the issue, its FRs and what it blocks).</span></div>`;
+  let h = `<div class="lhead"><b>At risk</b><span class="lsub">${total} flags across ${RULES.length} rules${loading ? ' · scores loading' : ''}. Commit dates are effective commits (earliest of the issue, its FRs and what it blocks).</span>${sortSel(sort)}</div>`;
   for (const r of RULES) {
-    const list = risk[r.key];
+    const list = risk[r.key] && sortEntries(risk[r.key], scores, sort);
     if (!list) { h += section(`risk-${r.key}`, r.label, '…', baselineNote, `<div class="placeholder">${baselineNote}</div>`); continue; }
     const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10 Oct 2026)' : list.length ? `${days(list)} d` : '';
     h += section(`risk-${r.key}`, r.label, list.length, sub, capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
@@ -33,13 +45,13 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
 
-export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly }) {
+export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly, sort = 'value' }) {
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
     ${readOnly ? '' : '<button class="estbtn" id="estPost" title="Post the No estimate lists to #dev_effort_estimate after a preview">Post No estimate to #dev_effort_estimate</button>'}
-    <label class="lchk"><input type="checkbox" id="allFrTeams" ${allFrTeams ? 'checked' : ''}> No-issue list: include FRs not assigned to Engineering</label></div>`;
+    <label class="lchk"><input type="checkbox" id="allFrTeams" ${allFrTeams ? 'checked' : ''}> No-issue list: include FRs not assigned to Engineering</label>${sortSel(sort)}</div>`;
   for (const g of GROUPS) {
-    const q = queues[g.key];
+    const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, sort) };
     const noIssue = allFrTeams ? q.noIssue : q.noIssue.filter((e) => e.fr.assignedTeam === 'Engineering');
     h += `<h3 class="lgroup">${esc(g.label)}</h3>`;
     h += section(`prep-${g.key}-noIssue`, 'No engineering issue', noIssue.length, 'Product to create or link one', capped(noIssue, (e) => frCard(e.fr), `${g.key}-noIssue`));

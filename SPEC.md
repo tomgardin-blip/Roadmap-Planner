@@ -157,7 +157,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 **3. Prep queues (per priority: Required for GO LIVE, Top 3)**
 
 - No eng issue: FRs needing Product to create or link one.
-- No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate (private, `C0C1CPJKZKK`), as the viewer, no tags, after an editable preview (decided 2026-10-10). Tom ticks which issues to post (none ticked by default); the message is rebuilt from the selection.
+- No estimate: eng issues without FE/BE/MOB effort. v2: a button that posts the list to #dev_effort_estimate (private, `C0C1CPJKZKK`), as the viewer, after an editable preview (decided 2026-10-10). The message opens with "@Qai estimate the issues below" (Qai = `U0C0Y7E5SQ4`, the agent with the effort-estimate skill); no other tags (Tom, 2026-10-26). Tom ticks which issues to post (none ticked by default); the message is rebuilt from the selection.
 - Not planned: estimated, not on the grid. The to-do list.
 - Built 2026-10-10 (src/prep.js):
   - Groups: "Required for GO LIVE" = FR priority Needed for go-live or Needed 1 month before; "Top 3" = Top 3. An issue sits under its highest-priority FR.
@@ -168,6 +168,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Signed customers only (Tom, 2026-10-10): an FR counts in the prep queues only when its customer's HubSpot deal status is Closed-Won (Lightdash deals_extract_deal_status). FRs with no customer are left out too. Go-live "No eng issue" for Engineering drops from 88 to 17.
   - No integration requests (Tom, 2026-10-26): FRs of type "Integration request" (Palletline, Pallex, TPN and other connector work) do not count in the prep queues. On 26 Oct data: GO LIVE no issue 27 → 26, no estimate 30 → 14, not planned 42 → 41; Top 3 no issue 62 → 55, no estimate 132 → 129, not planned 56 → 51. Scoring and Pushback still count every FR type.
   - Every Score tag explains itself on hover or long-press: the formula (demand ÷ FE+BE+MOB days, priority weights, deal-size multipliers) and the issue's own demand, effort and score (Tom, 2026-10-26).
+  - Default order of the issue lists (Prep queues and At risk), Tom 2026-10-26: highest customer value first: by score, issues without effort (no score) by their FR demand, ties by committed date. A Sort switch goes back to committed date, earliest first; the choice is remembered per viewer. The cell drawer keeps committed date first.
 
 **4. At risk**
 

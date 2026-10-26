@@ -159,7 +159,7 @@ export function startEstimatePost({ mcp, groups }) {
     </div>`).join('');
   const sheet = openSheet(`
     <h3>Post to ${ESTIMATE_CHANNEL.name}</h3>
-    <div class="srow muted">Tick the issues to post. Posted as you, no tags. Changing the selection rebuilds the text below.</div>
+    <div class="srow muted">Tick the issues to post. Posted as you; starts with @Qai so the agent estimates them. Changing the selection rebuilds the text below.</div>
     <div class="picklist">${list || '<div class="placeholder">No issues without an estimate.</div>'}</div>
     <div class="srow"><b id="pickCount">0</b> selected</div>
     <textarea id="sMsg" rows="10" class="smsg" placeholder="Tick issues above to build the message"></textarea>

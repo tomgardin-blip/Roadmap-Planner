@@ -29,10 +29,11 @@ test('weekly load: planner moves in the last 7 days and Notion edits since sync'
 });
 
 import { estimateMessage } from '../src/estimate.js';
-test('estimate message: bold header, one line per issue, trimmed under the Slack limit', () => {
+test('estimate message: tags Qai, bold header, one line per issue, trimmed under the Slack limit', () => {
   const e = (n, extra = {}) => ({ issue: { name: `Issue ${n}`, url: `https://example.invalid/${n}`, team: 'Transport Planning', committed: '2026-12-01', ...extra }, frs: [{}, {}] });
   const m = estimateMessage([{ label: 'Required for GO LIVE', entries: [e(1), e(2, { team: null, committed: null })] }, { label: 'Top 3', entries: [] }]);
-  assert.match(m, /^\*\*2 issues need/);
+  assert.match(m, /^<@U0C0Y7E5SQ4> estimate the issues below\n\n\*\*2 issues need/);
+  assert.equal((m.match(/<@/g) || []).length, 1);
   assert.match(m, /• \[Issue 1\]\(https:\/\/example.invalid\/1\) · Transport Planning · 2 FRs · commit 1 Dec 2026/);
   assert.match(m, /• \[Issue 2\]\(https:\/\/example.invalid\/2\) · No team · 2 FRs$/);
   assert.doesNotMatch(m, /Top 3/);

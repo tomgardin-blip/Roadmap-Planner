@@ -205,6 +205,7 @@ details.more[open] > summary { display: none; }
 .lhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 6px 0 12px; }
 .lhead b { font-size: 16px; } .lhead.small b { font-size: 13px; } .lhead.small { margin-top: 20px; }
 .lsub { color: var(--muted); font-size: 12px; }
+.lsort select { padding: 3px 24px 3px 6px; }
 .lchk { flex-basis: 100%; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
 .lgroup { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .lsec { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--card); }

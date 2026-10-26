@@ -31,8 +31,12 @@ const NOW = new Date(ty, tm - 1, td, 12);
 const horizon = buildHorizon(TODAY);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+function initialSort() {
+  try { return localStorage.getItem('rp.sort') === 'commit' ? 'commit' : 'value'; } catch { return 'value'; }
+}
+
 const state = {
-  tab: 'capacity', allFrTeams: false, pbOverbooked: false, readOnly: false,
+  tab: 'capacity', allFrTeams: false, listSort: initialSort(), pbOverbooked: false, readOnly: false,
   audit: null, auditError: null, owners: null, ownersLoading: false, users: new Map(), pushback: null,
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
@@ -102,6 +106,7 @@ function shell() {
   });
   document.getElementById('grid').addEventListener('change', (e) => {
     if (e.target.id === 'allFrTeams') { state.allFrTeams = e.target.checked; draw(); }
+    if (e.target.id === 'listSort') { state.listSort = e.target.value; try { localStorage.setItem('rp.sort', state.listSort); } catch { /* storage unavailable */ } draw(); }
     if (e.target.id === 'pbOverbooked') { state.pbOverbooked = e.target.checked; recompute(); draw(); }
   });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
@@ -305,8 +310,8 @@ function draw() {
   const onGrid = state.tab === 'capacity';
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
-  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError }); return; }
-  if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp }); return; }
+  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort }); return; }
+  if (state.tab === 'prep') { renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { list: state.pushback, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, overbookedOnly: state.pbOverbooked, readOnly: state.readOnly, team: state.teamFilter }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
