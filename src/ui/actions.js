@@ -4,7 +4,7 @@
 import { formatDate } from '../periods.js';
 import { FR_PRIORITIES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
 import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, previewComment, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
-import { ESTIMATE_CHANNEL, estimateMessage } from '../estimate.js';
+import { ESTIMATE_CHANNEL, estimateLines, estimatePosts } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -159,15 +159,17 @@ export function startEstimatePost({ mcp, groups }) {
     </div>`).join('');
   const sheet = openSheet(`
     <h3>Post to ${ESTIMATE_CHANNEL.name}</h3>
-    <div class="srow muted">Tick the issues to post. Posted as you; starts with @Qai so the agent estimates them. Changing the selection rebuilds the text below.</div>
+    <div class="srow muted">Tick the issues to post. One post per issue (one line below = one post), as you, each tagging @Qai so the agent estimates it. Changing the selection rebuilds the text.</div>
     <div class="picklist">${list || '<div class="placeholder">No issues without an estimate.</div>'}</div>
     <div class="srow"><b id="pickCount">0</b> selected</div>
-    <textarea id="sMsg" rows="10" class="smsg" placeholder="Tick issues above to build the message"></textarea>
+    <textarea id="sMsg" rows="10" class="smsg" placeholder="Tick issues above to build the posts"></textarea>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend" disabled>Post</button></div>`);
   const rebuild = () => {
     const picked = new Set([...sheet.querySelectorAll('input[data-pick]:checked')].map((x) => x.dataset.pick));
     sheet.querySelector('#pickCount').textContent = picked.size;
-    sheet.querySelector('#sMsg').value = picked.size ? estimateMessage(groups.map((g) => ({ label: g.label, entries: g.entries.filter((e) => picked.has(e.issue.id)) }))) : '';
+    const seen = new Set();
+    const entries = groups.flatMap((g) => g.entries).filter((e) => picked.has(e.issue.id) && !seen.has(e.issue.id) && seen.add(e.issue.id));
+    sheet.querySelector('#sMsg').value = estimateLines(entries).join('\n');
     sheet.querySelector('#sSend').disabled = !picked.size;
   };
   sheet.addEventListener('change', (e) => { if (e.target.matches('input[data-pick]')) rebuild(); });
@@ -179,9 +181,17 @@ export function startEstimatePost({ mcp, groups }) {
     rebuild();
   });
   sheet.querySelector('#sSend').addEventListener('click', async (e) => {
-    const text = sheet.querySelector('#sMsg').value.trim();
-    if (!text) return;
-    busy(e.target, true, 'Posting…');
-    try { await postSlack(mcp, ESTIMATE_CHANNEL.id, text); closeSheet(); toast(`Posted to ${ESTIMATE_CHANNEL.name}.`); } catch (err) { busy(e.target, false, 'Post'); toast(err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err), 'bad'); }
+    const posts = estimatePosts(sheet.querySelector('#sMsg').value);
+    if (!posts.length) return;
+    // One message per issue, sent in order; stop at the first refusal and say how far it got.
+    for (let i = 0; i < posts.length; i++) {
+      busy(e.target, true, `Posting ${i + 1}/${posts.length}…`);
+      try { await postSlack(mcp, ESTIMATE_CHANNEL.id, posts[i]); } catch (err) {
+        busy(e.target, false, 'Post');
+        const why = err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err);
+        return toast(`${i} of ${posts.length} posted. ${why}`, 'bad');
+      }
+    }
+    closeSheet(); toast(`Posted ${posts.length} issue${posts.length === 1 ? '' : 's'} to ${ESTIMATE_CHANNEL.name}.`);
   });
 }

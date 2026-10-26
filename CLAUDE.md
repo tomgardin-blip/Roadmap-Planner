@@ -32,7 +32,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Read-only viewers (cannot edit the artifact) write nothing: no buttons, no baseline rows.
 
 ## Other writes
-- Slack: only the "No estimate" issues the viewer ticks, to #dev_effort_estimate (`C0C1CPJKZKK`), as the viewer, after an editable preview, when they click Post. The message opens with @Qai (`U0C0Y7E5SQ4`) so the agent estimates the list; no other tags (Tom, 2026-10-26).
+- Slack: only the "No estimate" issues the viewer ticks, to #dev_effort_estimate (`C0C1CPJKZKK`), as the viewer, after an editable preview, when they click Post. One post per issue, in the channel (no thread): "@Qai estimate <issue link>" (Qai = `U0C0Y7E5SQ4`); no other tags (Tom, 2026-10-26).
 
 ## Working style
 - Ask Tom when in doubt.

@@ -28,17 +28,12 @@ test('weekly load: planner moves in the last 7 days and Notion edits since sync'
   assert.deepEqual({ in: m.get('2026-Q4').in, out: m.get('2026-Q4').out }, { in: 4, out: 5 });
 });
 
-import { estimateMessage } from '../src/estimate.js';
-test('estimate message: tags Qai, bold header, one line per issue, trimmed under the Slack limit', () => {
-  const e = (n, extra = {}) => ({ issue: { name: `Issue ${n}`, url: `https://example.invalid/${n}`, team: 'Transport Planning', committed: '2026-12-01', ...extra }, frs: [{}, {}] });
-  const m = estimateMessage([{ label: 'Required for GO LIVE', entries: [e(1), e(2, { team: null, committed: null })] }, { label: 'Top 3', entries: [] }]);
-  assert.match(m, /^<@U0C0Y7E5SQ4> estimate the issues below\n\n\*\*2 issues need/);
-  assert.equal((m.match(/<@/g) || []).length, 1);
-  assert.match(m, /• \[Issue 1\]\(https:\/\/example.invalid\/1\) · Transport Planning · 2 FRs · commit 1 Dec 2026/);
-  assert.match(m, /• \[Issue 2\]\(https:\/\/example.invalid\/2\) · No team · 2 FRs$/);
-  assert.doesNotMatch(m, /Top 3/);
-  assert.doesNotMatch(m, /--/);
-  const big = estimateMessage([{ label: 'G', entries: Array.from({ length: 200 }, (_, k) => e(k)) }]);
-  assert.ok(big.length < 5000);
-  assert.match(big, /and \d+ more in the Roadmap Planner$/);
+import { estimateLines, estimatePosts } from '../src/estimate.js';
+test('estimate posts: one line per issue, each its own post tagging Qai', () => {
+  const e = (n) => ({ issue: { name: `Issue ${n}`, url: `https://example.invalid/${n}` } });
+  const lines = estimateLines([e(1), e(2), { issue: { name: 'no url' } }]);
+  assert.deepEqual(lines, ['@Qai estimate https://example.invalid/1', '@Qai estimate https://example.invalid/2']);
+  const posts = estimatePosts(`${lines.join('\n')}\n\n  @Qai estimate https://example.invalid/3 please  \n`);
+  assert.deepEqual(posts, ['<@U0C0Y7E5SQ4> estimate https://example.invalid/1', '<@U0C0Y7E5SQ4> estimate https://example.invalid/2', '<@U0C0Y7E5SQ4> estimate https://example.invalid/3 please']);
+  assert.ok(posts.every((p) => !p.includes('--')));
 });
