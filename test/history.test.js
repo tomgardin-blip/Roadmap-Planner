@@ -37,9 +37,3 @@ test('estimate posts: one line per issue, each its own post asking claude_code f
   assert.deepEqual(posts, [1, 2, 3].map((n) => `<@U0BKLA7U9EW> run the product-feature skill on https://example.invalid/${n}`));
   assert.ok(posts.every((p) => !p.includes('--') && !p.includes('Qai')));
 });
-  const lines = estimateLines([e(1), e(2), { issue: { name: 'no url' } }]);
-  assert.deepEqual(lines, ['@Qai estimate https://example.invalid/1', '@Qai estimate https://example.invalid/2']);
-  const posts = estimatePosts(`${lines.join('\n')}\n\n  @Qai estimate https://example.invalid/3 please  \n`);
-  assert.deepEqual(posts, ['<@U0C0Y7E5SQ4> estimate https://example.invalid/1', '<@U0C0Y7E5SQ4> estimate https://example.invalid/2', '<@U0C0Y7E5SQ4> estimate https://example.invalid/3 please']);
-  assert.ok(posts.every((p) => !p.includes('--')));
-});
