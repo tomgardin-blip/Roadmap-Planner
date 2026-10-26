@@ -86,6 +86,26 @@ export async function loadSignedDeals(mcp) {
 }
 export const signedSet = (rows) => new Set((rows || []).map((r) => String(r.deals_extract_notion_page_id || '').replace(/-/g, '').toLowerCase()).filter(Boolean));
 
+/**
+ * FRs that count in the prep queues (Tom, 2026-10-26): Type "Feature request", Category containing
+ * "Feature Request", open, prep priorities. Two queries (GO LIVE, Top 3) keep each under the
+ * 1000-row cap. Set of FR ids, no dashes.
+ */
+export async function loadFeatureFrs(mcp) {
+  const q = (title, priorities) => runQuery(mcp, `Roadmap Planner: feature requests ${title}`, {
+    exploreName: 'customer_tasks', dimensions: ['customer_tasks_customer_task_notion_page_id'], metrics: [], sorts: [], limit: 5000,
+    filters: { type: 'and', dimensions: [
+      { fieldId: 'customer_tasks_task_type', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: ['Feature request'] },
+      { fieldId: 'customer_tasks_task_category', fieldType: 'string', fieldFilterType: 'string', operator: 'include', values: ['Feature Request'] },
+      { fieldId: 'customer_tasks_task_priority', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: priorities },
+      { fieldId: 'customer_tasks_task_status', fieldType: 'string', fieldFilterType: 'string', operator: 'notEquals', values: ['Done', "Won't do", 'Duplicate'] },
+    ] },
+  });
+  const rows = [...await q('GO LIVE', ['Needed for go-live', 'Needed 1 month before']), ...await q('Top 3', ['Top 3'])];
+  return featureFrSet(rows);
+}
+export const featureFrSet = (rows) => new Set((rows || []).map((r) => String(r.customer_tasks_customer_task_notion_page_id || '').replace(/-/g, '').toLowerCase()).filter(Boolean));
+
 /** Deal sizes of £25k and over: everything else counts ×1, so smaller deals are not needed. */
 export function loadDealSizes(mcp) {
   return runQuery(mcp, 'Roadmap Planner: deal sizes', {
@@ -103,8 +123,8 @@ export function loadDealSizes(mcp) {
  */
 export async function loadExtras(mcp, overlay, onStep) {
   try {
-    const [deals, tasks, signed] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp)];
-    onStep('scores', { deals, tasks, signed });
+    const [deals, tasks, signed, frs] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp), await loadFeatureFrs(mcp)];
+    onStep('scores', { deals, tasks, signed, frs });
   } catch (err) {
     onStep('scores', { error: explainError(LIGHTDASH, err) });
   }

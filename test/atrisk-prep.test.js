@@ -96,3 +96,13 @@ test('prep queues leave out Integration requests (connector work)', () => {
   assert.deepEqual(ids(q.top3.noEstimate), ['mixed']);
   assert.deepEqual(ids(q.top3.noIssue), []);
 });
+
+test('prep queues: only Feature requests with category Feature Request count', () => {
+  const O = (id, priority, features) => Object.assign(T(id, priority, features), { 3: 'Onboarding task' });
+  const rows = rowsOf([F({ id: 'a', team: TP }), F({ id: 'b', team: TP }), F({ id: 'c', team: TP })],
+    [T('fr', 'Needed for go-live', 'a'), T('bq', 'Needed for go-live', 'b'), O('ob', 'Needed for go-live', 'c'), T('lone', 'Top 3'), T('lonebq', 'Top 3')]);
+  const run = runCapacity(rows, { now: NOW });
+  const q = prepQueues({ run, scores: scoreRows(rows), taskRows: rows, featureRows: rows, featureFrs: new Set(['fr', 'lone']) });
+  assert.deepEqual(ids(q.goLive.noEstimate), ['a']);
+  assert.deepEqual(ids(q.top3.noIssue), ['lone']);
+});

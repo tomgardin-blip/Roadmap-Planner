@@ -48,7 +48,7 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
 export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly, sort = 'value' }) {
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
-    ${readOnly ? '' : '<button class="estbtn" id="estPost" title="Post the No estimate lists to #dev_effort_estimate after a preview">Post No estimate to #dev_effort_estimate</button>'}
+    ${readOnly ? '' : '<button class="estbtn" id="estPost" title="Post the No estimate issues to #product-create-ei-skill-trigger after a preview">Post No estimate to #product-create-ei-skill-trigger</button>'}
     <label class="lchk"><input type="checkbox" id="allFrTeams" ${allFrTeams ? 'checked' : ''}> No-issue list: include FRs not assigned to Engineering</label>${sortSel(sort)}</div>`;
   for (const g of GROUPS) {
     const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, sort) };

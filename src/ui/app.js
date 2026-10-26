@@ -9,7 +9,7 @@ import { horizon as buildHorizon } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
-import { loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, explainError, NOTION } from '../data/live.js';
+import { loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
 import { userName } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { renderGrid } from './grid.js';
@@ -228,7 +228,7 @@ function rescore() {
 function onExtra(step, p) {
   const x = state.extra;
   if (p.error) { x[step] = 'error'; x[`${step}Error`] = p.error; }
-  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; }
+  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; x.featureFrs = p.frs instanceof Set ? p.frs : p.frs ? featureFrSet(p.frs) : null; }
   else { x.backlog = 'ok'; x.featureRows = p.features; }
   if (x.scores === 'ok') rescore(); else { recompute(); renderChrome(); if (state.tab !== 'capacity') draw(); renderDrawer(); }
 }
@@ -291,7 +291,7 @@ function recompute() {
   state.risk = atRisk(state.run, { team: state.teamFilter, baseline: state.baseline });
   const x = state.extra;
   state.queues = x.scores === 'ok' && x.backlog !== 'loading'
-    ? prepQueues({ run: state.run, backlog: state.backlog, scores: state.scores, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], team: state.teamFilter, signed: x.signed })
+    ? prepQueues({ run: state.run, backlog: state.backlog, scores: state.scores, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], team: state.teamFilter, signed: x.signed, featureFrs: x.featureFrs })
     : null;
   state.pushback = x.scores === 'ok' ? pushbackCandidates({
     run: state.run, backlog: state.backlog, scores: state.scores, team: state.teamFilter,
@@ -378,7 +378,7 @@ async function boot() {
   show(state.mode === 'snapshot' ? window.__RP_ROWS__ : fakeLightdashRows(horizon));
   // Local preview: a saved backlog ({deals, tasks, features} Lightdash rows) if given, else none.
   const ex = window.__RP_EXTRA__ || {};
-  onExtra('scores', { deals: ex.deals || [], tasks: ex.tasks || [], signed: ex.signed || null });
+  onExtra('scores', { deals: ex.deals || [], tasks: ex.tasks || [], signed: ex.signed || null, frs: ex.frs || null });
   onExtra('backlog', { features: ex.features || [] });
 }
 
