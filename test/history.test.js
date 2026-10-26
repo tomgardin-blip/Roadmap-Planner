@@ -29,8 +29,14 @@ test('weekly load: planner moves in the last 7 days and Notion edits since sync'
 });
 
 import { estimateLines, estimatePosts } from '../src/estimate.js';
-test('estimate posts: one line per issue, each its own post tagging Qai', () => {
+test('estimate posts: one line per issue, each its own post asking claude_code for the product-feature skill', () => {
   const e = (n) => ({ issue: { name: `Issue ${n}`, url: `https://example.invalid/${n}` } });
+  const lines = estimateLines([e(1), e(2), { issue: { name: 'no url' } }]);
+  assert.deepEqual(lines, ['@claude_code run the product-feature skill on https://example.invalid/1', '@claude_code run the product-feature skill on https://example.invalid/2']);
+  const posts = estimatePosts(`${lines.join('\n')}\n\n  @claude_code run the product-feature skill on https://example.invalid/3  \n`);
+  assert.deepEqual(posts, [1, 2, 3].map((n) => `<@U0BKLA7U9EW> run the product-feature skill on https://example.invalid/${n}`));
+  assert.ok(posts.every((p) => !p.includes('--') && !p.includes('Qai')));
+});
   const lines = estimateLines([e(1), e(2), { issue: { name: 'no url' } }]);
   assert.deepEqual(lines, ['@Qai estimate https://example.invalid/1', '@Qai estimate https://example.invalid/2']);
   const posts = estimatePosts(`${lines.join('\n')}\n\n  @Qai estimate https://example.invalid/3 please  \n`);
