@@ -63,10 +63,13 @@ export function moveWarnings(issue, end, blockers = []) {
   return w;
 }
 
-/** Comment text tagging the owner. Reason included when one was entered (Tom 2026-10-10). */
-export function ownerCommentMarkdown({ ownerId, changes, reason, by }) {
+/**
+ * Comment text tagging the owner. Reason included when one was entered (Tom 2026-10-10). Never
+ * "(via Roadmap Planner, by …)": the comment is posted as the viewer already (Tom 2026-10-27).
+ */
+export function ownerCommentMarkdown({ ownerId, changes, reason }) {
   const what = changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; ');
-  return `<mention-user url="user://${ownerId}"/> fyi: ${what} (via Roadmap Planner${by ? `, by ${by}` : ''}).${reason ? ` Reason: ${reason}` : ''}`;
+  return `<mention-user url="user://${ownerId}"/> fyi: ${what}.${reason ? ` Reason: ${reason}` : ''}`;
 }
 
 export function ownerCommentInput(frId, args) {

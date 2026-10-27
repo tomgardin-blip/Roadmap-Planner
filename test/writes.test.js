@@ -43,7 +43,8 @@ test('move warnings: after commit and open blocker, never a block', () => {
 
 test('owner comment tags the owner and carries the reason', () => {
   const m = W.ownerCommentMarkdown({ ownerId: 'u-1', changes: [{ label: 'Priority', before: 'High', after: 'Top 3' }], reason: 'Capacity', by: 'Test User' });
-  assert.match(m, /^<mention-user url="user:\/\/u-1"\/> fyi: Priority: High → Top 3 \(via Roadmap Planner, by Test User\)\. Reason: Capacity$/);
+  assert.match(m, /^<mention-user url="user:\/\/u-1"\/> fyi: Priority: High → Top 3\. Reason: Capacity$/);
+  assert.doesNotMatch(m, /Roadmap Planner|by Test User/);
   assert.doesNotMatch(W.ownerCommentMarkdown({ ownerId: 'u', changes: [] }), /Reason/);
 });
 

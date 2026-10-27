@@ -152,7 +152,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Each FR in the drawer can change its committed date and its priority.
 - Committed date: always write "Success Committed". The FR's "Committed" is a formula: the earliest of Success Committed and, when priority is Needed for go-live, the deal's go-live date. The planner shows the resulting Committed after the edit.
 - Priority: write "Priority " (the property name ends in a space).
-- After a change: a prompt "Advise owner in Notion?" with the comment text (old → new, and the reason when one was entered). Send posts a Notion comment on the FR tagging its Responsible Success; Skip closes. The owner is "Responsible success email" from Lightdash (account manager when Live, onboarding manager when Onboarding), matched to a Notion user by email. No Responsible Success: no ping, never a fallback to sales.
+- After a change: a prompt "Advise owner in Notion?" with the comment text (old → new, and the reason when one was entered), e.g. "@Owner fyi: Committed: 18 Dec 2026 → 29 Jan 2027. Reason: Capacity". Never "(via Roadmap Planner, by …)" in the text (Tom, 2026-10-27). Send posts a Notion comment on the FR tagging its Responsible Success; Skip closes. The owner is "Responsible success email" from Lightdash (account manager when Live, onboarding manager when Onboarding), matched to a Notion user by email. No Responsible Success: no ping, never a fallback to sales.
 
 **3. Prep queues (per priority: Required for GO LIVE, Top 3)**
 
