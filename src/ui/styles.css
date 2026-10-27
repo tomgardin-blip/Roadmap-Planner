@@ -477,3 +477,9 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 }
 .qpteams { margin-left: 8px; flex-wrap: wrap; } .qpteams button { font-size: 12px; }
 @media (max-width: 700px) { .qpteams { margin-left: 0; display: flex; overflow-x: auto; flex-wrap: nowrap; max-width: 100%; } .qpteams button { white-space: nowrap; flex: 0 0 auto; } }
+
+/* Background save: the toast stays with a spinner until Notion has the change. */
+.toast.busy { display: flex; align-items: center; gap: 9px; }
+.toast.busy::before { content: ''; flex: 0 0 auto; width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; animation: rpSpin .8s linear infinite; }
+@keyframes rpSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .toast.busy::before { animation: none; } }

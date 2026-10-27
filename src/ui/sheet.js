@@ -19,5 +19,5 @@ export function toast(msg, kind = '') {
   t.className = `toast show ${kind}`;
   t.textContent = msg;
   clearTimeout(t._h);
-  t._h = setTimeout(() => { t.className = 'toast'; }, kind === 'bad' ? 9000 : 4500);
+  if (kind !== 'busy') t._h = setTimeout(() => { t.className = 'toast'; }, kind === 'bad' ? 9000 : 4500);
 }

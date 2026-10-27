@@ -27,6 +27,23 @@ function wireReason(sheet) {
 }
 const busy = (btn, on, label) => { btn.disabled = on; if (label) btn.textContent = label; };
 
+// Saves run in the background (Tom, 2026-10-27): Save closes the window at once, the planner shows the
+// change straight away, and a "Saving…" toast stays up while Notion writes; then a done or error toast.
+let pending = 0;
+async function inBackground(label, job) {
+  pending++;
+  toast(`Saving${pending > 1 ? ` ${pending} changes` : ''}… ${label}`, 'busy');
+  try {
+    const msg = await job();
+    pending--;
+    toast(pending ? `${msg} Still saving ${pending}…` : msg, pending ? 'busy' : '');
+  } catch (err) {
+    pending--;
+    toast(err?.bgMessage || errText(err), 'bad');
+  }
+}
+const fail = (bgMessage, cause) => Object.assign(new Error(bgMessage), { bgMessage, cause });
+
 /** Date button: set Start = End = date on an issue. ctx: { mcp, issue, date, label, blockers, onDone } */
 export function startMove(ctx) {
   const { mcp, issue, date, label, blockers = [], onDone } = ctx;
@@ -40,17 +57,20 @@ export function startMove(ctx) {
     ${reasonField()}
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Move</button></div>`);
   wireReason(sheet);
-  sheet.querySelector('#sSave').addEventListener('click', async (e) => {
-    busy(e.target, true, 'Saving…');
-    try {
-      const r = await moveIssue(mcp, { issue, start: date, end: date, reason: sheet.querySelector('#sReason').value.trim(), blockers });
-      closeSheet();
-      toast(`Moved to ${fd(date)}. Was ${fd(r.before.start)} → ${fd(r.before.end)}. Logged.`);
-      onDone?.(r);
-    } catch (err) {
-      busy(e.target, false, 'Move');
-      toast(errText(err), 'bad');
-    }
+  sheet.querySelector('#sSave').addEventListener('click', () => {
+    const reason = sheet.querySelector('#sReason').value.trim();
+    const was = { start: issue.start || null, end: issue.end || null };
+    closeSheet();
+    onDone?.({ before: was, after: { start: date, end: date } }); // shown at once
+    inBackground(`"${issue.name}" to ${fd(date)}`, async () => {
+      try {
+        const r = await moveIssue(mcp, { issue, start: date, end: date, reason, blockers });
+        return `Moved to ${fd(date)}. Was ${fd(r.before.start)} → ${fd(r.before.end)}. Logged.`;
+      } catch (err) {
+        onDone?.({ before: { start: date, end: date }, after: was }); // put it back
+        throw fail(`"${issue.name}" was not moved, put back: ${errText(err)}`, err);
+      }
+    });
   });
 }
 
@@ -77,24 +97,22 @@ export function startBulkMove(ctx) {
     ${reasonField()}
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Move ${ok.length}</button></div>`);
   wireReason(sheet);
-  sheet.querySelector('#sSave').addEventListener('click', async (e) => {
+  sheet.querySelector('#sSave').addEventListener('click', () => {
     const reason = sheet.querySelector('#sReason').value.trim();
-    const done = [];
-    for (let i = 0; i < ok.length; i++) {
-      busy(e.target, true, `Moving ${i + 1}/${ok.length}…`);
-      try {
-        const r = await moveIssue(mcp, { issue: ok[i].issue, start: date, end: date, reason, blockers: ok[i].blockers });
-        done.push({ issue: ok[i].issue, r });
-      } catch (err) {
-        busy(e.target, false, `Move ${ok.length}`);
-        toast(`${done.length} of ${ok.length} moved. Stopped at "${ok[i].issue.name}": ${errText(err)}`, 'bad');
-        if (done.length) onDone?.(done);
-        return;
-      }
-    }
+    const was = ok.map(({ issue }) => ({ issue, r: { after: { start: issue.start || null, end: issue.end || null } } }));
     closeSheet();
-    toast(`Moved ${done.length} issue${done.length === 1 ? '' : 's'} to ${fd(date)}. Each logged.`);
-    onDone?.(done);
+    onDone?.(ok.map(({ issue }) => ({ issue, r: { after: { start: date, end: date } } }))); // shown at once
+    inBackground(`${ok.length} issue${ok.length === 1 ? '' : 's'} to ${fd(date)}`, async () => {
+      for (let i = 0; i < ok.length; i++) {
+        try {
+          await moveIssue(mcp, { issue: ok[i].issue, start: date, end: date, reason, blockers: ok[i].blockers });
+        } catch (err) {
+          onDone?.(was.slice(i)); // the ones not saved go back
+          throw fail(`${i} of ${ok.length} moved. Stopped at "${ok[i].issue.name}", the rest put back: ${errText(err)}`, err);
+        }
+      }
+      return `Moved ${ok.length} issue${ok.length === 1 ? '' : 's'} to ${fd(date)}. Each logged.`;
+    });
   });
 }
 
@@ -165,44 +183,41 @@ export async function startFrEdit(ctx) {
     effLine();
   });
   effLine();
-  sheet.querySelector('#sSave').addEventListener('click', async (e) => {
+  sheet.querySelector('#sSave').addEventListener('click', () => {
     const comment = sheet.querySelector('#sCmt').value.trim();
-    busy(e.target, true, 'Saving…');
-    try {
-      const st = sheet.querySelector('#sSt').value;
-      const r = await editFr(mcp, { fr, successCommitted: sheet.querySelector('#sSc').value || null, priority: sheet.querySelector('#sPr').value, status: st && st !== cur.status ? st : undefined, reason: comment });
-      if (r.changes.length) onDone?.(r);
-      const eiSel = sheet.querySelector('#sEi');
+    const st = sheet.querySelector('#sSt').value;
+    const want = { successCommitted: sheet.querySelector('#sSc').value || null, priority: sheet.querySelector('#sPr').value, status: st && st !== cur.status ? st : undefined };
+    const eiSel = sheet.querySelector('#sEi');
+    const eiWant = eiSel && eiSel.value !== ei.status ? eiSel.value : null;
+    // The same changes editFr will write, worked out from the values read when the sheet opened.
+    const local = [];
+    if (want.successCommitted !== cur.successCommitted) local.push({ field: 'Success Committed', category: 'FR committed changed', label: 'Committed', before: cur.successCommitted, after: want.successCommitted });
+    if (want.priority !== cur.priority) local.push({ field: 'Priority', category: 'FR priority changed', label: 'Priority', before: cur.priority, after: want.priority });
+    if (want.status !== undefined) local.push({ field: 'Status', category: 'FR status changed', label: 'Status', before: cur.status, after: want.status });
+    if (!local.length && !eiWant && !comment) { closeSheet(); return toast('Nothing changed.'); }
+    closeSheet();
+    // Shown at once.
+    if (local.length) onDone?.({ changes: local, before: cur });
+    if (eiWant) onIssueStatus?.(issue, eiWant);
+    if (comment) onDone?.({ changes: local, commented: true, comment });
+    inBackground(`"${cur.name || fr.title}"`, async () => {
+      let r;
+      try { r = await editFr(mcp, { fr, ...want, reason: comment }); } catch (err) { throw fail(`FR not saved: ${errText(err)}. Refresh to see Notion's values.`, err); }
       let eiChange = null;
-      if (eiSel && eiSel.value !== ei.status) {
+      if (eiWant) {
         try {
-          eiChange = (await setIssueStatus(mcp, { issue: { ...issue, name: ei.name || issue.name }, status: eiSel.value, reason: comment, updateId: r.updateId })).change;
-        } catch (err) {
-          closeSheet();
-          return toast(`${r.changes.length ? 'FR saved, but the' : 'The'} engineering issue status was not saved: ${errText(err)}`, 'bad');
-        }
-        if (eiChange) onIssueStatus?.(issue, eiChange.after);
+          eiChange = (await setIssueStatus(mcp, { issue: { ...issue, name: ei.name || issue.name }, status: eiWant, reason: comment, updateId: r.updateId })).change;
+        } catch (err) { throw fail(`${r.changes.length ? 'FR saved, but the' : 'The'} engineering issue status was not saved: ${errText(err)}. Refresh to see Notion's values.`, err); }
       }
       const all = eiChange ? [...r.changes, eiChange] : r.changes;
-      if (!all.length && !comment) { closeSheet(); return toast('Nothing changed.'); }
-      if (!comment) { closeSheet(); return toast('Saved and logged. No comment posted (empty).'); }
-      const done = () => onDone?.({ ...r, changes: all, commented: true, comment });
-      busy(e.target, true, 'Posting comment…');
+      if (!comment) return all.length ? 'Saved and logged. No comment posted (empty).' : 'Nothing changed in Notion.';
       await ownerP;
       const shown = all.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
       try {
         await adviseOwner(mcp, { fr: { ...fr, title: r.name || cur.name || fr.title }, owner, changes: shown, comment, updateId: r.updateId });
-      } catch (err) {
-        closeSheet();
-        return toast(`${all.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, 'bad');
-      }
-      done();
-      closeSheet();
-      toast(`${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`);
-    } catch (err) {
-      busy(e.target, false, 'Save');
-      toast(errText(err), 'bad');
-    }
+      } catch (err) { throw fail(`${all.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, err); }
+      return `${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`;
+    });
   });
 }
 
@@ -214,10 +229,14 @@ export function startDismiss({ mcp, fr, issue, onDone }) {
     <div class="srow"><b>${esc(fr.title || 'FR')}</b> stays committed and leaves the pushback list. Logged in the audit log so Product can learn the call.</div>
     <label class="sfld">Reason <span class="muted">(optional)</span><input id="sReason" type="text" maxlength="200" placeholder="e.g. real go-live blocker"></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Log it</button></div>`);
-  sheet.querySelector('#sSave').addEventListener('click', async (e) => {
-    busy(e.target, true, 'Saving…');
+  sheet.querySelector('#sSave').addEventListener('click', () => {
     const reason = sheet.querySelector('#sReason').value.trim();
-    try { await dismissPushback(mcp, { fr, issue, reason }); closeSheet(); toast('Logged as not a pushback.'); onDone?.({ reason }); } catch (err) { busy(e.target, false, 'Log it'); toast(errText(err), 'bad'); }
+    closeSheet();
+    onDone?.({ reason }); // off the list at once
+    inBackground(`"${fr.title || 'FR'}"`, async () => {
+      try { await dismissPushback(mcp, { fr, issue, reason }); } catch (err) { throw fail(`Not logged: ${errText(err)}. It comes back on the next refresh.`, err); }
+      return 'Logged as not a pushback.';
+    });
   });
 }
 
