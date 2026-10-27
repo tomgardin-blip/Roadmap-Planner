@@ -183,7 +183,17 @@ export function planActions(issue, horizon, score) {
 }
 
 // Post in #roadmap_product about this issue (Tom, 2026-10-27).
-const roadmapBtn = (issue) => (readOnly || !issue.id ? '' : `<div class="cardacts"><button type="button" class="fredit rmpost" data-rmpost="${issue.id}" title="Post in #roadmap_product: your message, tagging the team's responsible, ending with the link, planned dates and committed date">Post in #roadmap_product</button></div>`);
+// Posts already made show as a link to the Slack message, to follow the replies (Tom, 2026-10-27).
+let roadmapPosts = () => [];
+export const setRoadmapPosts = (fn) => { roadmapPosts = fn; };
+const roadmapBtn = (issue) => {
+  if (!issue.id) return '';
+  const posts = roadmapPosts(issue.id);
+  const last = posts[0];
+  const links = last ? `<span class="rmlinks">${last.link ? `<a href="${esc(last.link)}" target="_blank" rel="noopener">Posted ${formatDate(String(last.at).slice(0, 10))} · open in Slack</a>` : `Posted ${formatDate(String(last.at).slice(0, 10))}`}${posts.length > 1 ? ` <span class="muted">(${posts.length} posts)</span>` : ''}</span>` : '';
+  const btn = readOnly ? '' : `<button type="button" class="fredit rmpost" data-rmpost="${issue.id}" title="Post in #roadmap_product: your message, tagging the team's responsible, ending with the link, planned dates and committed date">${last ? 'Post again' : 'Post in #roadmap_product'}</button>`;
+  return btn || links ? `<div class="cardacts">${btn}${links}</div>` : '';
+};
 
 export const setDealNames = (m) => { dealNames = m; };
 // (issueId, day) → html naming what sets an issue's committed date when no listed FR does (Tom, 2026-10-27).

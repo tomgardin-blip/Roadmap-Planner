@@ -15,7 +15,7 @@ import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, setCommitSource, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
+import { openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
 import { pushbackCandidates, overbookedCells } from '../pushback.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
@@ -198,7 +198,8 @@ function shell() {
       if (!issue) return;
       // The team's responsible: by the issue's Team property, else the team its assignees route it to.
       const team = TEAMS.find((t) => t.toLowerCase() === String(issue.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, issue)].find((t) => TEAM_LEADS[t]) : null);
-      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null });
+      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null,
+        onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: issue.id, itemName: issue.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); renderDrawer(); } });
       return;
     }
     const qt = e.target.closest('button[data-qaiteam]');
@@ -613,6 +614,8 @@ function show(rows) {
   state.noTeam = issuesWithoutTeam(state.run);
   setDealNames(state.dealNames);
   setCommitSource(commitSourceOf);
+  // #roadmap_product posts per issue, newest first, from the audit log (and the ones made this session).
+  setRoadmapPosts((id) => (state.audit || []).filter((a) => a.category === 'Roadmap post' && a.issueId === id).map((a) => ({ at: a.at, link: /^https:/.test(a.after || '') ? a.after : null })).sort((a, b) => String(b.at).localeCompare(String(a.at))));
   recompute();
   renderChrome();
   draw();

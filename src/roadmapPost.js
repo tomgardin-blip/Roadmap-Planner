@@ -41,3 +41,15 @@ export function roadmapMessage(text, issue, lead = null, { preview = false } = {
   const tag = lead ? `${preview ? `@${lead.name}` : `<@${lead.id}>`} ` : '';
   return `${tag}${String(text || '').trim()}\n\n${roadmapFooter(issue)}`;
 }
+
+/**
+ * The message link from the slack_send_message result (Tom, 2026-10-27: shown next to the button to
+ * follow replies). Uses the permalink when the result has one, else builds it from channel and ts.
+ */
+export function slackLink(result, channelId = ROADMAP_CHANNEL.id) {
+  const s = typeof result === 'string' ? result : JSON.stringify(result ?? '');
+  const m = /https:\/\/[a-z0-9.-]*slack\.com\/archives\/[A-Z0-9]+\/p\d+[^\s"'<>)\]\\]*/i.exec(s);
+  if (m) return m[0];
+  const ts = /"(?:message_)?ts"\s*:\s*"(\d+)\.(\d+)"/.exec(s) || /\bts[=:]\s*(\d{9,})\.(\d+)/.exec(s);
+  return ts ? `https://qargotms.slack.com/archives/${channelId}/p${ts[1]}${ts[2]}` : null;
+}

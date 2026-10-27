@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { plannedText, roadmapMessage, TEAM_LEADS } from '../src/roadmapPost.js';
+import { plannedText, roadmapMessage, TEAM_LEADS, slackLink } from '../src/roadmapPost.js';
 
 test('roadmap post: Tom\'s text, then link, planned start and end, committed', () => {
   assert.equal(plannedText({ start: '2026-12-25', end: '2026-12-25' }), '25/12/2026 (Q4 pot)');
@@ -13,4 +13,10 @@ test('roadmap post: Tom\'s text, then link, planned start and end, committed', (
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution'], { preview: true }), /^@Jone Hoong Hi/);
   assert.match(roadmapMessage('Hi', { name: 'X' }), /^Hi\n\n.*\*\*Committed:\*\* none$/s);
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u', committed: '2027-01-04', commitBy: 'set by Tyneside Express' }), /\*\*Committed:\*\* 04\/01\/2027 \(set by Tyneside Express\)$/);
+});
+
+test('roadmap post: message link from the Slack result, permalink or built from ts', () => {
+  assert.equal(slackLink({ text: 'Message sent: https://qargotms.slack.com/archives/C0A32B4JQS1/p1793132125000100 ok' }), 'https://qargotms.slack.com/archives/C0A32B4JQS1/p1793132125000100');
+  assert.equal(slackLink({ ok: true, channel: 'C0A32B4JQS1', ts: '1793132125.000100' }), 'https://qargotms.slack.com/archives/C0A32B4JQS1/p1793132125000100');
+  assert.equal(slackLink({ ok: true }), null);
 });

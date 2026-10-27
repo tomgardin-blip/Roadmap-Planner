@@ -3,6 +3,7 @@
 // Order per action: read the live "before" from Notion, write, then audit. A failed audit after a
 // successful write is reported, never silently dropped.
 
+import { ROADMAP_CHANNEL, slackLink } from '../roadmapPost.js';
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
   TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentText,
@@ -146,6 +147,17 @@ export async function dismissPushback(mcp, { fr, issue, reason }) {
     category: 'Pushback override', field: 'Pushback', before: 'Pushback candidate', after: 'Not a pushback',
     reason, frId: fr.id, issueId: issue?.id, itemName: fr.title, updateId: updateId(),
   });
+}
+
+/** #roadmap_product post about an issue, then an audit row holding the message link (Tom, 2026-10-27). */
+export async function postRoadmap(mcp, { issue, message }) {
+  const res = await postSlack(mcp, ROADMAP_CHANNEL.id, message);
+  const link = slackLink(res);
+  await audit(mcp, {
+    category: 'Roadmap post', field: 'Slack', before: '', after: link || 'Posted (no link returned)',
+    reason: message.slice(0, 1900), issueId: issue.id, itemName: issue.name, updateId: updateId(),
+  });
+  return link;
 }
 
 /** Post a message to Slack as the viewer. */

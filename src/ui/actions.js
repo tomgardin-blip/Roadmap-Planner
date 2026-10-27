@@ -3,7 +3,7 @@
 
 import { formatDate, potQuarters } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { postRoadmap, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
@@ -299,7 +299,7 @@ export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.produ
  * the team's responsible, always ending with the issue link, planned start and end, and committed date.
  * ctx: { mcp, issue, lead: { name, id } | null }
  */
-export function startRoadmapPost({ mcp, issue, lead }) {
+export function startRoadmapPost({ mcp, issue, lead, onDone }) {
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
   const sheet = openSheet(`
     <h3>Post in ${esc(ROADMAP_CHANNEL.name)}</h3>
@@ -318,10 +318,13 @@ export function startRoadmapPost({ mcp, issue, lead }) {
     const message = roadmapMessage(txt.value, issue, lead);
     closeSheet();
     inBackground(`post in ${ROADMAP_CHANNEL.name}`, async () => {
-      try { await postSlack(mcp, ROADMAP_CHANNEL.id, message); } catch (err) {
+      let link;
+      try { link = await postRoadmap(mcp, { issue, message }); } catch (err) {
+        if (err?.code === 'audit_failed') { onDone?.({ link: null }); throw fail(`Posted in ${ROADMAP_CHANNEL.name}, but its link was not saved: ${errText(err)}`, err); }
         throw fail(`Not posted in ${ROADMAP_CHANNEL.name}: ${err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err)}`, err);
       }
-      return `Posted in ${ROADMAP_CHANNEL.name}${lead ? `, ${lead.name} tagged` : ''}.`;
+      onDone?.({ link, message });
+      return `Posted in ${ROADMAP_CHANNEL.name}${lead ? `, ${lead.name} tagged` : ''}. Link shown next to the button.`;
     });
   });
 }

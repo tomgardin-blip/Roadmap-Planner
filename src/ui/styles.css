@@ -485,3 +485,4 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 @media (prefers-reduced-motion: reduce) { .toast.busy::before { animation: none; } }
 .fredit.qaiteam { float: none; padding: 1px 8px; font-size: 10.5px; }
 .cardacts { margin-top: 6px; } .cardacts .fredit { float: none; }
+.rmlinks { margin-left: 8px; font-size: 11.5px; } .rmlinks a { color: var(--commit-ink); }
