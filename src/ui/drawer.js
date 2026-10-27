@@ -3,7 +3,7 @@
 // push-out / pull-forward / quick-win suggestions (src/suggestions.js).
 
 import { cellIssues } from '../capacity.js';
-import { formatDate, lateVsCommit } from '../periods.js';
+import { formatDate, lateVsCommit, potQuarters } from '../periods.js';
 import { pushOut, pullForward } from '../suggestions.js';
 import { isAllowed } from '../notion/writes.js';
 
@@ -53,7 +53,7 @@ function dateButtons(issue, horizon) {
   let h = '<div class="datebtns">';
   for (const q of horizon) for (const m of q.months) h += btn(m.lastFriday, m.label, pot && issue.end === m.lastFriday && issue.end !== q.lastFriday);
   h += '<span class="sep"></span>';
-  for (const q of horizon) h += btn(q.lastFriday, q.shortLabel, pot && issue.end === q.lastFriday);
+  for (const q of potQuarters(horizon)) h += btn(q.lastFriday, q.shortLabel, pot && issue.end === q.lastFriday);
   return h + '</div>';
 }
 

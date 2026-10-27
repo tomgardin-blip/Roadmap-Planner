@@ -77,6 +77,21 @@ export function horizon(todayISO) {
   return out;
 }
 
+/**
+ * Quarter pot buttons: the three visible quarters plus the next `extra` (Tom, 2026-10-27: Q3 and Q4
+ * 2027 too). The extra ones carry the year in their label ("Q3 '27"), since Q4 repeats otherwise.
+ * Capacity cards stay on the three visible quarters.
+ */
+export function potQuarters(h, extra = 2) {
+  const out = h.map((q) => ({ lastFriday: q.lastFriday, shortLabel: q.shortLabel }));
+  let cur = { year: h[h.length - 1].year, q: h[h.length - 1].q };
+  for (let i = 0; i < extra; i++) {
+    cur = nextQuarter(cur);
+    out.push({ lastFriday: lastFridayOfQuarter(cur.year, cur.q), shortLabel: `Q${cur.q} '${String(cur.year).slice(2)}` });
+  }
+  return out;
+}
+
 // One date format everywhere in the planner: DD/MM/YYYY (Tom, 2026-10-27).
 const pad = (n) => String(n).padStart(2, '0');
 export function formatDate(iso) {

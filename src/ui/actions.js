@@ -1,7 +1,7 @@
 // Write flows in the UI: move an issue (date buttons), edit an FR (Success Committed, Priority),
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
-import { formatDate } from '../periods.js';
+import { formatDate, potQuarters } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
@@ -123,7 +123,7 @@ function dateChips(horizon, current) {
   let h = '<div class="datebtns">';
   for (const q of horizon) for (const m of q.months) h += b(m.lastFriday, m.label);
   h += '<span class="sep"></span>';
-  for (const q of horizon) h += b(q.lastFriday, q.shortLabel);
+  for (const q of potQuarters(horizon)) h += b(q.lastFriday, q.shortLabel);
   return `${h}</div>`;
 }
 

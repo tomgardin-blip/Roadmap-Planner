@@ -46,3 +46,10 @@ test('after commit: month pot in the commit month is covered, a later pot or dat
   assert.equal(lateVsCommit({ start: '2027-01-04', end: '2027-01-20', committed: '2027-01-15' }), true); // dated work ends after
   assert.equal(lateVsCommit({ start: null, end: null, committed: '2027-01-15' }), false);
 });
+
+test('pot quarters: the three visible ones plus the next two, labelled with their year', async () => {
+  const { horizon, potQuarters } = await import('../src/periods.js');
+  const p = potQuarters(horizon('2026-10-26'));
+  assert.deepEqual(p.map((x) => x.shortLabel), ['Q4', 'Q1', 'Q2', "Q3 '27", "Q4 '27"]);
+  assert.deepEqual(p.slice(3).map((x) => x.lastFriday), ['2027-09-24', '2027-12-31']);
+});
