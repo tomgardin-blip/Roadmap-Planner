@@ -2,7 +2,9 @@
 // carries the same date buttons and FR edit as the drawer.
 
 import { RULES } from '../atrisk.js';
-import { formatDate, formatDateTime, formatDatesIn } from '../periods.js';
+import { formatDate, formatDateTime, formatDatesIn, lateVsCommit } from '../periods.js';
+import { issueTeams, TEAMS } from '../capacity.js';
+import { ISSUE_PRIORITIES } from '../notion/writes.js';
 import { GROUPS } from '../prep.js';
 import { listCard, frCard } from './drawer.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
@@ -120,4 +122,40 @@ export function renderHistory(el, { audit, auditError, weekly, changes, users, s
     ${section('hist-planner', 'Planner changes', audit ? audit.length : '…', 'newest first', auditHtml, true)}
     ${section('hist-notion', 'Edited in Notion since the last sync', (changes || []).length, 'no reason given', notionHtml)}
   </div>`;
+}
+
+/**
+ * Quarter plan (Tom, 2026-10-27): per quarter and team, every open engineering issue planned in it
+ * (its end date falls in the quarter), with where it is planned, its committed date and its Priority,
+ * which can be set right here. Sorted by planned date, then committed date.
+ */
+export function renderQuarterPlan(el, { run, horizon, quarterKey, team = 'all', readOnly }) {
+  const q = horizon.find((x) => x.key === quarterKey) || horizon[0];
+  const qOf = (d) => { const [y, m] = String(d).split('-').map(Number); return `${y}-Q${Math.floor((m - 1) / 3) + 1}`; };
+  const closed = new Set(['Done', "Won't do", 'Duplicate']);
+  const inQ = (i) => i.end && qOf(i.end) === `${q.year}-Q${q.q}` && !closed.has(i.status) && !i.isParent && !(i.type || '').includes('Holiday');
+  const planned = (i) => {
+    if (i.start && i.start !== i.end) return `${formatDate(i.start)} → ${formatDate(i.end)}`;
+    const m = q.months.find((x) => x.lastFriday === i.end);
+    const label = i.end === q.lastFriday ? `${q.shortLabel} pot` : m ? `${m.label} pot` : 'Pot';
+    return `${label} · ${formatDate(i.end)}`;
+  };
+  const seg = `<span class="seg qpseg">${horizon.map((x) => `<button data-qp="${x.key}" class="${x.key === q.key ? 'on' : ''}">${esc(x.label)}</button>`).join('')}</span>`;
+  let h = `<div class="lhead"><b>Quarter plan</b>${seg}<span class="lsub">Engineering issues planned in ${esc(q.label)} (end date in the quarter), per team. Set the issue Priority here; it is written to Notion and logged.</span></div>`;
+  const teams = team === 'all' ? TEAMS : [team];
+  for (const tm of teams) {
+    const list = run.issues.filter((i) => inQ(i) && issueTeams(run, i).has(tm))
+      .sort((a, b) => String(a.end).localeCompare(String(b.end)) || String(a.committed || '9').localeCompare(String(b.committed || '9')));
+    const rows = list.map((i) => {
+      const late = lateVsCommit(i);
+      const pr = i.priority;
+      const opts = [pr && !ISSUE_PRIORITIES.includes(pr) ? pr : null, ...ISSUE_PRIORITIES].filter(Boolean);
+      const sel = readOnly ? esc(pr || '–') : `<select class="qpprio" data-qpissue="${i.id}" aria-label="Priority of ${esc(i.name)}">${pr ? '' : '<option value="" selected>–</option>'}${opts.map((o) => `<option ${o === pr ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      const name = i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a>` : esc(i.name);
+      return `<tr><td>${name}</td><td class="num">${planned(i)}</td><td class="num ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td></tr>`;
+    }).join('');
+    h += `<h3 class="lgroup">${esc(tm)} <span class="cnt">${list.length}</span></h3>`;
+    h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
+  }
+  el.innerHTML = `<div class="lists">${h}</div>`;
 }

@@ -5,7 +5,7 @@
 
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
-  TEST_FR, assertAllowed, issueDatesInput, frUpdateInput, ownerCommentInput, ownerCommentMarkdown,
+  TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, frUpdateInput, ownerCommentInput, ownerCommentMarkdown,
   auditRowInput, readIssueDates, readFr, moveWarnings,
 } from '../notion/writes.js';
 
@@ -52,6 +52,19 @@ export async function moveIssue(mcp, { issue, start, end, reason, blockers = [] 
     reason, warning: warnings.join('; '), issueId: issue.id, itemName: issue.name || before.name, updateId: updateId(),
   });
   return { before, after: { start, end }, warnings };
+}
+
+/** Set an engineering issue's Priority (Quarter plan), then audit it. */
+export async function setIssuePriority(mcp, { issue, priority }) {
+  assertAllowed('issue', issue.id);
+  const before = await readIssue(mcp, issue.id);
+  if (before.priority === priority) return { before, changed: false };
+  await call(mcp, NOTION, 'notion-update-page', issuePriorityInput(issue.id, priority));
+  await audit(mcp, {
+    category: 'Issue priority changed', field: 'Priority', before: before.priority || '', after: priority,
+    issueId: issue.id, itemName: issue.name || before.name, updateId: updateId(),
+  });
+  return { before, changed: true };
 }
 
 /** Change an FR's Success Committed and/or Priority. Returns the changes for the owner ping. */

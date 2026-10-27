@@ -36,6 +36,14 @@ export function issueDatesInput(issueId, start, end) {
   return { page_id: dashed(issueId), command: 'update_properties', properties: { ...dateProps('Start', start), ...dateProps('End', end) } };
 }
 
+// Engineering issue Priority (Bugs & Features), set from the Quarter plan (Tom, 2026-10-27).
+export const ISSUE_PRIORITIES = ['Urgent', 'High', 'Medium', 'Low', 'Not assigned'];
+export function issuePriorityInput(issueId, priority) {
+  assertAllowed('issue', issueId);
+  if (!ISSUE_PRIORITIES.includes(priority)) throw new Error(`Unknown issue priority ${priority}`);
+  return { page_id: dashed(issueId), command: 'update_properties', properties: { Priority: priority } };
+}
+
 /** notion-update-page input for an FR: only Success Committed and Priority are ever sent. */
 export function frUpdateInput(frId, { successCommitted, priority, status } = {}) {
   assertAllowed('fr', frId);
@@ -118,7 +126,7 @@ export function parseFetchedProperties(payload) {
 
 export function readIssueDates(payload) {
   const p = parseFetchedProperties(payload);
-  return { name: p.Name || '', start: p['date:Start:start']?.slice(0, 10) || null, end: p['date:End:start']?.slice(0, 10) || null };
+  return { name: p.Name || '', start: p['date:Start:start']?.slice(0, 10) || null, end: p['date:End:start']?.slice(0, 10) || null, priority: p.Priority || null };
 }
 
 export function readFr(payload) {

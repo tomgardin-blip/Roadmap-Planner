@@ -337,3 +337,10 @@ input.bsel { width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px;
 @media (max-width: 700px) { .estbtns { width: 100%; } .estbtns .estbtn { flex: 1 1 100%; } }
 @media (hover: hover) { .topbar .testbtn:hover:not(:disabled) { background: rgba(255,255,255,.15); } }
 .topbar .testbtn:disabled { opacity: .6; }
+.qpseg { margin-left: 8px; } .qpseg button { font-size: 12px; }
+.qptable td:first-child { width: 55%; }
+@media (min-width: 701px) { .qptable select { font-size: 12px; padding: 3px 24px 3px 6px; } }
+.lgroup .cnt { font-weight: 700; color: var(--ink); background: var(--grey); border-radius: 999px; padding: 0 8px; font-size: 12px; letter-spacing: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+.seg button { border: 0; border-radius: 0; padding: 5px 10px; background: transparent; }
+.seg button.on { background: var(--navy); color: #fff; font-weight: 700; }

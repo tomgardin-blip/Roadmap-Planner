@@ -11,12 +11,12 @@ import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
 import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
-import { userName } from '../data/writer.js';
+import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
-import { renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
+import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
 import { pushbackCandidates, overbookedCells } from '../pushback.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
 import { GROUPS } from '../prep.js';
@@ -39,7 +39,7 @@ function initialSort() {
 }
 
 const state = {
-  tab: 'capacity', allFrTeams: false, listSort: initialSort(), pbOverbooked: false, readOnly: false,
+  tab: 'capacity', qpQuarter: null, allFrTeams: false, listSort: initialSort(), pbOverbooked: false, readOnly: false,
   audit: null, auditError: null, owners: null, ownersLoading: false, users: new Map(), pushback: null,
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
@@ -93,6 +93,7 @@ function shell() {
         <button data-tab="prep">Prep queues<span class="cnt" id="cntPrep"></span></button>
         <button data-tab="risk">At risk<span class="cnt" id="cntRisk"></span></button>
         <button data-tab="pushback">Pushback<span class="cnt" id="cntPb"></span></button>
+        <button data-tab="qplan">Quarter plan</button>
         <button data-tab="history">History</button>
       </nav>
       <div class="toolbar">
@@ -116,6 +117,7 @@ function shell() {
   });
   document.getElementById('grid').addEventListener('change', (e) => {
     if (e.target.id === 'allFrTeams') { state.allFrTeams = e.target.checked; draw(); }
+    if (e.target.matches?.('select.qpprio')) { setPriority(e.target); return; }
     if (e.target.id === 'listSort') { state.listSort = e.target.value; try { localStorage.setItem('rp.sort', state.listSort); } catch { /* storage unavailable */ } draw(); }
     if (e.target.id === 'pbOverbooked') { state.pbOverbooked = e.target.checked; recompute(); draw(); }
   });
@@ -130,6 +132,8 @@ function shell() {
   // Footnote open on desktop, folded on phones where it would cover half the grid.
   document.querySelector('.note').open = !matchMedia('(max-width: 700px)').matches;
   document.getElementById('grid').addEventListener('click', (e) => {
+    const qp = e.target.closest('button[data-qp]');
+    if (qp) { state.qpQuarter = qp.dataset.qp; draw(); return; }
     const cell = e.target.closest('td.cell[data-period]');
     if (!cell || !state.run) return;
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
@@ -249,6 +253,31 @@ function loadComments() {
       }
     })
     .finally(() => { state.frCommentsLoading = false; if (state.tab === 'prep') draw(); });
+}
+
+/** Quarter plan: set an issue's Priority in Notion straight from the select (audited). */
+async function setPriority(sel) {
+  const issue = state.run?.issues.find((i) => i.id === sel.dataset.qpissue);
+  const priority = sel.value;
+  if (!issue || !priority || !state.mcp) return;
+  const prev = issue.priority || '';
+  sel.disabled = true;
+  try {
+    const r = await setIssuePriority(state.mcp, { issue, priority });
+    // Keep it in the loaded rows so redraws and a later reload of this view show the new value.
+    state.rows = state.rows.map((row) => {
+      const blob = row.serve_engineering_capacity_features;
+      if (blob == null) return row;
+      let hit = false;
+      const feats = parseBlob(blob).map((f) => { if (String(f[0]).replace(/-/g, '').toLowerCase() !== issue.id) return f; hit = true; const g = f.slice(); g[33] = priority; return g; });
+      return hit ? { ...row, serve_engineering_capacity_features: JSON.stringify(feats) } : row;
+    });
+    issue.priority = priority;
+    toast(r.changed ? `Priority set to ${priority}: ${issue.name}. Logged.` : `Already ${priority} in Notion.`);
+  } catch (err) {
+    sel.value = prev;
+    toast(`Priority not saved: ${explainError(NOTION, err)}`, 'bad');
+  } finally { sel.disabled = false; }
 }
 
 function renderBulkBar() {
@@ -420,6 +449,7 @@ function draw() {
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { list: state.pushback, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, overbookedOnly: state.pbOverbooked, readOnly: state.readOnly, team: state.teamFilter }); return; }
+  if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }

@@ -23,7 +23,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - All issues and FRs are writable since Tom approved it on 2026-10-10 ("unlock all"), within the field limits below. Test pages for trying things: issue "Test Tom - ignore" (`3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`), FR "Test Tom - ignore FR" (`3f5e32e8-f8c8-81d6-927b-d504b6f10e54`).
 - When Claude Code itself writes to Notion (not the published page), it still uses only the test pages unless Tom names the page.
 - Allowed writes (Tom, 2026-10-10), nothing else:
-  - Issues (Bugs and Features): Start and End only. Never effort, team, status.
+  - Issues (Bugs and Features): Start and End, and "Priority" (Urgent / High / Medium / Low / Not assigned) from the Quarter plan (Tom, 2026-10-27). Never effort, team, status.
   - FRs (Customer Tasks): "Success Committed" and "Priority " (any option, incl. "No longer needed" and "Won't do"), and "Status" only to "Won't do" (Tom, 2026-10-27). Never the "Committed" formula or anything else.
   - Comments on an FR: one per Save in the FR edit sheet (Tom, 2026-10-27, replaces the separate Send step): tags its Responsible Success (no tag when there is none, never a fallback), lists what changed, then Tom's comment. A comment with no field change is allowed.
   - Rows in the Roadmap Planner Audit Log (`collection://9b4b26f2-ea33-4578-89c2-252389cd5564`).
