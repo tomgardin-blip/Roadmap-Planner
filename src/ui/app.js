@@ -183,7 +183,7 @@ function shell() {
     const fe = e.target.closest('button[data-fr-edit]');
     if (fe && !fe.disabled) {
       const fr = shownFr(fe.dataset.frEdit) || state.pushback?.find((x) => x.fr.id === fe.dataset.frEdit)?.fr;
-      startFrEdit({ mcp: state.mcp, fr, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r) });
+      startFrEdit({ mcp: state.mcp, fr, horizon, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r) });
     }
   });
   document.addEventListener('keydown', (e) => {

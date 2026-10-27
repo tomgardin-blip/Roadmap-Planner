@@ -98,9 +98,20 @@ export function startBulkMove(ctx) {
   });
 }
 
+/** Month and quarter buttons for a date field (same dates as the issue date buttons). */
+function dateChips(horizon, current) {
+  if (!horizon.length) return '';
+  const b = (d, label) => `<button type="button" class="${d === current ? 'cur' : ''}" data-scdate="${d}" title="${fd(d)}">${esc(label)}</button>`;
+  let h = '<div class="datebtns">';
+  for (const q of horizon) for (const m of q.months) h += b(m.lastFriday, m.label);
+  h += '<span class="sep"></span>';
+  for (const q of horizon) h += b(q.lastFriday, q.shortLabel);
+  return `${h}</div>`;
+}
+
 /** FR edit: Success Committed and Priority. ctx: { mcp, fr: {id, title, dealId}, golive, onDone } */
 export async function startFrEdit(ctx) {
-  const { mcp, fr, golive, onDone } = ctx;
+  const { mcp, fr, golive, horizon = [], onDone } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
@@ -110,6 +121,7 @@ export async function startFrEdit(ctx) {
     <h3>${esc(cur.name || fr.title)}</h3>
     <label class="sfld">Committed date <span class="muted">(writes Success Committed)</span>
       <input id="sSc" type="date" value="${esc(cur.successCommitted || '')}"></label>
+    ${dateChips(horizon, cur.successCommitted)}
     <label class="sfld">Priority
       <select id="sPr">${[cur.priority && !FR_PRIORITIES.includes(cur.priority) ? cur.priority : null, ...FR_PRIORITIES].filter(Boolean)
         .map((p) => `<option ${p === cur.priority ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
@@ -124,6 +136,14 @@ export async function startFrEdit(ctx) {
     sheet.querySelector('#sEff').innerHTML = `Committed will be <b>${fd(eff)}</b>${pr === 'Needed for go-live' && golive ? ` (earliest of this date and go-live ${fd(golive)})` : ''}.`;
   };
   sheet.addEventListener('input', effLine);
+  // Month / quarter buttons fill the date with that period's last Friday, as the issue date buttons do.
+  sheet.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-scdate]');
+    if (!b) return;
+    sheet.querySelector('#sSc').value = b.dataset.scdate;
+    sheet.querySelectorAll('button[data-scdate]').forEach((x) => x.classList.toggle('cur', x === b));
+    effLine();
+  });
   effLine();
   sheet.querySelector('#sSave').addEventListener('click', async (e) => {
     const reason = sheet.querySelector('#sReason').value.trim();

@@ -173,6 +173,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - No engineering issue: comments (Tom, 2026-10-26). The planner reads each listed FR's Notion comments (notion-get-comments, 4 at a time, in the background when Prep queues opens). FRs with comments come first under "Has comments: check manually" (the product-feature skill usually ran but found no match and created no issue), each with the comment count and the latest comment (who, when, first 220 characters); then "No comments yet". Read only.
 - Refresh (Tom, 2026-10-27): the page reads everything once on open and does not poll. A "↻ Refresh" button in the top bar (live page only) re-reads Lightdash, the Notion overlay, the capacity feed, scores and backlog, audit log, effort baseline and FR comments, and redraws without a page reload. It keeps the open tab, team filter, sort and ticked issues, and says when done (with the Lightdash sync time). Disabled while a load is running.
 - Theme (Tom, 2026-10-27): opens in the light (day) theme, also on devices set to dark mode. The Theme button switches to dark and the choice is remembered per viewer.
+- FR edit date buttons (Tom, 2026-10-27): under the Committed date field, the same month and quarter buttons as on issue cards (Oct … Jun, Q4 Q1 Q2). A click fills the date with that period's last Friday (the same date an issue move uses); typing a date still works.
 
 **4. At risk**
 
