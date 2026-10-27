@@ -15,6 +15,7 @@ export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'To
 // FR Status: the planner may only close an FR as "Won't do" (Tom, 2026-10-27); no other status writes.
 export const FR_STATUS_CLOSE = "Won't do";
 export const GO_LIVE_PRIORITY = 'Needed for go-live';
+export const MONTH_BEFORE_PRIORITY = 'Needed 1 month before';
 export const REASONS = ['Commit moved', 'Estimate grew', 'Capacity', 'Dependency', 'Customer asked'];
 
 const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
@@ -73,11 +74,22 @@ export function frUpdateInput(frId, { successCommitted, priority, status } = {})
 }
 
 /**
- * The FR's "Committed" formula, as Tom described it (2026-10-10): the earliest of Success
- * Committed and, when priority is Needed for go-live, the deal's go-live date.
+ * The FR's "Committed" formula in Notion, as read off the data (2026-10-27: 754 of 762 "Needed for
+ * go-live" FRs sit 7 days before go-live, all 44 "Needed 1 month before" one calendar month before):
+ * the earliest of Success Committed and the go-live deadline for those two priorities.
  */
+export function goLiveDeadline(priority, golive) {
+  if (!golive) return null;
+  const d = new Date(`${String(golive).slice(0, 10)}T00:00:00Z`);
+  if (priority === GO_LIVE_PRIORITY) d.setUTCDate(d.getUTCDate() - 7);
+  else if (priority === MONTH_BEFORE_PRIORITY) {
+    const day = d.getUTCDate(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+    d.setUTCDate(Math.min(day, new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()));
+  } else return null;
+  return d.toISOString().slice(0, 10);
+}
 export function effectiveCommitted({ successCommitted, priority, golive }) {
-  const c = [successCommitted, priority === GO_LIVE_PRIORITY ? golive : null].filter(Boolean).sort();
+  const c = [successCommitted, goLiveDeadline(priority, golive)].filter(Boolean).sort();
   return c[0] || null;
 }
 

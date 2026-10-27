@@ -33,8 +33,10 @@ test('FR write sends only Success Committed and Priority; unknown priority refus
 
 test('effective committed: earliest of Success Committed and go-live when Needed for go-live', () => {
   assert.equal(W.effectiveCommitted({ successCommitted: '2027-01-29', priority: 'High', golive: '2026-12-01' }), '2027-01-29');
-  assert.equal(W.effectiveCommitted({ successCommitted: '2027-01-29', priority: 'Needed for go-live', golive: '2026-12-01' }), '2026-12-01');
-  assert.equal(W.effectiveCommitted({ successCommitted: null, priority: 'Needed for go-live', golive: '2026-12-01' }), '2026-12-01');
+  assert.equal(W.effectiveCommitted({ successCommitted: '2027-01-29', priority: 'Needed for go-live', golive: '2026-12-01' }), '2026-11-24'); // go-live − 7 days
+  assert.equal(W.effectiveCommitted({ successCommitted: null, priority: 'Needed for go-live', golive: '2027-02-01' }), '2027-01-25');
+  assert.equal(W.effectiveCommitted({ successCommitted: null, priority: 'Needed 1 month before', golive: '2027-03-31' }), '2027-02-28'); // one calendar month, clamped
+  assert.equal(W.effectiveCommitted({ successCommitted: '2026-12-01', priority: 'Needed 1 month before', golive: '2027-03-15' }), '2026-12-01');
   assert.equal(W.effectiveCommitted({ successCommitted: null, priority: 'Low', golive: '2026-12-01' }), null);
 });
 

@@ -2,7 +2,7 @@
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
 import { formatDate, potQuarters } from '../periods.js';
-import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
+import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { postRoadmap, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage } from '../roadmapPost.js';
@@ -174,7 +174,8 @@ export async function startFrEdit(ctx) {
     const sc = sheet.querySelector('#sSc').value || null;
     const pr = sheet.querySelector('#sPr').value;
     const eff = effectiveCommitted({ successCommitted: sc, priority: pr, golive });
-    sheet.querySelector('#sEff').innerHTML = `Committed will be <b>${fd(eff)}</b>${pr === 'Needed for go-live' && golive ? ` (earliest of this date and go-live ${fd(golive)})` : ''}.`;
+    const dl = goLiveDeadline(pr, golive);
+    sheet.querySelector('#sEff').innerHTML = `Committed will be <b>${fd(eff)}</b>${dl ? ` (earliest of this date and ${pr === 'Needed for go-live' ? '7 days' : 'one month'} before go-live ${fd(golive)}: ${fd(dl)})` : ''}.`;
   };
   sheet.addEventListener('input', effLine);
   // Month / quarter buttons fill the date with that period's last Friday, as the issue date buttons do.

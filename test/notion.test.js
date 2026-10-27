@@ -89,7 +89,7 @@ test('FR overlay: live priority, status and recomputed committed date patched on
   const rows = [{ serve_engineering_capacity_customer_tasks: JSON.stringify([t(A, 'd1'), t(B, 'd1'), t(C, 'd1'), t('other', 'd1')]) }];
   const out = JSON.parse(applyFrOverlay(rows, ov, new Map([['d1', '2027-02-26']]))[0].serve_engineering_capacity_customer_tasks);
   assert.deepEqual([out[0][4], out[0][8]], ['Needed after go-live', '2027-03-26']); // no go-live rule any more
-  assert.equal(out[1][8], '2027-02-26'); // go-live earlier than Success Committed
+  assert.equal(out[1][8], '2027-02-19'); // go-live 26/02 − 7 days, earlier than Success Committed
   assert.equal(out[2][8], null); // Won't do: no commit
   assert.deepEqual(out[3], t('other', 'd1'));
   assert.match(frOverlayQueryInput('2026-10-27T10:00:00Z').data.query, /"Priority ".*Last edited time/);
