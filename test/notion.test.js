@@ -108,3 +108,18 @@ test('FR overlay: issues linked to an edited FR take the earliest FR commit as i
   const untouched = [{ serve_engineering_capacity_features: JSON.stringify([f('33333333333333333333333333333333', '2026-10-01')]), serve_engineering_capacity_customer_tasks: JSON.stringify([t(FB, '2027-01-29', ['33333333333333333333333333333333'])]) }];
   assert.equal(JSON.parse(recommitIssues(untouched, applyFrOverlay(untouched, ov), ov)[0].serve_engineering_capacity_features)[0][26], '2026-10-01'); // no edited FR linked: kept
 });
+
+test('overlay: a "Blocked by" removed in Notion drops the link from the blocker before Lightdash syncs', () => {
+  const IMT = '379e32e8f8c881d896f8ec6f6e242419'; const GLY = '2b5e32e8f8c881ed8e32cbafc7264a7e'; const NEW = '11111111111111111111111111111111';
+  const f = (id, blocks) => { const x = new Array(35).fill(null); x[0] = id; x[10] = blocks; return x; };
+  const rows = [{ serve_engineering_capacity_features: JSON.stringify([f(GLY, ['379e32e8-f8c8-81d8-96f8-ec6f6e242419', 'aaaa']), f(IMT, null), f(NEW, null)]) }];
+  const ov = parseOverlay([
+    { url: `https://app.notion.com/${IMT}`, Name: 'IMT', Status: 'Backlog', 'Blocked by': null },
+    { url: `https://app.notion.com/${NEW}`, Name: 'N', Status: 'Backlog', 'Blocked by': JSON.stringify([`https://app.notion.com/${GLY}`]) },
+  ]);
+  const out = JSON.parse(applyOverlay(rows, ov).rows[0].serve_engineering_capacity_features);
+  assert.deepEqual(out[0][10], ['aaaa', NEW]); // IMT dropped, the new link added
+  assert.equal(out[1][11], null);
+  assert.deepEqual(out[2][11], [GLY]);
+  assert.deepEqual(JSON.parse(rows[0].serve_engineering_capacity_features)[0][10], ['379e32e8-f8c8-81d8-96f8-ec6f6e242419', 'aaaa']); // input untouched
+});

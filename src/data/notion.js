@@ -37,7 +37,7 @@ export function overlayQueryInput(sinceIso, offset = 0) {
   return {
     data: {
       data_source_urls: [ISSUES_DS],
-      query: `SELECT url, "Name", "Type", "Team", "Status", "Effort FE", "Effort BE", "Effort MOB", "date:Start:start", "date:End:start", "Last edited time" FROM "${ISSUES_DS}" WHERE datetime("Last edited time") > datetime(?) ORDER BY "Last edited time" DESC, url DESC LIMIT ${PAGE} OFFSET ${offset}`,
+      query: `SELECT url, "Name", "Type", "Team", "Status", "Effort FE", "Effort BE", "Effort MOB", "date:Start:start", "date:End:start", "Blocked by", "Last edited time" FROM "${ISSUES_DS}" WHERE datetime("Last edited time") > datetime(?) ORDER BY "Last edited time" DESC, url DESC LIMIT ${PAGE} OFFSET ${offset}`,
       params: [sinceIso],
     },
   };
@@ -46,6 +46,14 @@ export const OVERLAY_PAGE_SIZE = PAGE;
 
 const day = (v) => (v ? String(v).slice(0, 10) : null);
 const numOrNull = (v) => (v == null || v === '' ? null : Number(v));
+
+/** Notion relation cell (JSON array of page URLs, or null) → page ids. */
+function relationIds(v) {
+  if (!v) return [];
+  let list;
+  try { list = typeof v === 'string' ? JSON.parse(v) : v; } catch { list = String(v).split(','); }
+  return (Array.isArray(list) ? list : []).map(pageIdFromUrl).filter(Boolean);
+}
 
 /** Notion SQL result rows → Map(pageId → live values). */
 export function parseOverlay(results) {
@@ -58,6 +66,7 @@ export function parseOverlay(results) {
       team: r.Team || null, status: r.Status || null,
       fe: numOrNull(r['Effort FE']), be: numOrNull(r['Effort BE']), mob: numOrNull(r['Effort MOB']),
       start: day(r['date:Start:start']), end: day(r['date:End:start']),
+      blockedBy: relationIds(r['Blocked by']),
       editedAt: r['Last edited time'] || null,
     });
   }
@@ -94,6 +103,36 @@ export function applyOverlay(lightdashRows, overlay, { addMissing = true } = {})
     });
     return { ...r, serve_engineering_capacity_features: JSON.stringify(feats) };
   });
+
+  // Dependencies (Tom, 2026-10-27: a removed "Blocked by" must count before Lightdash syncs). For every
+  // issue edited since the sync, its live "Blocked by" decides which issues list it in their `blocks`
+  // (index 10), which the engine follows for the effective committed date; its own index 11 too.
+  const deps = [...overlay.values()].filter((o) => Array.isArray(o.blockedBy));
+  if (deps.length) {
+    for (const r of rows) {
+      const blob = r.serve_engineering_capacity_features;
+      if (blob == null) continue;
+      let hit = false;
+      const feats = JSON.parse(blob).map((f) => {
+        const id = nid(f[F.id]);
+        const blocks = (Array.isArray(f[10]) ? f[10] : String(f[10] || '').match(/[0-9a-f-]{32,36}/gi) || []).map(String);
+        let next = blocks.slice();
+        for (const o of deps) {
+          const has = next.some((b) => nid(b) === o.id);
+          const should = o.blockedBy.includes(id);
+          if (has && !should) next = next.filter((b) => nid(b) !== o.id);
+          if (!has && should) next.push(o.id);
+        }
+        const own = overlay.get(id);
+        if (next.length === blocks.length && next.every((b, k) => b === blocks[k]) && !own) return f;
+        hit = true;
+        const g = f.slice(); g[10] = next.length ? next : null;
+        if (own) g[11] = own.blockedBy.length ? own.blockedBy : null;
+        return g;
+      });
+      if (hit) r.serve_engineering_capacity_features = JSON.stringify(feats);
+    }
+  }
 
   const added = [];
   const extra = [];
