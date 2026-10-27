@@ -15,7 +15,6 @@ export const RULES = [
   { key: 'committedBlocked', label: 'Committed, status Blocked/on hold' },
   { key: 'dependency', label: 'Dependency in the wrong order' },
   { key: 'noTeam', label: 'No team: invisible in capacity' },
-  { key: 'claudeReview', label: 'Claude estimate not reviewed' },
   { key: 'effortGrowth', label: 'Effort grew 50% or more on a committed issue this quarter' },
 ];
 
@@ -49,7 +48,6 @@ export function atRisk(run, { team = 'all', baseline = null } = {}) {
         if (start && b.end && b.end > start) out.dependency.push({ issue: i, detail: `Starts ${formatDate(start)}, blocked by "${b.name}" ending ${formatDate(b.end)}`, blocker: b });
         else if (start && !b.end) out.dependency.push({ issue: i, detail: `Starts ${formatDate(start)}, blocked by "${b.name}" which has no dates`, blocker: b });
       }
-      if (i.status === 'Claude - to review' && effortOf(i) > 0) out.claudeReview.push({ issue: i, detail: `${effortOf(i)} d estimated by Claude, not reviewed` });
     }
     if (!picked && !i.team && !(i.assignedTo || []).length && planned && effortOf(i) > 0) {
       out.noTeam.push({ issue: i, detail: `${effortOf(i)} d with dates, counted in no team` });

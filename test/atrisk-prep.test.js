@@ -36,7 +36,7 @@ test('at risk: after commit, committed unplanned, blocked, dependency, no team, 
   assert.deepEqual(ids(r.committedBlocked), ['blk']);
   assert.deepEqual(ids(r.dependency), ['dep']);
   assert.deepEqual(ids(r.noTeam), ['orphan']);
-  assert.deepEqual(ids(r.claudeReview), ['claude']);
+  assert.equal(r.claudeReview, undefined); // rule removed (Tom, 2026-10-27)
 });
 
 test('prep queues: no issue, no estimate, not planned; highest group wins; other priorities ignored', () => {

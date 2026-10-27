@@ -207,7 +207,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Effort grew 50% or more on a committed issue this quarter.
 - Dependency planned in the wrong order ("Blocked by" issue ends later).
 - No team set, so invisible in capacity.
-- Effort is a Claude estimate not yet reviewed (status "Claude - to review"), especially with low confidence.
+- ~~Effort is a Claude estimate not yet reviewed~~: removed (Tom, 2026-10-27: not required).
 - Built 2026-10-10 (src/atrisk.js), for issues routed to our 4 teams (no-team rule: all issues):
   - Commit dates are the engine's effective commit (earliest of the issue, its FRs and what it blocks).
   - Dependency: a "Blocked by" issue that ends after this issue starts (pot issues: Start = End), or has no dates.
