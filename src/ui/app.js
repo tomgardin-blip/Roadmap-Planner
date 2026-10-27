@@ -23,7 +23,7 @@ import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
 import { startMove, startBulkMove, startFrEdit, loadTestPages, startDismiss, startEstimatePost } from './actions.js';
-import { closeSheet } from './sheet.js';
+import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
 
@@ -80,6 +80,7 @@ function shell() {
         <span id="modePill"></span>
         <span class="spacer"></span>
         <span id="pills"></span>
+        <button id="refreshBtn" class="testbtn" hidden title="Re-read Lightdash and Notion now, without reloading the page">↻ Refresh</button>
         <button id="testBtn" class="testbtn" hidden title="Try the Notion write-back on the test pages">Test writes</button>
         <span class="connwrap"><span class="connicon" id="connL" title="Lightdash">L</span><span class="connicon" id="connN" title="Notion">N</span></span>
       </div>
@@ -142,6 +143,7 @@ function shell() {
     }
   });
   document.getElementById('testBtn').addEventListener('click', openTest);
+  document.getElementById('refreshBtn').addEventListener('click', refresh);
   // Write flows (delegated: buttons live in the drawer and the sheet).
   document.addEventListener('click', (e) => {
     if (e.target.closest('[data-sheet-close]')) { closeSheet(); return; }
@@ -405,6 +407,63 @@ function show(rows) {
   draw();
 }
 
+/**
+ * Everything the live page reads: Lightdash rows with the Notion overlay, the capacity feed, then in
+ * the background the extras (scores, backlog), audit log and effort baseline. Used on open and by the
+ * Refresh button, which keeps the open tab, team filter, sort and ticked issues.
+ */
+async function loadAllLive(mcp) {
+  state.loadingAll = true;
+  try { return await loadAllLiveOnce(mcp); } finally { state.loadingAll = false; }
+}
+async function loadAllLiveOnce(mcp) {
+  state.status = { ...(state.status || {}), lightdash: 'loading', notion: 'loading' };
+  renderChrome();
+  state.feedError = null;
+  const [{ rows, status }, feed] = await Promise.all([
+    loadLive(mcp),
+    loadCapacityFeed(mcp).catch((err) => { state.feedError = explainError(NOTION, err); return null; }),
+  ]);
+  state.feed = feed;
+  state.status = status;
+  if (!rows) { renderChrome(); document.getElementById('grid').innerHTML = ''; return false; }
+  state.frComments = new Map(); // re-read on the next Prep queues draw
+  show(rows);
+  renderDrawer();
+  const background = [
+    loadExtras(mcp, status.overlay, onExtra),
+    loadAudit(mcp)
+      .then(async (audit) => {
+        state.audit = audit; state.auditError = null;
+        for (const id of new Set(audit.map((a) => a.by).filter(Boolean))) if (!state.users.has(id)) state.users.set(id, await userName(mcp, id));
+      })
+      .catch((err) => { state.auditError = explainError(NOTION, err); })
+      .finally(() => { recompute(); if (['history', 'pushback'].includes(state.tab)) draw(); }),
+    // Baseline from the Notion-overlaid rows, so first-seen effort is today's live value.
+    syncBaseline(mcp, state.run, quarterKeyOf(NOW), { write: !state.readOnly })
+      .then(({ baseline }) => { state.baseline = baseline; state.baselineError = null; })
+      .catch((err) => { state.baselineError = explainError(NOTION, err); })
+      .finally(() => { recompute(); if (state.tab === 'risk') draw(); }),
+  ];
+  await Promise.allSettled(background);
+  return true;
+}
+
+async function refresh() {
+  if (!state.mcp || state.refreshing) return;
+  if (state.loadingAll) return toast('Still loading, try again in a few seconds.');
+  const btn = document.getElementById('refreshBtn');
+  state.refreshing = true; btn.disabled = true; btn.textContent = '↻ Refreshing…';
+  try {
+    const ok = await loadAllLive(state.mcp);
+    toast(ok ? `Refreshed. Lightdash ${fmtTime(state.status?.syncedAt)}, Notion live.` : 'Refresh failed: see the connector icons.', ok ? '' : 'bad');
+  } catch (err) {
+    toast(`Refresh failed: ${explainError('Lightdash', err)}`, 'bad');
+  } finally {
+    state.refreshing = false; btn.disabled = false; btn.textContent = '↻ Refresh';
+  }
+}
+
 async function boot() {
   shell();
   renderChrome();
@@ -420,36 +479,14 @@ async function boot() {
   }
   if (mcp) {
     state.mcp = mcp;
+    document.getElementById('refreshBtn').hidden = false;
     // Read-only for anyone who cannot edit the artifact (Tom picks Editor/Viewer in Share).
     const user = await window.claude.use('user').catch(() => null);
     state.readOnly = !(await user?.canEdit?.().catch(() => false));
     setReadOnly(state.readOnly);
     document.getElementById('testBtn').hidden = state.readOnly;
     state.mode = 'live';
-    state.status = { lightdash: 'loading', notion: 'loading' };
-    renderChrome();
-    const [{ rows, status }, feed] = await Promise.all([
-      loadLive(mcp),
-      loadCapacityFeed(mcp).catch((err) => { state.feedError = explainError(NOTION, err); return null; }),
-    ]);
-    state.feed = feed;
-    state.status = status;
-    if (rows) {
-      show(rows);
-      loadExtras(mcp, status.overlay, onExtra);
-      // Baseline from the Notion-overlaid rows, so first-seen effort is today's live value.
-      loadAudit(mcp)
-        .then(async (audit) => {
-          state.audit = audit;
-          for (const id of new Set(audit.map((a) => a.by).filter(Boolean))) state.users.set(id, await userName(mcp, id));
-        })
-        .catch((err) => { state.auditError = explainError(NOTION, err); })
-        .finally(() => { recompute(); if (['history', 'pushback'].includes(state.tab)) draw(); });
-      syncBaseline(mcp, state.run, quarterKeyOf(NOW), { write: !state.readOnly })
-        .then(({ baseline }) => { state.baseline = baseline; })
-        .catch((err) => { state.baselineError = explainError(NOTION, err); })
-        .finally(() => { recompute(); if (state.tab === 'risk') draw(); });
-    } else { renderChrome(); document.getElementById('grid').innerHTML = ''; }
+    await loadAllLive(mcp);
     return;
   }
   state.mode = Array.isArray(window.__RP_ROWS__) ? 'snapshot' : 'fake';

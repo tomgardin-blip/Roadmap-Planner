@@ -335,3 +335,5 @@ input.bsel { width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px;
 .estbtns { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .estbtns .estbtn { margin-left: 0; }
 @media (max-width: 700px) { .estbtns { width: 100%; } .estbtns .estbtn { flex: 1 1 100%; } }
+@media (hover: hover) { .topbar .testbtn:hover:not(:disabled) { background: rgba(255,255,255,.15); } }
+.topbar .testbtn:disabled { opacity: .6; }
