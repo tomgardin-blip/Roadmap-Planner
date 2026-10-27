@@ -138,6 +138,14 @@ function shell() {
   document.getElementById('grid').addEventListener('click', (e) => {
     const qp = e.target.closest('button[data-qp]');
     if (qp) { state.qpQuarter = qp.dataset.qp; draw(); return; }
+    const qt = e.target.closest('button[data-qpteam]');
+    if (qt) {
+      // From All, a team button shows just that team; otherwise it toggles; none left = All.
+      const cur = pickedTeams(state.teamFilter) || [];
+      const t = qt.dataset.qpteam;
+      setTeams(t === 'all' ? [] : cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]);
+      return;
+    }
     const qx = e.target.closest('button[data-qpx]');
     if (qx) { const id = qx.dataset.qpx; if (state.qpOpen.has(id)) state.qpOpen.delete(id); else state.qpOpen.add(id); draw(); return; }
     const sg = e.target.closest('button[data-suggest]');
@@ -316,6 +324,7 @@ function afterIssueStatus(issue, status) {
  * Team filter as a tick list (Tom, 2026-10-27): one or more teams, none or all four = All teams.
  * Applies to every tab; remembered per viewer in this browser.
  */
+let setTeams = () => {};
 function initTeamPicker() {
   const btn = document.getElementById('teamBtn'); const panel = document.getElementById('teamPanel');
   const boxes = [...panel.querySelectorAll('input[data-team]')];
@@ -335,6 +344,8 @@ function initTeamPicker() {
   const p0 = pickedTeams(state.teamFilter);
   boxes.forEach((b) => { b.checked = !!p0?.includes(b.dataset.team); });
   label();
+  // Same filter from the team toggles in the Quarter plan header.
+  setTeams = (list) => { boxes.forEach((b) => { b.checked = list.includes(b.dataset.team); }); apply(); };
   btn.addEventListener('click', () => open(panel.hidden));
   panel.addEventListener('change', apply);
   panel.addEventListener('click', (e) => {

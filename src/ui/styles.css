@@ -472,3 +472,5 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
   .qptable tr.qpopen { border-bottom: 0; } .qptable tr.qpopen td { background: none; } .qptable tr.qpopen { background: var(--grey); }
   .qptable tr.qpact { display: block; background: var(--grey); padding: 0 10px 12px; } .qptable tr.qpact td { display: block; padding: 0; }
 }
+.qpteams { margin-left: 8px; flex-wrap: wrap; } .qpteams button { font-size: 12px; }
+@media (max-width: 700px) { .qpteams { margin-left: 0; display: flex; overflow-x: auto; flex-wrap: nowrap; max-width: 100%; } .qpteams button { white-space: nowrap; flex: 0 0 auto; } }
