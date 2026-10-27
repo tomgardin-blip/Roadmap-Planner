@@ -95,7 +95,7 @@ test('FR overlay: live priority, status and recomputed committed date patched on
   assert.match(frOverlayQueryInput('2026-10-27T10:00:00Z').data.query, /"Priority ".*Last edited time/);
 });
 
-test('FR overlay: the issue takes the new earliest FR commit when the edited FR set it', async () => {
+test('FR overlay: issues linked to an edited FR take the earliest FR commit as it is now', async () => {
   const { parseFrOverlay, applyFrOverlay, recommitIssues } = await import('../src/data/notion.js');
   const FA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; const FB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'; const I1 = '11111111111111111111111111111111'; const I2 = '22222222222222222222222222222222';
   const t = (id, c, feats) => { const x = new Array(10).fill(null); x[0] = id; x[4] = 'High'; x[5] = 'Not Started'; x[6] = 'd'; x[7] = JSON.stringify(feats); x[8] = c; return x; };
@@ -104,5 +104,7 @@ test('FR overlay: the issue takes the new earliest FR commit when the edited FR 
   const ov = parseFrOverlay([{ url: `https://app.notion.com/${FA}`, 'Priority ': 'High', Status: 'Not Started', 'date:Success Committed:start': '2027-03-26' }]);
   const out = JSON.parse(recommitIssues(rows, applyFrOverlay(rows, ov), ov)[0].serve_engineering_capacity_features);
   assert.equal(out[0][26], '2027-01-29'); // FA set it; FB is now the earliest
-  assert.equal(out[1][26], '2026-10-01'); // own date, earlier than any FR: kept
+  assert.equal(out[1][26], '2027-03-26'); // linked to FA only: FA's new date
+  const untouched = [{ serve_engineering_capacity_features: JSON.stringify([f('33333333333333333333333333333333', '2026-10-01')]), serve_engineering_capacity_customer_tasks: JSON.stringify([t(FB, '2027-01-29', ['33333333333333333333333333333333'])]) }];
+  assert.equal(JSON.parse(recommitIssues(untouched, applyFrOverlay(untouched, ov), ov)[0].serve_engineering_capacity_features)[0][26], '2026-10-01'); // no edited FR linked: kept
 });

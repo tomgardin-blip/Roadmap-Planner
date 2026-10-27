@@ -175,10 +175,10 @@ export function goliveMap(rows) {
 const idsOf = (v) => (!v ? [] : String(v).trim().startsWith('[') ? JSON.parse(v) : String(v).split(',')).map(nid).filter(Boolean);
 
 /**
- * After the FR overlay (Tom, 2026-10-27): an issue's committed date in Lightdash is a stored copy of the
- * earliest committed date of its FRs. When an overlaid FR changed that earliest date, the issue takes the
- * new earliest date (none if none). Only issues whose stored date equals the old earliest are touched,
- * so dates that come from the issue itself are kept. before/after: rows without / with the overlay.
+ * After the FR overlay (Tom, 2026-10-27): an issue's committed date in Lightdash is a stored copy of its
+ * Notion "Committed" formula, the earliest committed date of its FRs. Every issue linked to an FR edited
+ * since the sync takes the earliest committed date of its FRs as they are now (none if none). Issues it
+ * blocks still pull it earlier in the engine. before/after: rows without / with the overlay.
  */
 export function recommitIssues(before, after, overlay) {
   if (!overlay?.size) return after;
@@ -189,7 +189,7 @@ export function recommitIssues(before, after, overlay) {
     }
     return m;
   };
-  const was = committedOf(before); const now = committedOf(after);
+  const now = committedOf(after);
   const links = new Map();
   for (const [tid, t] of now) for (const fid of t.features) (links.get(fid) || links.set(fid, new Set()).get(fid)).add(tid);
   const minOf = (ids, m) => [...ids].map((id) => m.get(id)?.committed).filter(Boolean).sort()[0] || null;
@@ -200,8 +200,8 @@ export function recommitIssues(before, after, overlay) {
     const feats = (typeof blob === 'string' ? JSON.parse(blob || '[]') : blob).map((f) => {
       const ids = new Set([...(links.get(nid(f[F.id])) || []), ...idsOf(f[12]).filter((x) => now.has(x))]);
       if (![...ids].some((x) => overlay.has(x))) return f;
-      const oldMin = minOf(ids, was); const newMin = minOf(ids, now);
-      if (!oldMin || oldMin === newMin || String(f[26] || '').slice(0, 10) !== oldMin) return f;
+      const newMin = minOf(ids, now);
+      if ((f[26] ? String(f[26]).slice(0, 10) : null) === newMin) return f;
       hit = true; const g = f.slice(); g[26] = newMin; return g;
     });
     return hit ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;

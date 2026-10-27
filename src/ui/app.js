@@ -408,20 +408,21 @@ function afterFrEdit(fr, { changes, before = {}, commented = false, comment = ''
     });
     return hit ? { ...r, serve_engineering_capacity_customer_tasks: JSON.stringify(tasks) } : r;
   });
-  // Issues whose committed date this FR set (Tom, 2026-10-27): Lightdash's issue date is a stored copy,
-  // so when the FR that set it changes, the issue takes the earliest committed date left among its FRs.
+  // Issues linked to this FR (Tom, 2026-10-27): Lightdash's issue date is a stored copy of the earliest
+  // FR committed date, so it is recalculated from the FRs as they are now.
   const minC = (frs) => (frs || []).map((f) => f.committed && String(f.committed).slice(0, 10)).filter(Boolean).sort()[0] || null;
-  const affected = [...(state.scores || new Map())].filter(([, s]) => s.frs?.some((f) => f.id === fr.id)).map(([iid, s]) => ({ iid, oldMin: minC(s.frs) }));
+  const affected = [...(state.allScores || state.scores || new Map())].filter(([, s]) => s.frs?.some((f) => f.id === fr.id)).map(([iid]) => iid);
   state.extra.taskRows = patch(state.extra.taskRows);
   show(patch(state.rows)); // reruns the engine: the issue's committed date and TBD placement follow
   if (state.extra.scores !== 'ok') return;
   rescore();
   const issueById = new Map([...(state.run?.issues || []), ...(state.backlog || [])].map((i) => [i.id, i]));
   const recommit = new Map();
-  for (const { iid, oldMin } of affected) {
-    const cur = issueById.get(iid)?.committed;
-    const now = minC(state.scores.get(iid)?.frs);
-    if (cur && oldMin && String(cur).slice(0, 10) === oldMin && now !== oldMin) recommit.set(iid, now);
+  // Notion's issue "Committed" is a formula over its FRs: the stored copy becomes the earliest FR date now.
+  for (const iid of affected) {
+    const own = issueById.get(iid)?.committedOwn;
+    const now = minC((state.allScores || state.scores).get(iid)?.frs);
+    if ((own ? String(own).slice(0, 10) : null) !== now) recommit.set(iid, now);
   }
   if (!recommit.size) return;
   const setCommit = (rows) => rows.map((r) => {
