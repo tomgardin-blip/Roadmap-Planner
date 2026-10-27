@@ -123,7 +123,7 @@ export function scoreFeatures(features, tasks, dealSize = new Map(), opts = {}) 
     const id = nid(f[0]);
     const frs = [...links.get(id)].map((tid) => {
       const t = taskById.get(tid);
-      return { id: tid, title: t[2], url: t[1], priority: t[4], status: t[5], type: t[3], dealId: t[6] };
+      return { id: tid, title: t[2], url: t[1], priority: t[4], status: t[5], type: t[3], dealId: t[6], committed: t[8] ? String(t[8]).slice(0, 10) : null };
     });
     out.set(id, { id, ...scoreIssue({ fe: f[15], be: f[14], mob: f[30] }, frs, dealSize, o) });
   }

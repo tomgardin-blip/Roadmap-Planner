@@ -181,6 +181,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - The edit shows at once, no refresh: the FR's priority, status and effective committed date (earliest of Success Committed and go-live when "Needed for go-live"; none when Won't do / No longer needed) are patched into the loaded data and the engine reruns, so the issue moves group, drops out of a list or gets its new committed date straight away.
   - Pushback is a to-do list (Tom, 2026-10-27): an FR leaves it as soon as it is handled in the planner: marked "Not a pushback", or saved in the FR edit sheet (a changed committed date, priority or status, or just a comment to the owner). Read from the audit log on load, and added locally the moment you save, so it drops off instantly.
 - At risk → "No team: invisible in capacity" has a "DM Qai to add the team" button (Tom, 2026-10-27, to test): pick issues (none ticked), editable preview, one Slack DM to Qai per issue as the viewer: "Please set the missing Team on this engineering issue (decide-issue-team skill): <link>". Qai sets the Team; the planner itself never writes Team.
+- Which FR sets the commit (Tom, 2026-10-27): on every issue card the FR summary says "commit set by <customer>" for the FR(s) whose committed date equals the issue's committed date; that FR is listed first with a "Sets the commit · <date>" tag, and every other FR shows its own commit date when it has one. No FR with that date: "commit not from an FR" (it comes from the issue itself or an issue it blocks).
 
 **4. At risk**
 

@@ -77,16 +77,23 @@ const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
  * Bird's-eye FR count (with go-live and Top 3 counts), tap to see each FR with its priority,
  * customer and deal-size multiplier. Native <details>, so it works on touch without JS.
  */
-function frBlock(s) {
+// committed: the issue's (effective) committed date. The FR(s) with that same committed date set it
+// (Tom, 2026-10-27): flagged in the summary and on the row, and listed first.
+function frBlock(s, committed = null) {
   if (!s) return '';
   if (!s.frs.length) return '<div class="frs none">0 FRs</div>';
+  const day = committed ? String(committed).slice(0, 10) : null;
+  const setsCommit = (f) => !!day && f.committed === day;
+  const setters = s.frs.filter(setsCommit);
   const gl = s.frs.filter((f) => GO_LIVE.has(f.priority)).length;
   const t3 = s.frs.filter((f) => f.priority === 'Top 3').length;
-  const sum = [`<b>${s.frs.length} FR${s.frs.length === 1 ? '' : 's'}</b>`, `${s.customers} customer${s.customers === 1 ? '' : 's'}`, gl && `<span class="gl">${gl} go-live</span>`, t3 && `${t3} Top 3`].filter(Boolean).join(' · ');
-  const rows = [...s.frs].sort((a, b) => b.points - a.points || String(a.priority).localeCompare(String(b.priority))).map((f) => {
+  const by = setters.length ? `commit set by ${esc(setters.map((f) => dealNames.get(nidOf(f.dealId)) || 'No customer').filter((v, i, a) => a.indexOf(v) === i).join(', '))}`
+    : day ? '<span title="No linked FR has this committed date: it comes from the issue itself or from an issue it blocks">commit not from an FR</span>' : '';
+  const sum = [`<b>${s.frs.length} FR${s.frs.length === 1 ? '' : 's'}</b>`, `${s.customers} customer${s.customers === 1 ? '' : 's'}`, gl && `<span class="gl">${gl} go-live</span>`, t3 && `${t3} Top 3`, by].filter(Boolean).join(' · ');
+  const rows = [...s.frs].sort((a, b) => setsCommit(b) - setsCommit(a) || b.points - a.points || String(a.priority).localeCompare(String(b.priority))).map((f) => {
     const cust = dealNames.get(nidOf(f.dealId)) || 'No customer';
     const t = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || 'FR')}</a>` : esc(f.title || 'FR');
-    return frLine(f, cust, t);
+    return frLine({ ...f, setsCommit: setsCommit(f) }, cust, t);
   }).join('');
   return `<details class="frs"><summary>${sum}</summary><ul>${rows}</ul></details>`;
 }
@@ -96,7 +103,9 @@ function frLine(f, cust, titleHtml) {
   const edit = !readOnly && isAllowed('fr', f.id)
     ? `<button class="fredit" data-fr-edit="${f.id}">Edit</button>`
     : '';
-  return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
+  const commit = f.setsCommit ? ` <span class="tag commit" title="This FR's committed date is the issue's committed date">Sets the commit · ${formatDate(f.committed)}</span>`
+    : f.committed ? ` <span class="muted">commit ${formatDate(f.committed)}</span>` : '';
+  return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
 }
 
 /** Drawer for the test pages: the write path end to end, on "Test Tom - ignore" and its FR. */
@@ -124,7 +133,7 @@ function suggestion(x, skill, label) {
     `<span class="tag">${whenOf(issue)}</span>`,
     issue.status ? `<span class="tag" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
   ].join('');
-  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score)}</div>`;
+  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed)}</div>`;
 }
 
 function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
@@ -177,7 +186,7 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
     ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
   return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
     <div class="meta">${tags}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span></div>
-    ${frBlock(score)}
+    ${frBlock(score, issue.committed)}
     ${dateButtons(issue, horizon)}</div>`;
 }
 
@@ -199,7 +208,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
   return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
     <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
     ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
-    ${frBlock(score)}
+    ${frBlock(score, issue.committed)}
     ${dateButtons(issue, horizon)}</div>`;
 }
 
