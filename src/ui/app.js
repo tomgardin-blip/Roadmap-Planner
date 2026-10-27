@@ -65,7 +65,10 @@ function fmtTime(iso) {
 }
 
 function shell() {
-  try { const t = localStorage.getItem('rp.theme'); if (t) document.documentElement.dataset.theme = t; } catch { /* storage unavailable */ }
+  // Light by default, also on a dark-mode device (Tom, 2026-10-27); the Theme button's choice is remembered.
+  let theme = 'light';
+  try { theme = localStorage.getItem('rp.theme') || 'light'; } catch { /* storage unavailable */ }
+  document.documentElement.dataset.theme = theme;
   // Render into our own root: replacing document.body would also delete the
   // <style> and <script> tags the artifact runtime puts inside it.
   let root = document.getElementById('rp-root');
