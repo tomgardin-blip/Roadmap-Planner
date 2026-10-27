@@ -144,7 +144,7 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
   if (diff > 1e-9) {
     const p = pushOut({ run, scores, team, skill, quarter, over: diff });
     const ex = [p.excluded.committed && `${p.excluded.committed} committed`, p.excluded.inProgress && `${p.excluded.inProgress} in progress`].filter(Boolean).join(', ');
-    let h = `<h4>Suggested to push out · ${fmt(diff)} d over</h4><div class="hint">No commit, not in progress. Quick wins first, then lowest score.${ex ? ` Not shown: ${ex}.` : ''}</div>`;
+    let h = `<h4>Suggested to push out · ${fmt(diff)} d over</h4><div class="hint">No commit, not in progress. Lowest customer value per day first, then the biggest; quick wins last (keep those).${ex ? ` Not shown: ${ex}.` : ''}</div>`;
     if (!p.items.length) return `${h}<div class="placeholder">Nothing movable: everything here is committed or in progress.</div>`;
     p.items.forEach((x, i) => {
       h += suggestion(x, skill, `${fmt(x.cumulative)} d moved`);

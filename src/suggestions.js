@@ -1,6 +1,6 @@
 // Drawer suggestions for one quarter total (SPEC "Capacity grid", decided 2026-10-10).
 // - Push out (over capacity): the quarter's issues with no commit and not in progress,
-//   quick wins first, then lowest score. Full list; the point where the overbooking is
+//   lowest score first, then most days, quick wins last. Full list; the point where the overbooking is
 //   covered is marked.
 // - Pull forward (under capacity): issues planned later or not planned, same team and skill,
 //   whose effort in that skill fits the free days, not blocked. Committed first (pulling them
@@ -42,7 +42,9 @@ export function pushOut({ run, scores, team, skill, quarter, over, quickWinMaxEf
     const s = scores?.get(issue.id) || null;
     items.push({ issue, days, score: s, quickWin: isQuickWin(s, quickWinMaxEffort) });
   }
-  items.sort((a, b) => (b.quickWin - a.quickWin)
+  // Postponing (Tom, 2026-10-27): the ones to move are the big, low-value, uncommitted ones. Lowest
+  // score first, then most days; quick wins last (they free little and are the work worth keeping).
+  items.sort((a, b) => (a.quickWin - b.quickWin)
     || ((a.score?.score ?? Infinity) - (b.score?.score ?? Infinity))
     || b.days - a.days);
   let sum = 0;

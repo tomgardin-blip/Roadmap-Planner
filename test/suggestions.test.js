@@ -19,7 +19,7 @@ const sc = (entries) => new Map(entries.map(([id, score, effort]) => [id, { scor
 const ids = (xs) => xs.map((x) => x.issue.id);
 const pot = (d) => ({ start: d, end: d });
 
-test('push out: no commit, not in progress; quick wins first, then lowest score; cover point marked', () => {
+test('push out: no commit, not in progress; lowest score first, quick wins last; cover point marked', () => {
   const r = run([
     F({ id: 'low', team: TP, be: 6, ...pot('2026-12-25') }),
     F({ id: 'high', team: TP, be: 4, ...pot('2026-12-25') }),
@@ -29,9 +29,9 @@ test('push out: no commit, not in progress; quick wins first, then lowest score;
   ]);
   const s = sc([['low', 0.5, 6], ['high', 9, 4], ['qw', 20, 1], ['com', 1, 3], ['busy', 1, 3]]);
   const p = pushOut({ run: r, scores: s, team: TP, skill: 'BE', quarter: Q4, over: 6 });
-  assert.deepEqual(ids(p.items), ['qw', 'low', 'high']);
+  assert.deepEqual(ids(p.items), ['low', 'high', 'qw']);
   assert.deepEqual(p.excluded, { committed: 1, inProgress: 1 });
-  assert.equal(p.coverIdx, 1); // 1 + 6 >= 6
+  assert.equal(p.coverIdx, 0); // 6 >= 6
   assert.equal(p.items[2].cumulative, 11);
 });
 
