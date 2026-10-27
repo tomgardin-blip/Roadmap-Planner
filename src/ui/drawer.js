@@ -109,20 +109,6 @@ function frLine(f, cust, titleHtml, issueId = null) {
   return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
 }
 
-/** Drawer for the test pages: the write path end to end, on "Test Tom - ignore" and its FR. */
-export function renderTestPanel(el, { horizon, issue, fr, error }) {
-  const body = error ? `<div class="placeholder">${esc(error)}</div>` : !issue ? '<div class="placeholder">Reading the test pages from Notion…</div>' : `
-    <div class="hint">Safe place to try the write-back: these two pages are test pages. Every change lands in the Roadmap Planner Audit Log.</div>
-    <h4>Test issue</h4>
-    <div class="issue"><div class="t"><a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a></div>
-      <div class="meta"><span class="tag">${issue.start || issue.end ? `${formatDate(issue.start)} → ${formatDate(issue.end)}` : 'No dates'}</span></div>
-      ${dateButtons(issue, horizon)}</div>
-    <h4>Test FR</h4>
-    <div class="issue"><ul class="frlist">${frLine({ ...fr, status: fr.successCommitted ? `Success Committed ${formatDate(fr.successCommitted)}` : 'No Success Committed' }, 'No customer', `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title)}</a>`, issue.id)}</ul></div>`;
-  el.innerHTML = `<div class="dh"><b>Test writes</b><span class="sub">Notion write-back</span><span class="spacer"></span><button class="hx" data-close aria-label="Close">×</button></div><div class="dbody">${body}</div>`;
-  el.classList.add('open');
-}
-
 /** Compact row for a suggestion list. */
 function suggestion(x, skill, label) {
   const { issue } = x;

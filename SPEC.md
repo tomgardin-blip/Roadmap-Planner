@@ -266,7 +266,7 @@ Notion gotchas:
 
 **Test writes panel**
 
-- A "Test writes" button in the header (live page only) opens the test issue and the test FR, read live from Notion, with the same date buttons and FR edit as everywhere else. It exists because the test pages carry no effort and so never show up in a grid cell.
+- Removed (Tom, 2026-10-27): the "Test writes" button and panel are gone; all issues and FRs have been writable since 2026-10-10. The test pages stay for Claude Code's own write tests.
 
 **History**
 

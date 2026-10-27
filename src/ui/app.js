@@ -15,7 +15,7 @@ import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
+import { openDrawer, closeDrawer, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
 import { pushbackCandidates, overbookedCells } from '../pushback.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
@@ -23,7 +23,7 @@ import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startMove, startBulkMove, startFrEdit, loadTestPages, startDismiss, startEstimatePost } from './actions.js';
+import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost } from './actions.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -49,7 +49,7 @@ const state = {
   baseline: null, baselineError: null,
   frComments: new Map(), frCommentsLoading: false, // Notion comments of No-engineering-issue FRs
   feed: null, feedError: null, // Sander's capacity feed (latest run) or null
-  mcp: null, test: null, // test: null (closed) or { issue, fr, error } for the Test writes drawer
+  mcp: null,
 };
 
 function themeToggle() {
@@ -85,7 +85,6 @@ function shell() {
         <span class="spacer"></span>
         <span id="pills"></span>
         <button id="refreshBtn" class="testbtn" hidden title="Re-read Lightdash and Notion now, without reloading the page">↻ Refresh</button>
-        <button id="testBtn" class="testbtn" hidden title="Try the Notion write-back on the test pages">Test writes</button>
         <span class="connwrap"><span class="connicon" id="connL" title="Lightdash">L</span><span class="connicon" id="connN" title="Notion">N</span></span>
       </div>
       <nav class="tabs">
@@ -153,25 +152,22 @@ function shell() {
       // Opens the cell drawer for that team, skill and quarter: its push-out / pull-in suggestions.
       document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
       state.drawer = { team: sg.dataset.team, skill: sg.dataset.skill, period: sg.dataset.period };
-      state.test = null; renderDrawer(); return;
+      renderDrawer(); return;
     }
     const cell = e.target.closest('td.cell[data-period]');
     if (!cell || !state.run) return;
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     cell.classList.add('sel');
     state.drawer = { ...cell.dataset };
-    state.test = null;
     renderDrawer();
   });
   document.getElementById('drawer').addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) {
       closeDrawer(document.getElementById('drawer'));
       state.drawer = null;
-      state.test = null;
       document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     }
   });
-  document.getElementById('testBtn').addEventListener('click', openTest);
   document.getElementById('refreshBtn').addEventListener('click', refresh);
   // Write flows (delegated: buttons live in the drawer and the sheet).
   document.addEventListener('click', (e) => {
@@ -214,23 +210,15 @@ function shell() {
     if (fe && !fe.disabled) {
       const fr = shownFr(fe.dataset.frEdit) || state.pushback?.find((x) => x.fr.id === fe.dataset.frEdit)?.fr;
       const iid = fe.dataset.issue;
-      const issue = iid ? shownIssue(iid) || state.run?.issues.find((i) => i.id === iid) || (state.test?.issue?.id === iid ? state.test.issue : { id: iid }) : null;
+      const issue = iid ? shownIssue(iid) || state.run?.issues.find((i) => i.id === iid) || { id: iid } : null;
       startFrEdit({ mcp: state.mcp, fr, issue, horizon, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus });
     }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (document.getElementById('rp-sheet')) { closeSheet(); return; }
-    closeDrawer(document.getElementById('drawer')); state.drawer = null; state.test = null;
+    closeDrawer(document.getElementById('drawer')); state.drawer = null;
   });
-}
-
-async function openTest() {
-  state.drawer = null;
-  state.test = {};
-  renderDrawer();
-  try { state.test = await loadTestPages(state.mcp); } catch (err) { state.test = { error: `Could not read the test pages: ${err?.message || err?.code || 'unknown error'}` }; }
-  renderDrawer();
 }
 
 /** Patch a feature row's Start/End in the loaded rows so the grid follows the write. */
@@ -257,7 +245,7 @@ function afterMoves(done) {
     return changed ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
   });
   if (hit) show(state.rows);
-  if (state.test) openTest(); else renderDrawer();
+  renderDrawer();
 }
 
 /** Bulk bar: shows while issues are ticked; same month / quarter buttons as on a card. */
@@ -317,7 +305,6 @@ function afterIssueStatus(issue, status) {
   const local = { category: 'EI status changed', field: 'Status', after: status, issueId: id, itemName: issue.name, at: new Date().toISOString() };
   state.audit = [local, ...(state.audit || [])];
   if (hit) { show(rows); if (state.extra.scores === 'ok') rescore(); }
-  if (state.test) openTest();
 }
 
 /**
@@ -406,11 +393,9 @@ function afterFrEdit(fr, { changes, before = {}, commented = false, comment = ''
   state.extra.taskRows = patch(state.extra.taskRows);
   show(patch(state.rows)); // reruns the engine: the issue's committed date and TBD placement follow
   if (state.extra.scores === 'ok') rescore();
-  if (state.test) openTest();
 }
 
 function renderDrawer() {
-  if (state.test) { renderTestPanel(document.getElementById('drawer'), { horizon, ...state.test }); return; }
   if (!state.drawer || !state.run) return;
   openDrawer(document.getElementById('drawer'), {
     run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
@@ -621,7 +606,6 @@ async function boot() {
     const user = await window.claude.use('user').catch(() => null);
     state.readOnly = !(await user?.canEdit?.().catch(() => false));
     setReadOnly(state.readOnly);
-    document.getElementById('testBtn').hidden = state.readOnly;
     state.mode = 'live';
     await loadAllLive(mcp);
     return;

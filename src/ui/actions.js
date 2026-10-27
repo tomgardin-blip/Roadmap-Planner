@@ -2,7 +2,7 @@
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
 import { formatDate } from '../periods.js';
-import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
+import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
@@ -203,15 +203,6 @@ export async function startFrEdit(ctx) {
       toast(errText(err), 'bad');
     }
   });
-}
-
-/** Live view of the test issue and test FR, so the write path can be tried end to end. */
-export async function loadTestPages(mcp) {
-  const [issue, fr] = await Promise.all([readIssue(mcp, TEST_ISSUE), readFrLive(mcp, TEST_FR)]);
-  return {
-    issue: { id: TEST_ISSUE, name: issue.name || 'Test Tom - ignore', url: `https://app.notion.com/p/${TEST_ISSUE}`, start: issue.start, end: issue.end, committed: null, skillEfforts: {}, status: issue.status || '' },
-    fr: { id: TEST_FR, title: fr.name || 'Test Tom - ignore FR', url: `https://app.notion.com/p/${TEST_FR}`, priority: fr.priority, successCommitted: fr.successCommitted, dealId: null },
-  };
 }
 
 /** "Not a pushback" with an optional reason, logged to the audit DB. */
