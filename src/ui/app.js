@@ -267,9 +267,16 @@ function renderBulkBar() {
  * the FR's effective committed date (earliest of Success Committed and go-live when "Needed for
  * go-live"), which the engine also carries onto its issues.
  */
-function afterFrEdit(fr, { changes, before = {} }) {
+function afterFrEdit(fr, { changes, before = {}, commented = false, comment = '' }) {
+  // Record it locally as the audit log will, so the Pushback to-do list and History update at once.
+  const frId = String(fr.id).replace(/-/g, '').toLowerCase();
+  const now = new Date().toISOString();
+  const local = commented
+    ? [{ category: 'Owner advised', field: 'Comment', frId, itemName: fr.title, reason: comment, at: now, after: changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; ') }]
+    : changes.map((c) => ({ category: c.category, field: c.field, before: c.before, after: c.after, frId, itemName: fr.title, reason: comment, at: now }));
+  if (local.length) state.audit = [...local, ...(state.audit || [])];
+  if (commented || !changes.length) { recompute(); if (state.tab !== 'capacity') draw(); return; }
   const val = (field, cur) => { const c = changes.find((x) => x.field === field); return c ? c.after : cur; };
-  if (!changes.length) return;
   const priority = val('Priority', before.priority);
   const status = val('Status', before.status);
   const golive = fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null;

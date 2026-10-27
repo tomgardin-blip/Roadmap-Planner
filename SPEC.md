@@ -179,6 +179,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Priority offers every Notion option, incl. "No longer needed" and "Won't do". Status: keep, or "Won't do" (close the FR); no other status. Audit categories "FR priority changed" / "FR status changed" (field Status added to the audit log).
   - No reason chips any more. One Comment box instead: every Save posts one Notion comment on the FR that tags its Responsible Success, lists what changed, then the comment ("@Owner fyi: Priority: Top 3 → Needed after go-live. <comment>"). Comment only (no field change) is allowed: "@Owner <comment>". No Responsible Success: posted without a tag. The comment is also the audit row's Reason. Issue moves and "Not a pushback" keep their optional reason (audit log only, no ping).
   - The edit shows at once, no refresh: the FR's priority, status and effective committed date (earliest of Success Committed and go-live when "Needed for go-live"; none when Won't do / No longer needed) are patched into the loaded data and the engine reruns, so the issue moves group, drops out of a list or gets its new committed date straight away.
+  - Pushback is a to-do list (Tom, 2026-10-27): an FR leaves it as soon as it is handled in the planner: marked "Not a pushback", or saved in the FR edit sheet (a changed committed date, priority or status, or just a comment to the owner). Read from the audit log on load, and added locally the moment you save, so it drops off instantly.
 
 **4. At risk**
 

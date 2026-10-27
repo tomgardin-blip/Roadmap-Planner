@@ -34,8 +34,12 @@ export function parseAudit(results) {
   }));
 }
 
-/** FR ids marked "Not a pushback". */
-export const dismissedFrs = (audit) => new Set(audit.filter((a) => a.category === 'Pushback override' && a.frId).map((a) => a.frId));
+/**
+ * FR ids handled in the planner, which leave the Pushback to-do list (Tom, 2026-10-27): marked
+ * "Not a pushback", or edited (committed date, priority, status) or pinged from the FR edit sheet.
+ */
+export const HANDLED_CATEGORIES = new Set(['Pushback override', 'FR committed changed', 'FR priority changed', 'FR status changed', 'Owner advised']);
+export const dismissedFrs = (audit) => new Set(audit.filter((a) => HANDLED_CATEGORIES.has(a.category) && a.frId).map((a) => a.frId));
 
 /** End date from an audit "start / end" string. */
 const endOf = (s) => { const parts = String(s || '').split('/').map((x) => x.trim()); const e = parts[1] || parts[0]; return /^\d{4}-\d{2}-\d{2}$/.test(e) ? e : null; };

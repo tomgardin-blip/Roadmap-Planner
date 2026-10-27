@@ -164,6 +164,7 @@ export async function startFrEdit(ctx) {
       const r = await editFr(mcp, { fr, successCommitted: sheet.querySelector('#sSc').value || null, priority: sheet.querySelector('#sPr').value, status: st && st !== cur.status ? st : undefined, reason: comment });
       if (!r.changes.length && !comment) { closeSheet(); return toast('Nothing changed.'); }
       if (r.changes.length) onDone?.(r);
+      const done = () => onDone?.({ ...r, commented: true, comment });
       busy(e.target, true, 'Posting comment…');
       await ownerP;
       const shown = r.changes.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
@@ -173,6 +174,7 @@ export async function startFrEdit(ctx) {
         closeSheet();
         return toast(`${r.changes.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, 'bad');
       }
+      done();
       closeSheet();
       toast(`${r.changes.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`);
     } catch (err) {
