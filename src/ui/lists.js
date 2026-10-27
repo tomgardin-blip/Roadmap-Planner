@@ -169,8 +169,12 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
       const name = i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a>` : esc(i.name);
       const isOpen = open.has(i.id);
       const plan = `<button type="button" class="qpx ${isOpen ? 'on' : ''}" data-qpx="${i.id}" aria-expanded="${isOpen}" title="Move it, edit its FRs (commit, priority, comment)">${isOpen ? 'Close' : 'Plan'}</button>`;
-      const row = `<tr class="${isOpen ? 'qpopen' : ''}"><td>${name}</td><td class="num">${planned(i)}</td><td class="num ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td><td class="qpacts">${plan}</td></tr>`;
-      return isOpen ? `${row}<tr class="qpact"><td colspan="5">${planActions(i, horizon, scores?.get(i.id))}</td></tr>` : row;
+      // Effort per skill in days (Tom, 2026-10-27); '–' when none. Phones show them as one line under the name.
+      const ef = ['frontend', 'backend', 'mobile'].map((k) => Math.round((i.skillEfforts?.[k] || 0) * 10) / 10);
+      const effCells = ef.map((v) => `<td class="num qpeff">${v ? v : '–'}</td>`).join('');
+      const effLine = ['FE', 'BE', 'MOB'].map((s, k) => (ef[k] ? `${s} ${ef[k]}` : null)).filter(Boolean).join(' · ');
+      const row = `<tr class="${isOpen ? 'qpopen' : ''}"><td>${name}${effLine ? `<span class="qpeffm"> · ${effLine} d</span>` : ''}</td>${effCells}<td class="num">${planned(i)}</td><td class="num qpcom ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td><td class="qpacts">${plan}</td></tr>`;
+      return isOpen ? `${row}<tr class="qpact"><td colspan="8">${planActions(i, horizon, scores?.get(i.id))}</td></tr>` : row;
     }).join('');
     h += `<h3 class="lgroup">${esc(tm)} <span class="cnt">${list.length}</span></h3>`;
     // The team's capacity for this quarter, recalculated after every move (Tom, 2026-10-27), and per skill
@@ -183,7 +187,7 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
       }).join('');
       h += `<div class="qpcap">${card}<div class="chips qpsugg">${sugg}</div></div>`;
     }
-    h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
+    h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num" title="Frontend effort, days">FE</th><th class="num" title="Backend effort, days">BE</th><th class="num" title="Mobile effort, days">MOB</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

@@ -338,7 +338,9 @@ input.bsel { width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px;
 @media (hover: hover) { .topbar .testbtn:hover:not(:disabled) { background: rgba(255,255,255,.15); } }
 .topbar .testbtn:disabled { opacity: .6; }
 .qpseg { margin-left: 8px; } .qpseg button { font-size: 12px; }
-.qptable td:first-child { width: 55%; }
+.qptable td:first-child { width: 42%; }
+.qptable td.qpeff { width: 44px; color: var(--ink); }
+.qpeffm { display: none; color: var(--muted); font-weight: 400; }
 @media (min-width: 701px) { .qptable select { font-size: 12px; padding: 3px 24px 3px 6px; } }
 .lgroup .cnt { font-weight: 700; color: var(--ink); background: var(--grey); border-radius: 999px; padding: 0 8px; font-size: 12px; letter-spacing: 0; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; vertical-align: middle; }
@@ -468,7 +470,8 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
   .qptable td { border: 0; padding: 0; }
   .qptable td:first-child { grid-column: 1 / -1; width: auto; font-weight: 600; }
   .qptable td.num { text-align: left; }
-  .qptable td.num + td.num::before { content: 'Commit '; color: var(--muted); }
+  .qptable td.qpcom::before { content: 'Commit '; color: var(--muted); }
+  .qptable td.qpeff { display: none; } .qpeffm { display: inline; }
   .qptable tr.qpopen { border-bottom: 0; } .qptable tr.qpopen td { background: none; } .qptable tr.qpopen { background: var(--grey); }
   .qptable tr.qpact { display: block; background: var(--grey); padding: 0 10px 12px; } .qptable tr.qpact td { display: block; padding: 0; }
 }
