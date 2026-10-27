@@ -33,7 +33,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Read-only viewers (cannot edit the artifact) write nothing: no buttons, no baseline rows.
 
 ## Other writes
-- Slack: only the "No estimate" issues the viewer ticks, as the viewer, after an editable preview, when they click Post. One post per issue, in the channel (no thread, never grouped); no other tags. Two buttons, both kept (Tom, 2026-10-26 / 2026-10-27):
+- Slack: only the "No estimate" issues and "No engineering issue" FRs the viewer ticks, as the viewer, after an editable preview, when they click Post. One post per issue, in the channel (no thread, never grouped); no other tags. Two buttons, both kept (Tom, 2026-10-26 / 2026-10-27):
   - #product-create-ei-skill-trigger (`C0CC87L21GW`): "@claude_code run the product-feature skill on <issue link>" (claude_code = `U0BKLA7U9EW`).
   - #dev_effort_estimate (`C0C1CPJKZKK`, the old flow): "@Qai estimate <issue link>" (Qai = `U0C0Y7E5SQ4`).
 

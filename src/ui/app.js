@@ -166,7 +166,12 @@ function shell() {
     }
     const ep = e.target.closest('button[data-estpost]');
     if (ep) {
-      const groups = GROUPS.map((g) => ({ label: g.label, entries: state.queues?.[g.key].noEstimate || [] }));
+      // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.
+      const frEntry = (fr) => ({ fr: true, issue: { id: fr.id, name: fr.title || 'FR', url: fr.url, team: null, committed: fr.committed }, frs: [fr] });
+      const groups = GROUPS.flatMap((g) => [
+        { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
+        { label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => state.allFrTeams || e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) },
+      ]);
       startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost] });
       return;
     }
