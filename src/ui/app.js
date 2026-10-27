@@ -459,7 +459,10 @@ function commitSourceOf(issueId, day) {
   const issue = byId.get(issueId);
   if (!issue) return null;
   const blocked = (issue.blocks || []).map((id) => byId.get(id)).find((b) => b && String(b.committed || '').slice(0, 10) === day);
-  if (blocked) return `<span title="This issue blocks it, so it inherits that deadline">commit set by the issue it blocks: ${esc(blocked.name)}</span>`;
+  if (blocked) {
+    const name = blocked.url ? `<a href="${esc(blocked.url)}" target="_blank" rel="noopener" title="Open the issue that carries this committed date in Notion">${esc(blocked.name)}</a>` : esc(blocked.name);
+    return `<span title="This issue blocks it, so it inherits that deadline">commit set by the issue it blocks: ${name}</span>`;
+  }
   const fr = (state.allScores?.get(issueId)?.frs || []).find((f) => f.committed === day);
   if (fr) {
     const deal = String(fr.dealId || '').replace(/-/g, '').toLowerCase();
