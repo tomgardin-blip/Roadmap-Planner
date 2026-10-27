@@ -106,3 +106,12 @@ test('prep queues: only Feature requests with category Feature Request count', (
   assert.deepEqual(ids(q.goLive.noEstimate), ['a']);
   assert.deepEqual(ids(q.top3.noIssue), ['lone']);
 });
+
+test('scores: with signed deals given, unsigned and customer-less FRs are left out of the FR list', async () => {
+  const { scoreFeatures } = await import('../src/scoring.js');
+  const f = new Array(35).fill(null); f[0] = 'feat'; f[14] = 2;
+  const t = (id, deal) => { const x = new Array(10).fill(null); x[0] = id; x[4] = 'Needed for go-live'; x[5] = 'Not Started'; x[6] = deal; x[7] = JSON.stringify(['feat']); return x; };
+  const tasks = [t('a', 'won'), t('b', 'open'), t('c', null)];
+  assert.equal(scoreFeatures([f], tasks).get('feat').frs.length, 3);
+  assert.deepEqual(scoreFeatures([f], tasks, new Map(), { signed: new Set(['won']) }).get('feat').frs.map((x) => x.id), ['a']);
+});

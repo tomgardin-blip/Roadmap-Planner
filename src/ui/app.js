@@ -405,7 +405,7 @@ function renderDrawer() {
 
 function rescore() {
   const x = state.extra;
-  state.scores = scoreRows([...state.rows, ...x.taskRows, ...x.featureRows], x.deals);
+  state.scores = scoreRows([...state.rows, ...x.taskRows, ...x.featureRows], x.deals, { signed: x.signed });
   state.backlog = x.featureRows.length ? toIssues(x.featureRows) : [];
   recompute();
   renderChrome();

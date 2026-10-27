@@ -107,6 +107,9 @@ export function scoreIssue({ fe = 0, be = 0, mob = 0 }, frs, dealSize = new Map(
  */
 export function scoreFeatures(features, tasks, dealSize = new Map(), opts = {}) {
   const o = { ...SCORING_DEFAULTS, ...opts };
+  // Signed customers only (Tom, 2026-10-27): with opts.signed (Set of Closed-Won deal ids), FRs of
+  // unsigned deals or with no customer are left out of the FR lists, counts and scores everywhere.
+  if (o.signed) tasks = tasks.filter((t) => t[6] && o.signed.has(nid(t[6])));
   const taskById = new Map(tasks.map((t) => [nid(t[0]), t]));
   const featById = new Map(features.map((f) => [nid(f[0]), f]));
   const links = new Map(features.map((f) => [nid(f[0]), new Set()]));
