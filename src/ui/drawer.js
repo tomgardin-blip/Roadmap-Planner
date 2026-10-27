@@ -81,14 +81,14 @@ const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
 // (Tom, 2026-10-27): flagged in the summary and on the row, and listed first.
 function frBlock(s, committed = null, issueId = null) {
   if (!s) return '';
-  if (!s.frs.length) return '<div class="frs none">0 FRs</div>';
   const day = committed ? String(committed).slice(0, 10) : null;
+  if (!s.frs.length) return `<div class="frs none">0 FRs${day ? ` · ${commitSource(issueId, day) || 'commit not from an FR'}` : ''}</div>`;
   const setsCommit = (f) => !!day && f.committed === day;
   const setters = s.frs.filter(setsCommit);
   const gl = s.frs.filter((f) => GO_LIVE.has(f.priority)).length;
   const t3 = s.frs.filter((f) => f.priority === 'Top 3').length;
   const by = setters.length ? `commit set by ${esc(setters.map((f) => dealNames.get(nidOf(f.dealId)) || 'No customer').filter((v, i, a) => a.indexOf(v) === i).join(', '))}`
-    : day ? '<span title="No linked FR has this committed date: it comes from the issue itself or from an issue it blocks">commit not from an FR</span>' : '';
+    : day ? (commitSource(issueId, day) || '<span title="No linked FR has this committed date: it comes from the issue itself or from an issue it blocks">commit not from an FR</span>') : '';
   const sum = [`<b>${s.frs.length} FR${s.frs.length === 1 ? '' : 's'}</b>`, `${s.customers} customer${s.customers === 1 ? '' : 's'}`, gl && `<span class="gl">${gl} go-live</span>`, t3 && `${t3} Top 3`, by].filter(Boolean).join(' · ');
   const rows = [...s.frs].sort((a, b) => setsCommit(b) - setsCommit(a) || b.points - a.points || String(a.priority).localeCompare(String(b.priority))).map((f) => {
     const cust = dealNames.get(nidOf(f.dealId)) || 'No customer';
@@ -183,6 +183,9 @@ export function planActions(issue, horizon, score) {
 }
 
 export const setDealNames = (m) => { dealNames = m; };
+// (issueId, day) → html naming what sets an issue's committed date when no listed FR does (Tom, 2026-10-27).
+let commitSource = () => null;
+export const setCommitSource = (fn) => { commitSource = fn; };
 
 /** Issue card for the list screens (at risk, prep queues): same tags, FRs and date buttons as the drawer. */
 export function listCard(issue, horizon, score, detail, extraTags = '') {

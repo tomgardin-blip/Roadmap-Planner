@@ -117,12 +117,20 @@ export const formatDatesIn = (s) => String(s ?? '').replace(/\b(\d{4})-(\d{2})-(
  * - Month pot in the same month as the committed date: covered (engineers plan it before the date).
  * - Pot in a later month (e.g. a quarter pot in March for a 15/01 commit): late, move it to a month pot.
  * - Dated work (Start ≠ End): late when it ends after the committed date.
+ * - Never late when it ends in the same week (Monday to Sunday) as the committed date (Tom, 2026-10-27).
  * The quarter pot date equals the last month's pot date, so a commit in that same month counts as covered.
  */
+function weekMonday(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
 export function lateVsCommit({ start, end, committed } = {}) {
   if (!committed || !end) return false;
   const e = String(end).slice(0, 10); const c = String(committed).slice(0, 10);
   if (e <= c) return false;
+  if (weekMonday(e) === weekMonday(c)) return false;
   const pot = !start || String(start).slice(0, 10) === e;
   return !(pot && e.slice(0, 7) === c.slice(0, 7));
 }

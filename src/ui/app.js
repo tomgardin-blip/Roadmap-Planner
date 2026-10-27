@@ -15,7 +15,7 @@ import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
+import { openDrawer, closeDrawer, setCommitSource, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
 import { pushbackCandidates, overbookedCells } from '../pushback.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
@@ -397,9 +397,36 @@ function afterFrEdit(fr, { changes, before = {}, commented = false, comment = ''
     });
     return hit ? { ...r, serve_engineering_capacity_customer_tasks: JSON.stringify(tasks) } : r;
   });
+  // Issues whose committed date this FR set (Tom, 2026-10-27): Lightdash's issue date is a stored copy,
+  // so when the FR that set it changes, the issue takes the earliest committed date left among its FRs.
+  const minC = (frs) => (frs || []).map((f) => f.committed && String(f.committed).slice(0, 10)).filter(Boolean).sort()[0] || null;
+  const affected = [...(state.scores || new Map())].filter(([, s]) => s.frs?.some((f) => f.id === fr.id)).map(([iid, s]) => ({ iid, oldMin: minC(s.frs) }));
   state.extra.taskRows = patch(state.extra.taskRows);
   show(patch(state.rows)); // reruns the engine: the issue's committed date and TBD placement follow
-  if (state.extra.scores === 'ok') rescore();
+  if (state.extra.scores !== 'ok') return;
+  rescore();
+  const issueById = new Map([...(state.run?.issues || []), ...(state.backlog || [])].map((i) => [i.id, i]));
+  const recommit = new Map();
+  for (const { iid, oldMin } of affected) {
+    const cur = issueById.get(iid)?.committed;
+    const now = minC(state.scores.get(iid)?.frs);
+    if (cur && oldMin && String(cur).slice(0, 10) === oldMin && now !== oldMin) recommit.set(iid, now);
+  }
+  if (!recommit.size) return;
+  const setCommit = (rows) => rows.map((r) => {
+    const blob = r.serve_engineering_capacity_features;
+    if (blob == null) return r;
+    let hit = false;
+    const feats = parseBlob(blob).map((f) => {
+      const id = String(f[0]).replace(/-/g, '').toLowerCase();
+      if (!recommit.has(id)) return f;
+      hit = true; const g = f.slice(); g[26] = recommit.get(id); return g;
+    });
+    return hit ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
+  });
+  state.extra.featureRows = setCommit(state.extra.featureRows);
+  show(setCommit(state.rows));
+  rescore();
 }
 
 function renderDrawer() {
@@ -410,9 +437,35 @@ function renderDrawer() {
   });
 }
 
+/**
+ * What sets an issue's committed date when no shown FR has it (Tom, 2026-10-27), in the engine's order:
+ * an issue it blocks (it inherits that deadline), a linked FR left out of the list (unsigned customer,
+ * no customer, not a feature request, closed), or the issue's own committed date in Lightdash.
+ */
+function commitSourceOf(issueId, day) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const all = [...(state.run?.issues || []), ...(state.backlog || [])];
+  const byId = new Map(all.map((i) => [i.id, i]));
+  const issue = byId.get(issueId);
+  if (!issue) return null;
+  const blocked = (issue.blocks || []).map((id) => byId.get(id)).find((b) => b && String(b.committed || '').slice(0, 10) === day);
+  if (blocked) return `<span title="This issue blocks it, so it inherits that deadline">commit set by the issue it blocks: ${esc(blocked.name)}</span>`;
+  const fr = (state.allScores?.get(issueId)?.frs || []).find((f) => f.committed === day);
+  if (fr) {
+    const deal = String(fr.dealId || '').replace(/-/g, '').toLowerCase();
+    const why = !deal ? 'no customer' : state.extra.signed && !state.extra.signed.has(deal) ? 'customer not signed' : fr.type && fr.type !== 'Feature request' ? `type ${fr.type}` : fr.status ? `FR status ${fr.status}` : 'not in this list';
+    const link = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
+    return `commit set by an FR not listed here (${esc(why)}): ${esc(state.dealNames.get(deal) || 'No customer')} · ${link}`;
+  }
+  if (String(issue.committedOwn || '').slice(0, 10) === day) return '<span title="The committed date stored on the engineering issue in Lightdash, from an FR that is closed or no longer linked, or set by hand">commit set on the issue itself (no open FR has this date)</span>';
+  return null;
+}
+
 function rescore() {
   const x = state.extra;
   state.scores = scoreRows([...state.rows, ...x.taskRows, ...x.featureRows], x.deals, { signed: x.signed });
+  // Every linked FR, signed or not: only to name what sets a committed date the shown FRs don't explain.
+  state.allScores = x.signed ? scoreRows([...state.rows, ...x.taskRows, ...x.featureRows], x.deals) : state.scores;
   state.backlog = x.featureRows.length ? toIssues(x.featureRows) : [];
   recompute();
   renderChrome();
@@ -531,6 +584,7 @@ function show(rows) {
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);
   setDealNames(state.dealNames);
+  setCommitSource(commitSourceOf);
   recompute();
   renderChrome();
   draw();
