@@ -4,7 +4,7 @@
 import { formatDate } from '../periods.js';
 import { FR_PRIORITIES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
 import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, previewComment, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
-import { ESTIMATE_CHANNEL, estimateLines, estimatePosts } from '../estimate.js';
+import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -193,7 +193,8 @@ export function startDismiss({ mcp, fr, issue, onDone }) {
  * Pick which "No estimate" issues to post (none ticked by default, Tom 2026-10-10), preview and
  * edit the text, then post to Slack as the viewer. groups: [{ label, entries: [{ issue, frs }] }].
  */
-export function startEstimatePost({ mcp, groups }) {
+export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature }) {
+  const ch = target.channel;
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
   const list = groups.filter((g) => g.entries.length).map((g) => `
     <div class="pickgrp"><div class="pickhead"><b>${esc(g.label)}</b> <span class="muted">(${g.entries.length})</span>
@@ -202,8 +203,8 @@ export function startEstimatePost({ mcp, groups }) {
         <span><b>${esc(e.issue.name)}</b><span class="muted"> · ${esc(e.issue.team || 'No team')} · ${e.frs.length} FR${e.frs.length === 1 ? '' : 's'}${e.issue.committed ? ` · commit ${fd(e.issue.committed)}` : ''}</span></span></label>`).join('')}
     </div>`).join('');
   const sheet = openSheet(`
-    <h3>Post to ${ESTIMATE_CHANNEL.name}</h3>
-    <div class="srow muted">Tick the issues to post. One post per issue (one line below = one post), as you, each asking @claude_code to run the product-feature skill (writes the estimate and updates the issue). Changing the selection rebuilds the text.</div>
+    <h3>Post to ${esc(ch.name)}</h3>
+    <div class="srow muted">Tick the issues to post. One post per issue (one line below = one post), as you, ${esc(target.how)}. Changing the selection rebuilds the text.</div>
     <div class="picklist">${list || '<div class="placeholder">No issues without an estimate.</div>'}</div>
     <div class="srow"><b id="pickCount">0</b> selected</div>
     <textarea id="sMsg" rows="10" class="smsg" placeholder="Tick issues above to build the posts"></textarea>
@@ -213,7 +214,7 @@ export function startEstimatePost({ mcp, groups }) {
     sheet.querySelector('#pickCount').textContent = picked.size;
     const seen = new Set();
     const entries = groups.flatMap((g) => g.entries).filter((e) => picked.has(e.issue.id) && !seen.has(e.issue.id) && seen.add(e.issue.id));
-    sheet.querySelector('#sMsg').value = estimateLines(entries).join('\n');
+    sheet.querySelector('#sMsg').value = estimateLines(entries, target).join('\n');
     sheet.querySelector('#sSend').disabled = !picked.size;
   };
   sheet.addEventListener('change', (e) => { if (e.target.matches('input[data-pick]')) rebuild(); });
@@ -225,17 +226,17 @@ export function startEstimatePost({ mcp, groups }) {
     rebuild();
   });
   sheet.querySelector('#sSend').addEventListener('click', async (e) => {
-    const posts = estimatePosts(sheet.querySelector('#sMsg').value);
+    const posts = estimatePosts(sheet.querySelector('#sMsg').value, target);
     if (!posts.length) return;
     // One message per issue, sent in order; stop at the first refusal and say how far it got.
     for (let i = 0; i < posts.length; i++) {
       busy(e.target, true, `Posting ${i + 1}/${posts.length}…`);
-      try { await postSlack(mcp, ESTIMATE_CHANNEL.id, posts[i]); } catch (err) {
+      try { await postSlack(mcp, ch.id, posts[i]); } catch (err) {
         busy(e.target, false, 'Post');
         const why = err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err);
         return toast(`${i} of ${posts.length} posted. ${why}`, 'bad');
       }
     }
-    closeSheet(); toast(`Posted ${posts.length} issue${posts.length === 1 ? '' : 's'} to ${ESTIMATE_CHANNEL.name}.`);
+    closeSheet(); toast(`Posted ${posts.length} issue${posts.length === 1 ? '' : 's'} to ${ch.name}.`);
   });
 }

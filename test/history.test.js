@@ -28,7 +28,7 @@ test('weekly load: planner moves in the last 7 days and Notion edits since sync'
   assert.deepEqual({ in: m.get('2026-Q4').in, out: m.get('2026-Q4').out }, { in: 4, out: 5 });
 });
 
-import { estimateLines, estimatePosts } from '../src/estimate.js';
+import { estimateLines, estimatePosts, ESTIMATE_TARGETS } from '../src/estimate.js';
 test('estimate posts: one line per issue, each its own post asking claude_code for the product-feature skill', () => {
   const e = (n) => ({ issue: { name: `Issue ${n}`, url: `https://example.invalid/${n}` } });
   const lines = estimateLines([e(1), e(2), { issue: { name: 'no url' } }]);
@@ -36,4 +36,13 @@ test('estimate posts: one line per issue, each its own post asking claude_code f
   const posts = estimatePosts(`${lines.join('\n')}\n\n  @claude_code run the product-feature skill on https://example.invalid/3  \n`);
   assert.deepEqual(posts, [1, 2, 3].map((n) => `<@U0BKLA7U9EW> run the product-feature skill on https://example.invalid/${n}`));
   assert.ok(posts.every((p) => !p.includes('--') && !p.includes('Qai')));
+});
+
+test('estimate posts, Qai flow: one post per issue in #dev_effort_estimate, @Qai estimate', () => {
+  const q = ESTIMATE_TARGETS.qai;
+  assert.equal(q.channel.id, 'C0C1CPJKZKK');
+  const lines = estimateLines([{ issue: { url: 'https://example.invalid/1' } }, { issue: { url: 'https://example.invalid/2' } }], q);
+  assert.deepEqual(lines, ['@Qai estimate https://example.invalid/1', '@Qai estimate https://example.invalid/2']);
+  assert.deepEqual(estimatePosts(lines.join('\n'), q), ['<@U0C0Y7E5SQ4> estimate https://example.invalid/1', '<@U0C0Y7E5SQ4> estimate https://example.invalid/2']);
+  assert.equal(ESTIMATE_TARGETS.productFeature.channel.id, 'C0CC87L21GW');
 });

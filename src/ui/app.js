@@ -21,6 +21,7 @@ import { weeklyLoadChanges, dismissedFrs } from '../history.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
+import { ESTIMATE_TARGETS } from '../estimate.js';
 import { startMove, startBulkMove, startFrEdit, loadTestPages, startDismiss, startEstimatePost } from './actions.js';
 import { closeSheet } from './sheet.js';
 import { parseBlob } from '../scoring.js';
@@ -163,9 +164,10 @@ function shell() {
       if (c) startDismiss({ mcp: state.mcp, fr: c.fr, issue: c.issue, onDone: ({ reason }) => { state.audit = [{ category: 'Pushback override', frId: c.fr.id.replace(/-/g, '').toLowerCase(), itemName: c.fr.title, reason, at: new Date().toISOString(), field: 'Pushback' }, ...(state.audit || [])]; recompute(); draw(); } });
       return;
     }
-    if (e.target.closest('#estPost')) {
+    const ep = e.target.closest('button[data-estpost]');
+    if (ep) {
       const groups = GROUPS.map((g) => ({ label: g.label, entries: state.queues?.[g.key].noEstimate || [] }));
-      startEstimatePost({ mcp: state.mcp, groups });
+      startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost] });
       return;
     }
     const fe = e.target.closest('button[data-fr-edit]');

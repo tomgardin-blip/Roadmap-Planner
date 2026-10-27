@@ -332,3 +332,6 @@ input.bsel { width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px;
 .cmt.muted { font-size: 11px; }
 .lsubhead { margin: 8px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .lsubhead .cnt { font-weight: 700; color: var(--ink); background: var(--grey); border-radius: 999px; padding: 0 7px; }
+.estbtns { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.estbtns .estbtn { margin-left: 0; }
+@media (max-width: 700px) { .estbtns { width: 100%; } .estbtns .estbtn { flex: 1 1 100%; } }
