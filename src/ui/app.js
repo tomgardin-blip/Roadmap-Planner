@@ -6,7 +6,7 @@
 // All three run through the same capacity engine.
 
 import { horizon as buildHorizon, formatDate, formatDateTime } from '../periods.js';
-import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
+import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
@@ -97,7 +97,11 @@ function shell() {
         <button data-tab="history">History</button>
       </nav>
       <div class="toolbar">
-        <label class="fld">Team <select id="teamSel"><option value="all">All teams</option>${TEAMS.map((t) => `<option>${esc(t)}</option>`).join('')}</select></label>
+        <div class="fld teampick"><span class="flab">Team</span><button type="button" id="teamBtn" aria-haspopup="true" aria-expanded="false"><span id="teamLbl">All teams</span></button>
+          <div class="teampanel" id="teamPanel" hidden>
+            ${TEAMS.map((t) => `<label><input type="checkbox" data-team="${esc(t)}"> ${esc(t)}</label>`).join('')}
+            <div class="tpacts"><button type="button" data-teamall>All teams</button><button type="button" class="primary" data-teamdone>Done</button></div>
+          </div></div>
         <span class="spacer" style="flex:1"></span>
         <button id="themeBtn" title="Light / dark"><span class="tlabel">Theme</span><svg class="ticon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
       </div>
@@ -108,7 +112,7 @@ function shell() {
     <div class="bulkbar" id="bulkbar" hidden></div>
     <aside class="drawer" id="drawer"></aside>`;
 
-  document.getElementById('teamSel').addEventListener('change', (e) => { state.teamFilter = e.target.value; recompute(); draw(); });
+  initTeamPicker();
   document.querySelector('nav.tabs').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
     if (!b || b.disabled) return;
@@ -297,6 +301,39 @@ function afterIssueStatus(issue, status) {
   state.audit = [local, ...(state.audit || [])];
   if (hit) { show(rows); if (state.extra.scores === 'ok') rescore(); }
   if (state.test) openTest();
+}
+
+/**
+ * Team filter as a tick list (Tom, 2026-10-27): one or more teams, none or all four = All teams.
+ * Applies to every tab; remembered per viewer in this browser.
+ */
+function initTeamPicker() {
+  const btn = document.getElementById('teamBtn'); const panel = document.getElementById('teamPanel');
+  const boxes = [...panel.querySelectorAll('input[data-team]')];
+  const label = () => {
+    const p = pickedTeams(state.teamFilter);
+    document.getElementById('teamLbl').textContent = !p ? 'All teams' : p.length === 1 ? p[0] : `${p.length} teams: ${p.join(', ')}`;
+    btn.title = p ? p.join(', ') : 'All teams';
+  };
+  const apply = () => {
+    const picked = boxes.filter((b) => b.checked).map((b) => b.dataset.team);
+    state.teamFilter = pickedTeams(picked) ? picked : 'all';
+    try { localStorage.setItem('rp.teams', JSON.stringify(pickedTeams(state.teamFilter) || [])); } catch { /* storage unavailable */ }
+    label(); recompute(); draw();
+  };
+  const open = (on) => { panel.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
+  try { const saved = JSON.parse(localStorage.getItem('rp.teams') || '[]'); if (pickedTeams(saved)) state.teamFilter = pickedTeams(saved); } catch { /* storage unavailable */ }
+  const p0 = pickedTeams(state.teamFilter);
+  boxes.forEach((b) => { b.checked = !!p0?.includes(b.dataset.team); });
+  label();
+  btn.addEventListener('click', () => open(panel.hidden));
+  panel.addEventListener('change', apply);
+  panel.addEventListener('click', (e) => {
+    if (e.target.closest('[data-teamall]')) { boxes.forEach((b) => { b.checked = false; }); apply(); }
+    if (e.target.closest('[data-teamdone]')) open(false);
+  });
+  document.addEventListener('click', (e) => { if (!panel.hidden && !e.target.closest('.teampick')) open(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) open(false); });
 }
 
 function renderBulkBar() {

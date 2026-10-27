@@ -2,7 +2,7 @@
 // per team, one card per quarter; per skill the spare days (capacity − demand) per month,
 // then pot and TBD (demand only, so negative) and the quarter total. Header: demand / spare.
 
-import { TEAMS } from '../capacity.js';
+import { TEAMS, pickedTeams } from '../capacity.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const r1 = (n) => Math.round(n * 10) / 10;
@@ -37,7 +37,7 @@ function card(team, rows, q, qi) {
 }
 
 export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
-  const teams = teamFilter === 'all' ? TEAMS : [teamFilter];
+  const teams = pickedTeams(teamFilter) || TEAMS;
   let h = '<div class="cards">';
   for (const team of teams) {
     // Skills with neither capacity nor demand anywhere in the horizon are left out, as in the planner.

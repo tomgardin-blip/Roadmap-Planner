@@ -9,6 +9,14 @@ import * as Engine from '../vendor/capacity-engine.js';
 
 // Display order (Tom, 2026-10-27): O+I, Transport Planning, Trip Execution, Application Platform.
 export const TEAMS = ['Order + Invoice', 'Transport Planning', 'Trip Execution', 'Application Platform'];
+
+/** Team filter → the picked teams in TEAMS order, or null for all. Accepts 'all', one name or a list (Tom, 2026-10-27: pick one or more teams). */
+export function pickedTeams(team) {
+  if (!team || team === 'all') return null;
+  const list = [].concat(team);
+  const out = TEAMS.filter((t) => list.includes(t));
+  return out.length && out.length < TEAMS.length ? out : null;
+}
 export const SKILLS = ['FE', 'BE', 'MOB'];
 const ENGINE_SKILL = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
 

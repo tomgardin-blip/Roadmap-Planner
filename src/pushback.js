@@ -3,7 +3,7 @@
 // fewest customers on the issue, then highest effort, then smallest deal. "In previous TMS"
 // and "niche wording" are not used. Pure functions.
 
-import { issueTeams, TEAMS } from './capacity.js';
+import { issueTeams, TEAMS, pickedTeams } from './capacity.js';
 
 const CLOSED = new Set(['Done', "Won't do", 'Duplicate']);
 const SK = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
@@ -33,7 +33,8 @@ export function pushbackCandidates({ run, backlog = [], scores, taskCommitted, d
     if (!issue.id || seen.has(issue.id) || CLOSED.has(issue.status)) continue;
     seen.add(issue.id);
     const teams = [...issueTeams(run, issue)].filter((t) => TEAMS.includes(t));
-    if (!teams.length || (team !== 'all' && !teams.includes(team))) continue;
+    const picked = pickedTeams(team);
+    if (!teams.length || (picked && !teams.some((x) => picked.includes(x)))) continue;
     const s = scores?.get(issue.id);
     if (!s) continue;
     const when = issue.end || issue.committed;

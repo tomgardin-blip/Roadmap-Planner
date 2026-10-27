@@ -3,7 +3,7 @@
 
 import { RULES } from '../atrisk.js';
 import { formatDate, formatDateTime, formatDatesIn, lateVsCommit } from '../periods.js';
-import { issueTeams, TEAMS } from '../capacity.js';
+import { issueTeams, TEAMS, pickedTeams } from '../capacity.js';
 import { ISSUE_PRIORITIES } from '../notion/writes.js';
 import { GROUPS } from '../prep.js';
 import { listCard, frCard } from './drawer.js';
@@ -98,7 +98,7 @@ export function renderPushback(el, { list, loading, owners, names, overbookedOnl
         <span class="tag ${owner ? '' : 'late'}">${owner ? `COM/AM ${esc(owner)}` : owners ? 'No Responsible Success' : 'COM/AM loading…'}</span></div>
       <div class="meta">Issue ${link(c.issue.url, c.issue.name)} · ${esc(c.issue.team || '')} · <b>${c.customers}</b> customer${c.customers === 1 ? '' : 's'} · <b>${Math.round(c.effort * 10) / 10}</b> d${c.quarter ? ` · ${esc(c.quarter)}` : ''}${c.inOverbooked ? ' <span class="tag late">Overbooked quarter</span>' : ''}${c.deal ? ` · deal £${Math.round(c.deal / 1000)}k` : ''}</div></div>`;
   };
-  el.innerHTML = `<div class="lists"><div class="lhead"><b>Pushback candidates</b><span class="lsub">${list.length} committed FRs${team !== 'all' ? ` · ${esc(team)}` : ''}. Easiest to challenge first: fewest customers on the issue, then highest effort, then smallest deal. A suggestion; "Not a pushback" is logged.</span>
+  el.innerHTML = `<div class="lists"><div class="lhead"><b>Pushback candidates</b><span class="lsub">${list.length} committed FRs${pickedTeams(team) ? ` · ${esc(pickedTeams(team).join(', '))}` : ''}. Easiest to challenge first: fewest customers on the issue, then highest effort, then smallest deal. A suggestion; "Not a pushback" is logged.</span>
     <label class="lchk"><input type="checkbox" id="pbOverbooked" ${overbookedOnly ? 'checked' : ''}> Only issues in overbooked quarters</label></div>
     ${capped(list, row, 'pushback')}</div>`;
 }
@@ -127,7 +127,7 @@ export function renderHistory(el, { audit, auditError, weekly, changes, users, s
 /**
  * Quarter plan (Tom, 2026-10-27): per quarter and team, every open engineering issue planned in it
  * (its end date falls in the quarter), with where it is planned, its committed date and its Priority,
- * which can be set right here. Sorted by planned date, then committed date.
+ * which can be set right here. Sorted month pots, quarter pot, dated work; then committed date (none last).
  */
 export function renderQuarterPlan(el, { run, horizon, quarterKey, team = 'all', readOnly }) {
   const q = horizon.find((x) => x.key === quarterKey) || horizon[0];
@@ -140,12 +140,23 @@ export function renderQuarterPlan(el, { run, horizon, quarterKey, team = 'all', 
     const label = i.end === q.lastFriday ? `${q.shortLabel} pot` : m ? `${m.label} pot` : 'Pot';
     return `${label} · ${formatDate(i.end)}`;
   };
+  // Sort (Tom, 2026-10-27): month pots first (month order), then the quarter pot, then dated work by end
+  // date; within each, committed date earliest first, issues with no commit after them.
+  const rank = (i) => {
+    if (i.start && i.start !== i.end) return [2, String(i.end)];
+    if (i.end === q.lastFriday) return [1, '']; // same date as the last month's pot: shown as the quarter pot
+    const m = q.months.findIndex((x) => x.lastFriday === i.end);
+    return m >= 0 ? [0, String(m)] : [2, String(i.end)];
+  };
+  const byPlan = (a, b) => {
+    const [ga, ka] = rank(a); const [gb, kb] = rank(b);
+    return ga - gb || ka.localeCompare(kb) || (!a.committed) - (!b.committed) || String(a.committed || '').localeCompare(String(b.committed || ''));
+  };
   const seg = `<span class="seg qpseg">${horizon.map((x) => `<button data-qp="${x.key}" class="${x.key === q.key ? 'on' : ''}">${esc(x.label)}</button>`).join('')}</span>`;
   let h = `<div class="lhead"><b>Quarter plan</b>${seg}<span class="lsub">Engineering issues planned in ${esc(q.label)} (end date in the quarter), per team. Set the issue Priority here; it is written to Notion and logged.</span></div>`;
-  const teams = team === 'all' ? TEAMS : [team];
+  const teams = pickedTeams(team) || TEAMS;
   for (const tm of teams) {
-    const list = run.issues.filter((i) => inQ(i) && issueTeams(run, i).has(tm))
-      .sort((a, b) => String(a.end).localeCompare(String(b.end)) || String(a.committed || '9').localeCompare(String(b.committed || '9')));
+    const list = run.issues.filter((i) => inQ(i) && issueTeams(run, i).has(tm)).sort(byPlan);
     const rows = list.map((i) => {
       const late = lateVsCommit(i);
       const pr = i.priority;

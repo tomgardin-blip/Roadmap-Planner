@@ -11,7 +11,7 @@
 // capacity rows, so `featureFrs` (FR ids that pass both rules) comes from a separate Lightdash query;
 // without it only the Type rule applies.
 
-import { issueTeams, TEAMS } from './capacity.js';
+import { issueTeams, TEAMS, pickedTeams } from './capacity.js';
 
 export const GROUPS = [
   { key: 'goLive', label: 'Required for GO LIVE', priorities: ['Needed 1 month before', 'Needed for go-live'] },
@@ -64,7 +64,8 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     const ours = [...teams].some((x) => TEAMS.includes(x));
     // Truly unrouted: no Team property and no assignee. Other teams' issues are out of scope.
     const noTeam = !i.team && !(i.assignedTo || []).length;
-    if (team !== 'all' ? !teams.has(team) : !(ours || noTeam)) continue;
+    const picked = pickedTeams(team);
+    if (picked ? !picked.some((x) => teams.has(x)) : !(ours || noTeam)) continue;
     const entry = { issue: i, frs: frs.filter((f) => groupOf(f.priority)), noTeam };
     if (effortOf(i) === 0) out[g].noEstimate.push(entry);
     else if (!(i.start || i.end)) out[g].notPlanned.push(entry);
