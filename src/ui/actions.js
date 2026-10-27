@@ -139,10 +139,10 @@ export async function startFrEdit(ctx) {
         .map((st) => `<option ${st === ei.status ? 'selected' : ''}>${esc(st)}</option>`).join('')}</select></label>` : ''}
     <div class="srow muted" id="sEff"></div>
     <label class="sfld">Comment <span class="muted" id="sOwner">(posted on the FR in Notion; looking up the Responsible Success…)</span>
-      <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. What changed and why, or just a note to the owner"></textarea></label>
+      <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. Posted on the FR as you write it, tagging the owner. Empty: no comment"></textarea></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save</button></div>`);
-  // Every save posts one comment on the FR that tags its Responsible Success (Tom, 2026-10-27):
-  // the changes, then the comment. No owner: posted without a tag (never a fallback to Sales).
+  // A save with a comment posts it on the FR, tagging its Responsible Success (Tom, 2026-10-27): only
+  // the tag and Tom's text, no list of changes. Empty comment: nothing posted. No owner: no tag.
   let owner; let ownerErr = null;
   const ownerP = findOwner(mcp, fr.id).then((o) => { owner = o; }, (err) => { owner = null; ownerErr = errText(err); })
     .then(() => {
@@ -185,6 +185,7 @@ export async function startFrEdit(ctx) {
       }
       const all = eiChange ? [...r.changes, eiChange] : r.changes;
       if (!all.length && !comment) { closeSheet(); return toast('Nothing changed.'); }
+      if (!comment) { closeSheet(); return toast('Saved and logged. No comment posted (empty).'); }
       const done = () => onDone?.({ ...r, changes: all, commented: true, comment });
       busy(e.target, true, 'Posting comment…');
       await ownerP;

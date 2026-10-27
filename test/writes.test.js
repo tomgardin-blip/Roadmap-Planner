@@ -44,15 +44,15 @@ test('move warnings: after commit and open blocker, never a block', () => {
   assert.deepEqual(W.moveWarnings({}, '2026-12-25'), []);
 });
 
-test('owner comment: tag, changes, then the comment; comment-only and no-owner variants', () => {
+test('owner comment: tag then the comment only, no list of changes; no-owner variant', () => {
   const ch = [{ label: 'Priority', before: 'High', after: 'Top 3' }];
   const c = (args) => W.ownerCommentInput(W.TEST_FR, args).rich_text;
   assert.deepEqual(c({ ownerId: 'u-1', changes: ch, comment: 'Pushed by customer' }), [
     { type: 'mention', mention: { type: 'user', user: { id: 'u-1' } } },
-    { type: 'text', text: { content: ' fyi: Priority: High → Top 3. Pushed by customer' } },
+    { type: 'text', text: { content: ' Pushed by customer' } },
   ]);
   assert.equal(c({ ownerId: 'u-1', comment: 'Can you check with the customer?' })[1].text.content, ' Can you check with the customer?');
-  assert.deepEqual(c({ changes: ch, comment: 'x' }), [{ type: 'text', text: { content: 'fyi: Priority: High → Top 3. x' } }]);
+  assert.deepEqual(c({ changes: ch, comment: 'x' }), [{ type: 'text', text: { content: 'x' } }]);
   assert.equal(W.ownerCommentInput(W.TEST_FR, { ownerId: 'u-1', comment: 'y'.repeat(2500) }).rich_text.length, 3);
   assert.equal(W.ownerCommentInput(W.TEST_FR, { comment: 'x' }).markdown, undefined);
   assert.doesNotMatch(W.ownerCommentText({ changes: ch, comment: 'x' }), /Roadmap Planner|Reason/);
@@ -133,7 +133,7 @@ test('adviseOwner: comment then audit, the comment text in both', async () => {
   await adviseOwner(mcp, { fr: { id: W.TEST_FR, title: 'F' }, owner: { id: 'own-1', name: 'Owner' }, changes: [{ label: 'Committed', before: '2026-12-18', after: '2027-01-29' }], comment: 'Capacity' });
   const c = mcp.calls.find((x) => x.tool === 'notion-create-comment').input;
   assert.equal(c.rich_text[0].mention.user.id, 'own-1');
-  assert.match(c.rich_text[1].text.content, /2027-01-29\. Capacity$/);
+  assert.equal(c.rich_text[1].text.content, ' Capacity');
   const row = mcp.calls.find((x) => x.tool === 'notion-create-pages').input.pages[0].properties;
   assert.equal(row.Category, 'Owner advised');
   assert.deepEqual(row.Owner, ['own-1']);

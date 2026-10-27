@@ -25,7 +25,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Allowed writes (Tom, 2026-10-10), nothing else:
   - Issues (Bugs and Features): Start and End, and "Priority" (Urgent / High / Medium / Low / Not assigned) from the Quarter plan (Tom, 2026-10-27), and "Status" (any option) from the FR edit sheet when opened from an issue card (Tom, 2026-10-27). Never effort or team.
   - FRs (Customer Tasks): "Success Committed" and "Priority " (any option, incl. "No longer needed" and "Won't do"), and "Status" only to "Won't do" (Tom, 2026-10-27). Never the "Committed" formula or anything else.
-  - Comments on an FR: one per Save in the FR edit sheet (Tom, 2026-10-27, replaces the separate Send step): tags its Responsible Success (no tag when there is none, never a fallback), lists what changed, then Tom's comment. A comment with no field change is allowed.
+  - Comments on an FR: one per Save in the FR edit sheet when the Comment box has text (Tom, 2026-10-27, replaces the separate Send step): tags its Responsible Success (no tag when there is none, never a fallback), then only Tom's text, no list of changes (Tom writes those himself). Empty comment: nothing posted. A comment with no field change is allowed.
   - Rows in the Roadmap Planner Audit Log (`collection://9b4b26f2-ea33-4578-89c2-252389cd5564`).
   - Rows in the Roadmap Planner Effort Baseline (`collection://62afe97a-fdaf-4007-af81-5d1e1498661e`), written automatically on open; no audit row (they are the record).
 - Roadmap Planner Capacity (`collection://f060b93c-ecf8-4254-9b1d-cf5fc55b4c2c`): read-only for the planner. Only Sander's roadmap-changes-report skill writes it (capacity per team × skill × week, daily).

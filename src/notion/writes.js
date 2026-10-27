@@ -91,13 +91,13 @@ export function moveWarnings(issue, end, blockers = []) {
 }
 
 /**
- * Comment on the FR (Tom 2026-10-27): tags the owner, lists what changed, then Tom's comment.
- * "@Owner fyi: Committed: 18 Dec 2026 → 29 Jan 2027. <comment>", or "@Owner <comment>" with no change.
- * No owner: the same text without a tag. Never "(via Roadmap Planner, by …)": posted as the viewer.
+ * Comment on the FR (Tom 2026-10-27): "@Owner <comment>", only when there is a comment. No owner: the
+ * same text without a tag. Never "(via Roadmap Planner, by …)": posted as the viewer.
  */
-export function ownerCommentText({ changes = [], comment }) {
-  const what = changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; ');
-  return [what ? `fyi: ${what}.` : '', (comment || '').trim()].filter(Boolean).join(' ');
+// Only Tom's own text: he writes the change into it himself (Tom, 2026-10-27, drops the "fyi: <changes>." prefix).
+// The changes stay in the audit row.
+export function ownerCommentText({ comment }) {
+  return (comment || '').trim();
 }
 
 /**
