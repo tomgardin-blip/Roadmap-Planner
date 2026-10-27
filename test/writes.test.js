@@ -39,8 +39,8 @@ test('effective committed: earliest of Success Committed and go-live when Needed
 });
 
 test('move warnings: after commit and open blocker, never a block', () => {
-  assert.deepEqual(W.moveWarnings({ committed: '2026-11-30' }, '2026-12-25'), ['After commit 2026-11-30']);
-  assert.deepEqual(W.moveWarnings({ committed: '2027-01-31' }, '2026-12-25', [{ name: 'B', end: '2027-01-29' }]), ['Blocked by "B" ending 2027-01-29']);
+  assert.deepEqual(W.moveWarnings({ committed: '2026-11-30' }, '2026-12-25'), ['After commit 30/11/2026']);
+  assert.deepEqual(W.moveWarnings({ committed: '2027-01-31' }, '2026-12-25', [{ name: 'B', end: '2027-01-29' }]), ['Blocked by "B" ending 29/01/2027']);
   assert.deepEqual(W.moveWarnings({}, '2026-12-25'), []);
 });
 
@@ -99,10 +99,10 @@ test('moveIssue: read before, write, then audit with warning', async () => {
   assert.deepEqual(tools, ['notion-fetch', 'notion-update-page', 'notion-get-users', 'notion-create-pages']);
   const row = mcp.calls[3].input.pages[0].properties;
   assert.equal(row.Category, 'Moved past commit');
-  assert.equal(row.Warning, 'After commit 2026-11-30');
+  assert.equal(row.Warning, 'After commit 30/11/2026');
   assert.equal(row.Reason, 'Capacity');
   assert.deepEqual(row['Changed by'], ['me-1']);
-  assert.deepEqual(r.warnings, ['After commit 2026-11-30']);
+  assert.deepEqual(r.warnings, ['After commit 30/11/2026']);
 });
 
 test('editFr: writes only what changed, one audit row per field; no-op when unchanged', async () => {

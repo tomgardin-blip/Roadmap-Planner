@@ -1,6 +1,7 @@
 // At-risk rules (SPEC "Features and screens" > 4. At risk). Pure functions over the engine issues.
 // Rules that need data the planner cannot reach yet are listed in UNAVAILABLE, never guessed.
 
+import { formatDate } from './periods.js';
 import { issueTeams, TEAMS } from './capacity.js';
 import { effortGrowth } from './notion/baseline.js';
 
@@ -38,14 +39,14 @@ export function atRisk(run, { team = 'all', baseline = null } = {}) {
   for (const i of open) {
     const planned = i.start || i.end;
     if (inScope(i)) {
-      if (i.committed && i.end && i.end > i.committed) out.afterCommit.push({ issue: i, detail: `Ends ${i.end}, committed ${i.committed}` });
-      if (i.committed && !planned && effortOf(i) > 0) out.committedUnplanned.push({ issue: i, detail: `Committed ${i.committed}, no dates` });
-      if (i.committed && i.status === 'Blocked/on hold') out.committedBlocked.push({ issue: i, detail: `Committed ${i.committed}` });
+      if (i.committed && i.end && i.end > i.committed) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
+      if (i.committed && !planned && effortOf(i) > 0) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
+      if (i.committed && i.status === 'Blocked/on hold') out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
       // A blocker that ends after this issue starts (pot issues: Start = End).
       const start = i.start || i.end;
       for (const b of blockedBy.get(i.id) || []) {
-        if (start && b.end && b.end > start) out.dependency.push({ issue: i, detail: `Starts ${start}, blocked by "${b.name}" ending ${b.end}`, blocker: b });
-        else if (start && !b.end) out.dependency.push({ issue: i, detail: `Starts ${start}, blocked by "${b.name}" which has no dates`, blocker: b });
+        if (start && b.end && b.end > start) out.dependency.push({ issue: i, detail: `Starts ${formatDate(start)}, blocked by "${b.name}" ending ${formatDate(b.end)}`, blocker: b });
+        else if (start && !b.end) out.dependency.push({ issue: i, detail: `Starts ${formatDate(start)}, blocked by "${b.name}" which has no dates`, blocker: b });
       }
       if (i.status === 'Claude - to review' && effortOf(i) > 0) out.claudeReview.push({ issue: i, detail: `${effortOf(i)} d estimated by Claude, not reviewed` });
     }

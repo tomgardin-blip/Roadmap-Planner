@@ -26,3 +26,11 @@ test('horizon rolls over on the first day of a quarter', () => {
   assert.equal(horizon('2026-12-31')[0].key, '2026-Q4');
   assert.equal(horizon('2027-01-01')[0].key, '2027-Q1');
 });
+
+import { formatDate, formatDatesIn } from '../src/periods.js';
+test('dates show as DD/MM/YYYY everywhere', () => {
+  assert.equal(formatDate('2027-01-04'), '04/01/2027');
+  assert.equal(formatDate('2026-12-25T00:00:00.000Z'), '25/12/2026');
+  assert.equal(formatDate(null), '');
+  assert.equal(formatDatesIn('2026-11-27 / 2027-01-29'), '27/11/2026 / 29/01/2027');
+});

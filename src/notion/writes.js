@@ -3,6 +3,7 @@
 // Allowed: issue Start/End, FR "Success Committed" and "Priority ", FR comments tagging the
 // owner, audit rows. Any issue or FR since Tom's approval on 2026-10-10 (field limits unchanged).
 
+import { formatDate } from '../periods.js';
 export const TEST_ISSUE = '3f4e32e8f8c880ef9c6dc3a0c44b1af1';
 export const TEST_FR = '3f5e32e8f8c881d6927bd504b6f10e54';
 export const AUDIT_DS = '9b4b26f2-ea33-4578-89c2-252389cd5564';
@@ -64,8 +65,8 @@ export function effectiveCommitted({ successCommitted, priority, golive }) {
 /** Warnings for moving an issue to `end` (allowed, never blocked: Tom 2026-10-10). */
 export function moveWarnings(issue, end, blockers = []) {
   const w = [];
-  if (issue.committed && end && end > issue.committed) w.push(`After commit ${issue.committed}`);
-  for (const b of blockers) if (b.end && end && b.end > end) w.push(`Blocked by "${b.name}" ending ${b.end}`);
+  if (issue.committed && end && end > issue.committed) w.push(`After commit ${formatDate(issue.committed)}`);
+  for (const b of blockers) if (b.end && end && b.end > end) w.push(`Blocked by "${b.name}" ending ${formatDate(b.end)}`);
   return w;
 }
 

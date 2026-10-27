@@ -2,6 +2,7 @@
 // carries the same date buttons and FR edit as the drawer.
 
 import { RULES } from '../atrisk.js';
+import { formatDate, formatDateTime, formatDatesIn } from '../periods.js';
 import { GROUPS } from '../prep.js';
 import { listCard, frCard } from './drawer.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
@@ -42,7 +43,7 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
   for (const r of RULES) {
     const list = risk[r.key] && sortEntries(risk[r.key], scores, sort);
     if (!list) { h += section(`risk-${r.key}`, r.label, '…', baselineNote, `<div class="placeholder">${baselineNote}</div>`); continue; }
-    const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10 Oct 2026)' : list.length ? `${days(list)} d` : '';
+    const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10/10/2026)' : list.length ? `${days(list)} d` : '';
     // No team: ask Qai to set the Team, one DM per ticked issue (Tom, 2026-10-27).
     const tools = r.key === 'noTeam' && list.length && !readOnly ? `<div class="lhead small"><button class="estbtn" data-estpost="qaiTeam" title="One DM to Qai per ticked issue, asking it to set the Team">${ESTIMATE_TARGETS.qaiTeam.button}</button></div>` : '';
     h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
@@ -80,7 +81,7 @@ export function tabCounts(risk, queues) {
   return { risk: r, prep: p };
 }
 
-const fd = (iso) => (iso ? new Date(`${String(iso).slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '–');
+const fd = (iso) => (iso ? formatDate(iso) : '–');
 const link = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text));
 
 /** Pushback candidates: one row per committed FR, easiest to challenge first. */
@@ -107,13 +108,13 @@ export function renderHistory(el, { audit, auditError, weekly, changes, users, s
     <td>${v.items.map((i) => `<div class="hitem">${esc(i.name)}: ${esc(i.from || '–')} → ${esc(i.to || '–')} · ${Math.round(i.days * 10) / 10} d · <span class="${i.source === 'Notion' ? 'warnt' : ''}">${esc(i.source === 'Notion' ? 'Notion, no reason given' : i.reason || 'Planner, no reason')}</span></div>`).join('')}</td></tr>`).join('');
   const who = (a) => esc((a.by && users?.get(a.by)) || a.byText || 'Someone');
   const auditHtml = auditError ? `<div class="placeholder">Audit log unavailable: ${esc(auditError)}</div>` : !audit ? '<div class="placeholder">Reading the audit log from Notion…</div>'
-    : audit.length ? audit.map((a) => `<div class="hrow"><div class="hwhen">${esc(new Date(a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}<br><span class="muted">${who(a)}</span></div>
-      <div><span class="tag">${esc(a.category)}</span> <b>${esc(a.itemName)}</b>${a.field === 'Comment' || a.field === 'Pushback' ? '' : `<div class="muted">${esc(a.field)}: ${esc(a.before || '–')} → ${esc(a.after || '–')}</div>`}
-      ${a.reason ? `<div>Reason: ${esc(a.reason)}</div>` : ''}${a.warning ? `<div class="warnt">⚠ ${esc(a.warning)}</div>` : ''}</div></div>`).join('') : '<div class="placeholder">No planner changes yet.</div>';
-  const notionHtml = (changes || []).length ? changes.map((c) => `<div class="hrow"><div class="hwhen muted">Notion</div><div><b>${esc(c.name)}</b><div class="muted">${c.fields.map((k) => `${esc(k)}: ${esc(c.before[k] ?? '–')} → ${esc(c.after[k] ?? '–')}`).join(' · ')}</div><div class="warnt">No reason given</div></div></div>`).join('')
+    : audit.length ? audit.map((a) => `<div class="hrow"><div class="hwhen">${esc(formatDateTime(a.at))}<br><span class="muted">${who(a)}</span></div>
+      <div><span class="tag">${esc(a.category)}</span> <b>${esc(a.itemName)}</b>${a.field === 'Comment' || a.field === 'Pushback' ? '' : `<div class="muted">${esc(a.field)}: ${esc(formatDatesIn(a.before) || '–')} → ${esc(formatDatesIn(a.after) || '–')}</div>`}
+      ${a.reason ? `<div>Reason: ${esc(a.reason)}</div>` : ''}${a.warning ? `<div class="warnt">⚠ ${esc(formatDatesIn(a.warning))}</div>` : ''}</div></div>`).join('') : '<div class="placeholder">No planner changes yet.</div>';
+  const notionHtml = (changes || []).length ? changes.map((c) => `<div class="hrow"><div class="hwhen muted">Notion</div><div><b>${esc(c.name)}</b><div class="muted">${c.fields.map((k) => `${esc(k)}: ${esc(formatDatesIn(c.before[k]) || '–')} → ${esc(formatDatesIn(c.after[k]) || '–')}`).join(' · ')}</div><div class="warnt">No reason given</div></div></div>`).join('')
     : '<div class="placeholder">No issues edited in Notion since the last sync.</div>';
   el.innerHTML = `<div class="lists">
-    <div class="lhead"><b>History</b><span class="lsub">Planner changes from the audit log; Notion edits since the last Lightdash sync${syncedAt ? ` (${esc(new Date(syncedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))})` : ''}. Older Notion edits arrive once the snapshots are in Lightdash.</span></div>
+    <div class="lhead"><b>History</b><span class="lsub">Planner changes from the audit log; Notion edits since the last Lightdash sync${syncedAt ? ` (${esc(formatDateTime(syncedAt))})` : ''}. Older Notion edits arrive once the snapshots are in Lightdash.</span></div>
     <h3 class="lgroup">This week, load per quarter</h3>
     ${qs.length ? `<table class="htable"><thead><tr><th>Quarter</th><th>In</th><th>Out</th><th>Net</th><th>What moved</th></tr></thead><tbody>${weekRows}</tbody></table>` : '<div class="placeholder">No load moved between quarters this week.</div>'}
     ${section('hist-planner', 'Planner changes', audit ? audit.length : '…', 'newest first', auditHtml, true)}

@@ -5,7 +5,7 @@
 //   3. fake Lightdash-shaped rows.
 // All three run through the same capacity engine.
 
-import { horizon as buildHorizon } from '../periods.js';
+import { horizon as buildHorizon, formatDate, formatDateTime } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
@@ -62,7 +62,7 @@ function themeToggle() {
 function fmtTime(iso) {
   if (!iso) return '?';
   const d = new Date(iso);
-  return isNaN(d) ? iso : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return isNaN(d) ? iso : formatDateTime(iso);
 }
 
 function shell() {
@@ -358,7 +358,7 @@ function renderChrome() {
     const warn = x.scores === 'error' || x.backlog === 'error';
     pills.push(`<span class="pill ${warn ? 'warn' : ''}" title="${esc([x.scoresError, x.backlogError].filter(Boolean).join(' ') || 'FR demand and the unplanned backlog load in the background after the grid.')}">${sc}${bl}</span>`);
   }
-  pills.push(`<span class="pill">Today <b>${esc(TODAY)}</b></span>`);
+  pills.push(`<span class="pill">Today <b>${esc(formatDate(TODAY))}</b></span>`);
   if (state.mode === 'live' && state.run) {
     // Where capacity comes from: Sander's daily run of the data app's engine, or our own copy.
     const src = state.run.capacitySource;

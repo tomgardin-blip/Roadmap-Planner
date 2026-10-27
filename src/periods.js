@@ -77,8 +77,21 @@ export function horizon(todayISO) {
   return out;
 }
 
+// One date format everywhere in the planner: DD/MM/YYYY (Tom, 2026-10-27).
+const pad = (n) => String(n).padStart(2, '0');
 export function formatDate(iso) {
   if (!iso) return '';
-  const d = parseISO(iso);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const d = parseISO(String(iso).slice(0, 10));
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
 }
+
+/** Timestamps (sync times, audit rows): DD/MM/YYYY HH:MM in the viewer's time zone. */
+export function formatDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Every ISO date (YYYY-MM-DD) inside a text, shown as DD/MM/YYYY. */
+export const formatDatesIn = (s) => String(s ?? '').replace(/\b(\d{4})-(\d{2})-(\d{2})(?:T[\d:.]+Z?)?\b/g, (_, y, m, d) => `${d}/${m}/${y}`);
