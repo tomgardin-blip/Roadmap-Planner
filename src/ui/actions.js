@@ -125,6 +125,8 @@ function dateChips(horizon, current) {
   for (const q of horizon) for (const m of q.months) h += b(m.lastFriday, m.label);
   h += '<span class="sep"></span>';
   for (const q of potQuarters(horizon)) h += b(q.lastFriday, q.shortLabel);
+  // Clear the committed date (Tom, 2026-10-27): writes an empty Success Committed.
+  h += '<span class="sep"></span><button type="button" data-scclear title="Clear Success Committed">Clear</button>';
   return `${h}</div>`;
 }
 
@@ -177,6 +179,11 @@ export async function startFrEdit(ctx) {
   sheet.addEventListener('input', effLine);
   // Month / quarter buttons fill the date with that period's last Friday, as the issue date buttons do.
   sheet.addEventListener('click', (e) => {
+    if (e.target.closest('button[data-scclear]')) {
+      sheet.querySelector('#sSc').value = '';
+      sheet.querySelectorAll('button[data-scdate]').forEach((x) => x.classList.remove('cur'));
+      effLine(); return;
+    }
     const b = e.target.closest('button[data-scdate]');
     if (!b) return;
     sheet.querySelector('#sSc').value = b.dataset.scdate;
