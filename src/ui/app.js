@@ -39,7 +39,7 @@ function initialSort() {
 }
 
 const state = {
-  tab: 'capacity', qpQuarter: null, allFrTeams: false, listSort: initialSort(), pbOverbooked: false, readOnly: false,
+  tab: 'capacity', qpQuarter: null, qpOpen: new Set(), allFrTeams: false, listSort: initialSort(), pbOverbooked: false, readOnly: false,
   audit: null, auditError: null, owners: null, ownersLoading: false, users: new Map(), pushback: null,
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
@@ -138,6 +138,15 @@ function shell() {
   document.getElementById('grid').addEventListener('click', (e) => {
     const qp = e.target.closest('button[data-qp]');
     if (qp) { state.qpQuarter = qp.dataset.qp; draw(); return; }
+    const qx = e.target.closest('button[data-qpx]');
+    if (qx) { const id = qx.dataset.qpx; if (state.qpOpen.has(id)) state.qpOpen.delete(id); else state.qpOpen.add(id); draw(); return; }
+    const sg = e.target.closest('button[data-suggest]');
+    if (sg && state.run) {
+      // Opens the cell drawer for that team, skill and quarter: its push-out / pull-in suggestions.
+      document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
+      state.drawer = { team: sg.dataset.team, skill: sg.dataset.skill, period: sg.dataset.period };
+      state.test = null; renderDrawer(); return;
+    }
     const cell = e.target.closest('td.cell[data-period]');
     if (!cell || !state.run) return;
     document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
@@ -505,7 +514,7 @@ function draw() {
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { list: state.pushback, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, overbookedOnly: state.pbOverbooked, readOnly: state.readOnly, team: state.teamFilter }); return; }
-  if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
+  if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }

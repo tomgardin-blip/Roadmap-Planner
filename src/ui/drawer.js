@@ -191,6 +191,11 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
     ${dateButtons(issue, horizon)}</div>`;
 }
 
+/** Planning actions for one issue (Quarter plan row): its FRs with Edit, then the month and quarter pot buttons. */
+export function planActions(issue, horizon, score) {
+  return `${frBlock(score, issue.committed, issue.id)}${dateButtons(issue, horizon)}`;
+}
+
 export const setDealNames = (m) => { dealNames = m; };
 
 /** Issue card for the list screens (at risk, prep queues): same tags, FRs and date buttons as the drawer. */

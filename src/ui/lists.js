@@ -6,7 +6,8 @@ import { formatDate, formatDateTime, formatDatesIn, lateVsCommit } from '../peri
 import { issueTeams, TEAMS, pickedTeams } from '../capacity.js';
 import { ISSUE_PRIORITIES } from '../notion/writes.js';
 import { GROUPS } from '../prep.js';
-import { listCard, frCard } from './drawer.js';
+import { listCard, frCard, planActions } from './drawer.js';
+import { teamCard } from './grid.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -129,8 +130,9 @@ export function renderHistory(el, { audit, auditError, weekly, changes, users, s
  * (its end date falls in the quarter), with where it is planned, its committed date and its Priority,
  * which can be set right here. Sorted month pots, quarter pot, dated work; then committed date (none last).
  */
-export function renderQuarterPlan(el, { run, horizon, quarterKey, team = 'all', readOnly }) {
+export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = 'all', readOnly, scores = null, open = new Set() }) {
   const q = horizon.find((x) => x.key === quarterKey) || horizon[0];
+  const qi = horizon.indexOf(q);
   const qOf = (d) => { const [y, m] = String(d).split('-').map(Number); return `${y}-Q${Math.floor((m - 1) / 3) + 1}`; };
   const closed = new Set(['Done', "Won't do", 'Duplicate']);
   const inQ = (i) => i.end && qOf(i.end) === `${q.year}-Q${q.q}` && !closed.has(i.status) && !i.isParent && !(i.type || '').includes('Holiday');
@@ -163,10 +165,23 @@ export function renderQuarterPlan(el, { run, horizon, quarterKey, team = 'all', 
       const opts = [pr && !ISSUE_PRIORITIES.includes(pr) ? pr : null, ...ISSUE_PRIORITIES].filter(Boolean);
       const sel = readOnly ? esc(pr || '–') : `<select class="qpprio" data-qpissue="${i.id}" aria-label="Priority of ${esc(i.name)}">${pr ? '' : '<option value="" selected>–</option>'}${opts.map((o) => `<option ${o === pr ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
       const name = i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a>` : esc(i.name);
-      return `<tr><td>${name}</td><td class="num">${planned(i)}</td><td class="num ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td></tr>`;
+      const isOpen = open.has(i.id);
+      const plan = `<button type="button" class="qpx ${isOpen ? 'on' : ''}" data-qpx="${i.id}" aria-expanded="${isOpen}" title="Move it, edit its FRs (commit, priority, comment)">${isOpen ? 'Close' : 'Plan'}</button>`;
+      const row = `<tr class="${isOpen ? 'qpopen' : ''}"><td>${name}</td><td class="num">${planned(i)}</td><td class="num ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td><td class="qpacts">${plan}</td></tr>`;
+      return isOpen ? `${row}<tr class="qpact"><td colspan="5">${planActions(i, horizon, scores?.get(i.id))}</td></tr>` : row;
     }).join('');
     h += `<h3 class="lgroup">${esc(tm)} <span class="cnt">${list.length}</span></h3>`;
-    h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
+    // The team's capacity for this quarter, recalculated after every move (Tom, 2026-10-27), and per skill
+    // a button to the suggestions (what to push out when over, what to pull in when there is room).
+    const card = grid && qi >= 0 ? teamCard(grid, tm, q, qi) : '';
+    if (card) {
+      const sugg = grid.rows.filter((r) => r.team === tm && (r.quarters[qi].capacity || r.quarters[qi].planned)).map((r) => {
+        const c = r.quarters[qi]; const d = Math.round((c.planned - c.capacity) * 10) / 10;
+        return `<button type="button" class="chip ${d > 0 ? 'over' : ''}" data-suggest="1" data-team="${esc(tm)}" data-skill="${r.skill}" data-period="${q.key}">${r.skill} ${d > 0 ? `${d.toFixed(1)} d over: what to move out` : `${(-d).toFixed(1)} d free: what to pull in`}</button>`;
+      }).join('');
+      h += `<div class="qpcap">${card}<div class="chips qpsugg">${sugg}</div></div>`;
+    }
+    h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

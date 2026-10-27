@@ -36,6 +36,12 @@ function card(team, rows, q, qi) {
   return `${h}</tbody></table></section>`;
 }
 
+/** One team's card for one quarter (Quarter plan, Tom 2026-10-27), or '' when the team has no capacity or demand. */
+export function teamCard(grid, team, q, qi) {
+  const rows = grid.rows.filter((r) => r.team === team && r.quarters.some((x) => x.capacity || x.planned));
+  return rows.length ? card(team, rows, q, qi) : '';
+}
+
 export function renderGrid(el, grid, horizon, { teamFilter = 'all' } = {}) {
   const teams = pickedTeams(teamFilter) || TEAMS;
   let h = '<div class="cards">';
