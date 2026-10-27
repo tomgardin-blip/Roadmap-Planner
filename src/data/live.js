@@ -5,7 +5,7 @@
 
 import { CAPACITY_DS, feedQueryInput, parseFeed } from './capacityFeed.js';
 import { parseComments } from '../notion/comments.js';
-import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap } from './notion.js';
+import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
@@ -192,7 +192,7 @@ export async function loadLive(mcp) {
   try {
     status.golive = goliveMap(rows);
     status.frOverlay = await loadFrOverlay(mcp, status.syncedAt || '1970-01-01T00:00:00Z');
-    rows = applyFrOverlay(rows, status.frOverlay, status.golive);
+    rows = recommitIssues(rows, applyFrOverlay(rows, status.frOverlay, status.golive), status.frOverlay);
   } catch { status.frOverlay = null; }
   return { rows, status };
 }
