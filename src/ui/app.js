@@ -192,7 +192,9 @@ function shell() {
     const fe = e.target.closest('button[data-fr-edit]');
     if (fe && !fe.disabled) {
       const fr = shownFr(fe.dataset.frEdit) || state.pushback?.find((x) => x.fr.id === fe.dataset.frEdit)?.fr;
-      startFrEdit({ mcp: state.mcp, fr, horizon, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r) });
+      const iid = fe.dataset.issue;
+      const issue = iid ? shownIssue(iid) || state.run?.issues.find((i) => i.id === iid) || (state.test?.issue?.id === iid ? state.test.issue : { id: iid }) : null;
+      startFrEdit({ mcp: state.mcp, fr, issue, horizon, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus });
     }
   });
   document.addEventListener('keydown', (e) => {
@@ -278,6 +280,23 @@ async function setPriority(sel) {
     sel.value = prev;
     toast(`Priority not saved: ${explainError(NOTION, err)}`, 'bad');
   } finally { sel.disabled = false; }
+}
+
+/** Patch an engineering issue's new Status into the loaded rows and recompute (Done / Won't do drop it). */
+function afterIssueStatus(issue, status) {
+  const id = String(issue.id).replace(/-/g, '').toLowerCase();
+  let hit = false;
+  const rows = state.rows.map((row) => {
+    const blob = row.serve_engineering_capacity_features;
+    if (blob == null) return row;
+    let changed = false;
+    const feats = parseBlob(blob).map((f) => { if (String(f[0]).replace(/-/g, '').toLowerCase() !== id) return f; hit = changed = true; const g = f.slice(); g[5] = status; return g; });
+    return changed ? { ...row, serve_engineering_capacity_features: JSON.stringify(feats) } : row;
+  });
+  const local = { category: 'EI status changed', field: 'Status', after: status, issueId: id, itemName: issue.name, at: new Date().toISOString() };
+  state.audit = [local, ...(state.audit || [])];
+  if (hit) { show(rows); if (state.extra.scores === 'ok') rescore(); }
+  if (state.test) openTest();
 }
 
 function renderBulkBar() {

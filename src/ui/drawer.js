@@ -79,7 +79,7 @@ const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
  */
 // committed: the issue's (effective) committed date. The FR(s) with that same committed date set it
 // (Tom, 2026-10-27): flagged in the summary and on the row, and listed first.
-function frBlock(s, committed = null) {
+function frBlock(s, committed = null, issueId = null) {
   if (!s) return '';
   if (!s.frs.length) return '<div class="frs none">0 FRs</div>';
   const day = committed ? String(committed).slice(0, 10) : null;
@@ -93,15 +93,16 @@ function frBlock(s, committed = null) {
   const rows = [...s.frs].sort((a, b) => setsCommit(b) - setsCommit(a) || b.points - a.points || String(a.priority).localeCompare(String(b.priority))).map((f) => {
     const cust = dealNames.get(nidOf(f.dealId)) || 'No customer';
     const t = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || 'FR')}</a>` : esc(f.title || 'FR');
-    return frLine({ ...f, setsCommit: setsCommit(f) }, cust, t);
+    return frLine({ ...f, setsCommit: setsCommit(f) }, cust, t, issueId);
   }).join('');
   return `<details class="frs"><summary>${sum}</summary><ul>${rows}</ul></details>`;
 }
 
-function frLine(f, cust, titleHtml) {
+// issueId: the engineering issue the FR is shown under, so the edit sheet can also set its status.
+function frLine(f, cust, titleHtml, issueId = null) {
   shown.frs.set(f.id, f);
   const edit = !readOnly && isAllowed('fr', f.id)
-    ? `<button class="fredit" data-fr-edit="${f.id}">Edit</button>`
+    ? `<button class="fredit" data-fr-edit="${f.id}"${issueId ? ` data-issue="${issueId}"` : ''}>Edit</button>`
     : '';
   const commit = f.setsCommit ? ` <span class="tag commit" title="This FR's committed date is the issue's committed date">Sets the commit · ${formatDate(f.committed)}</span>`
     : f.committed ? ` <span class="muted">commit ${formatDate(f.committed)}</span>` : '';
@@ -117,7 +118,7 @@ export function renderTestPanel(el, { horizon, issue, fr, error }) {
       <div class="meta"><span class="tag">${issue.start || issue.end ? `${formatDate(issue.start)} → ${formatDate(issue.end)}` : 'No dates'}</span></div>
       ${dateButtons(issue, horizon)}</div>
     <h4>Test FR</h4>
-    <div class="issue"><ul class="frlist">${frLine({ ...fr, status: fr.successCommitted ? `Success Committed ${formatDate(fr.successCommitted)}` : 'No Success Committed' }, 'No customer', `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title)}</a>`)}</ul></div>`;
+    <div class="issue"><ul class="frlist">${frLine({ ...fr, status: fr.successCommitted ? `Success Committed ${formatDate(fr.successCommitted)}` : 'No Success Committed' }, 'No customer', `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title)}</a>`, issue.id)}</ul></div>`;
   el.innerHTML = `<div class="dh"><b>Test writes</b><span class="sub">Notion write-back</span><span class="spacer"></span><button class="hx" data-close aria-label="Close">×</button></div><div class="dbody">${body}</div>`;
   el.classList.add('open');
 }
@@ -133,7 +134,7 @@ function suggestion(x, skill, label) {
     `<span class="tag">${whenOf(issue)}</span>`,
     issue.status ? `<span class="tag" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
   ].join('');
-  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed)}</div>`;
+  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed, x.issue?.id)}</div>`;
 }
 
 function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
@@ -186,7 +187,7 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
     ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
   return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
     <div class="meta">${tags}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span></div>
-    ${frBlock(score, issue.committed)}
+    ${frBlock(score, issue.committed, issue.id)}
     ${dateButtons(issue, horizon)}</div>`;
 }
 
@@ -208,7 +209,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
   return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
     <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
     ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
-    ${frBlock(score, issue.committed)}
+    ${frBlock(score, issue.committed, issue.id)}
     ${dateButtons(issue, horizon)}</div>`;
 }
 

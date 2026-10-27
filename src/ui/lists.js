@@ -92,7 +92,7 @@ export function renderPushback(el, { list, loading, owners, names, overbookedOnl
   const row = (c) => {
     const owner = owners?.get(c.fr.id.replace(/-/g, ''));
     const cust = names.get(String(c.fr.dealId || '').replace(/-/g, '').toLowerCase()) || 'No customer';
-    const btns = readOnly ? '' : `<button class="fredit" data-fr-edit="${c.fr.id}">Edit FR</button><button class="fredit" data-dismiss="${c.fr.id}" data-issue="${c.issue.id}">Not a pushback</button>`;
+    const btns = readOnly ? '' : `<button class="fredit" data-fr-edit="${c.fr.id}" data-issue="${c.issue.id}">Edit FR</button><button class="fredit" data-dismiss="${c.fr.id}" data-issue="${c.issue.id}">Not a pushback</button>`;
     return `<div class="issue pb"><div class="t">${link(c.fr.url, c.fr.title || 'FR')} ${btns}</div>
       <div class="meta"><span class="tag">${esc(c.fr.priority || 'No priority')}</span><span class="tag commit">Commit ${fd(c.fr.committed)}</span><b>${esc(cust)}</b>
         <span class="tag ${owner ? '' : 'late'}">${owner ? `COM/AM ${esc(owner)}` : owners ? 'No Responsible Success' : 'COM/AM loading…'}</span></div>

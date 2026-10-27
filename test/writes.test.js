@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as W from '../src/notion/writes.js';
-import { moveIssue, editFr, findOwner, adviseOwner, setIssuePriority } from '../src/data/writer.js';
+import { moveIssue, editFr, findOwner, adviseOwner, setIssuePriority, setIssueStatus } from '../src/data/writer.js';
 
 // Synthetic ids and users only; the two test page ids are the real allowlisted test pages.
 const OTHER = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
@@ -64,7 +64,7 @@ test('audit row: relation, who, and update id', () => {
 });
 
 test('reads Start/End and FR values from a fetch result', () => {
-  assert.deepEqual(W.readIssueDates(fetched({ Name: 'I', 'date:Start:start': '2026-11-27', 'date:End:start': '2026-11-27' })), { name: 'I', start: '2026-11-27', end: '2026-11-27', priority: null });
+  assert.deepEqual(W.readIssueDates(fetched({ Name: 'I', 'date:Start:start': '2026-11-27', 'date:End:start': '2026-11-27' })), { name: 'I', start: '2026-11-27', end: '2026-11-27', priority: null, status: null });
   assert.deepEqual(W.readFr(fetched({ Task: 'F', 'Priority ': 'Medium', 'date:Success Committed:start': '2026-12-18' })), { name: 'F', successCommitted: '2026-12-18', priority: 'Medium', status: null });
   assert.deepEqual(W.readFr(fetched({ Task: 'F' })), { name: 'F', successCommitted: null, priority: null, status: null });
 });
@@ -143,4 +143,17 @@ test('issue priority: only the Priority property, known options only, audited', 
   assert.deepEqual(Object.keys(up.properties), ['Priority']);
   const row = mcp.calls.find((x) => x.tool === 'notion-create-pages').input.pages[0].properties;
   assert.equal(row.Category, 'Issue priority changed');
+});
+
+test('issue status: only the Status property, every Notion option, audited as EI status changed', async () => {
+  assert.deepEqual(W.issueStatusInput(W.TEST_ISSUE, 'To test').properties, { Status: 'To test' });
+  assert.ok(W.EI_STATUSES.includes("Won't do") && W.EI_STATUSES.includes('Backlog') && W.EI_STATUSES.length === 18);
+  assert.throws(() => W.issueStatusInput(W.TEST_ISSUE, 'Status'), /Unknown issue status/);
+  const mcp = fakeMcp();
+  const r = await setIssueStatus(mcp, { issue: { id: W.TEST_ISSUE, name: 'T' }, status: 'Done', reason: 'x' });
+  assert.equal(r.change.after, 'Done');
+  const up = mcp.calls.find((x) => x.tool === 'notion-update-page').input;
+  assert.deepEqual(Object.keys(up.properties), ['Status']);
+  const row = mcp.calls.find((x) => x.tool === 'notion-create-pages').input.pages[0].properties;
+  assert.equal(row.Category, 'EI status changed');
 });

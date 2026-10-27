@@ -176,6 +176,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - FR edit date buttons (Tom, 2026-10-27): under the Committed date field, the same month and quarter buttons as on issue cards (Oct … Jun, Q4 Q1 Q2). A click fills the date with that period's last Friday (the same date an issue move uses); typing a date still works.
 - FR edit sheet, 2026-10-27 (Tom):
   - Labels (Tom, 2026-10-27): the status field in the sheet is "Feature request status" (the FR's own Status in Customer Tasks, never the engineering issue's). On cards, the issue's status shows as "EI: <status>" and each FR line as "FR status: <status>".
+  - Engineering issue status (Tom, 2026-10-27, option 2 "every status"): when the sheet is opened from an issue card (At risk, Prep queues, Pushback, cell drawer, test panel), a field "Engineering issue status" shows the issue's live Status and offers every Notion option (to do: Product scoping TODO, Claude - to review, Product scoping in progress, Product scoping complete, Backlog, Blocked/on hold, Ready to implement; in progress: Support standby, To design/scope this week, Designing/scoping, To implement this week, Implementing, To test; complete: PS - Ready to preplan, Production Ready, Done, Duplicate, Won't do). A change writes only the issue's Status, logs an audit row "EI status changed", is listed in the FR comment ("EI status: Backlog → Won't do"), and is patched into the loaded data at once (Done / Won't do / Duplicate drop the issue from the lists). FRs with no engineering issue have no such field.
   - Priority offers every Notion option, incl. "No longer needed" and "Won't do". Status: keep, or "Won't do" (close the FR); no other status. Audit categories "FR priority changed" / "FR status changed" (field Status added to the audit log).
   - No reason chips any more. One Comment box instead: every Save posts one Notion comment on the FR that tags its Responsible Success, lists what changed, then the comment ("@Owner fyi: Priority: Top 3 → Needed after go-live. <comment>"). Comment only (no field change) is allowed: "@Owner <comment>". No Responsible Success: posted without a tag. The comment is also the audit row's Reason. Issue moves and "Not a pushback" keep their optional reason (audit log only, no ping).
   - The edit shows at once, no refresh: the FR's priority, status and effective committed date (earliest of Success Committed and go-live when "Needed for go-live"; none when Won't do / No longer needed) are patched into the loaded data and the engine reruns, so the issue moves group, drops out of a list or gets its new committed date straight away.
@@ -253,7 +254,7 @@ Notion gotchas:
 **Test issue**
 
 - "Test Tom - ignore": https://app.notion.com/p/qargo/Test-Tom-ignore-3f4e32e8f8c880ef9c6dc3a0c44b1af1 (page ID `3f4e32e8-f8c8-80ef-9c6d-c3a0c44b1af1`), team Application Platform, no customer links, no effort.
-- Write-back was tested on this issue; Tom approved writing to all real issues and FRs on 2026-10-10. Only Start and End are written on issues; never effort, team or status.
+- Write-back was tested on this issue; Tom approved writing to all real issues and FRs on 2026-10-10. Only Start and End are written on issues, plus Priority (Quarter plan) and Status (FR edit sheet) since 2026-10-27; never effort or team.
 
 **Test FR**
 

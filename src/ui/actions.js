@@ -2,8 +2,8 @@
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
 import { formatDate } from '../periods.js';
-import { FR_PRIORITIES, FR_STATUS_CLOSE, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
-import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
+import { moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
@@ -109,14 +109,20 @@ function dateChips(horizon, current) {
   return `${h}</div>`;
 }
 
-/** FR edit: Success Committed and Priority. ctx: { mcp, fr: {id, title, dealId}, golive, onDone } */
+/**
+ * FR edit: Success Committed, Priority, FR status, and the status of the engineering issue it was
+ * opened from (Tom, 2026-10-27: every EI status). ctx: { mcp, fr, issue?, golive, onDone, onIssueStatus }
+ */
 export async function startFrEdit(ctx) {
-  const { mcp, fr, golive, horizon = [], onDone } = ctx;
+  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
   let cur;
-  try { cur = await readFrLive(mcp, fr.id); } catch (err) { closeSheet(); return toast(errText(err), 'bad'); }
+  let ei = null;
+  try {
+    [cur, ei] = await Promise.all([readFrLive(mcp, fr.id), issue && isAllowed('issue', issue.id) ? readIssue(mcp, issue.id) : null]);
+  } catch (err) { closeSheet(); return toast(errText(err), 'bad'); }
   sheet = openSheet(`
     <h3>${esc(cur.name || fr.title)}</h3>
     <label class="sfld">Committed date <span class="muted">(writes Success Committed)</span>
@@ -128,6 +134,9 @@ export async function startFrEdit(ctx) {
     <label class="sfld">Feature request status <span class="muted">(this FR in Customer Tasks, not the engineering issue)</span>
       <select id="sSt">${cur.status === FR_STATUS_CLOSE ? `<option selected>${esc(FR_STATUS_CLOSE)}</option>`
         : `<option value="" selected>Keep current: ${esc(cur.status || 'none')}</option><option value="${esc(FR_STATUS_CLOSE)}">${esc(FR_STATUS_CLOSE)} (close the FR)</option>`}</select></label>
+    ${ei ? `<label class="sfld">Engineering issue status <span class="muted">(${esc(ei.name || issue.name || 'the issue')} in Bugs &amp; Features)</span>
+      <select id="sEi">${[ei.status && !EI_STATUSES.includes(ei.status) ? ei.status : null, ...EI_STATUSES].filter(Boolean)
+        .map((st) => `<option ${st === ei.status ? 'selected' : ''}>${esc(st)}</option>`).join('')}</select></label>` : ''}
     <div class="srow muted" id="sEff"></div>
     <label class="sfld">Comment <span class="muted" id="sOwner">(posted on the FR in Notion; looking up the Responsible Success…)</span>
       <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. What changed and why, or just a note to the owner"></textarea></label>
@@ -162,21 +171,33 @@ export async function startFrEdit(ctx) {
     try {
       const st = sheet.querySelector('#sSt').value;
       const r = await editFr(mcp, { fr, successCommitted: sheet.querySelector('#sSc').value || null, priority: sheet.querySelector('#sPr').value, status: st && st !== cur.status ? st : undefined, reason: comment });
-      if (!r.changes.length && !comment) { closeSheet(); return toast('Nothing changed.'); }
       if (r.changes.length) onDone?.(r);
-      const done = () => onDone?.({ ...r, commented: true, comment });
+      const eiSel = sheet.querySelector('#sEi');
+      let eiChange = null;
+      if (eiSel && eiSel.value !== ei.status) {
+        try {
+          eiChange = (await setIssueStatus(mcp, { issue: { ...issue, name: ei.name || issue.name }, status: eiSel.value, reason: comment, updateId: r.updateId })).change;
+        } catch (err) {
+          closeSheet();
+          return toast(`${r.changes.length ? 'FR saved, but the' : 'The'} engineering issue status was not saved: ${errText(err)}`, 'bad');
+        }
+        if (eiChange) onIssueStatus?.(issue, eiChange.after);
+      }
+      const all = eiChange ? [...r.changes, eiChange] : r.changes;
+      if (!all.length && !comment) { closeSheet(); return toast('Nothing changed.'); }
+      const done = () => onDone?.({ ...r, changes: all, commented: true, comment });
       busy(e.target, true, 'Posting comment…');
       await ownerP;
-      const shown = r.changes.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
+      const shown = all.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
       try {
         await adviseOwner(mcp, { fr: { ...fr, title: r.name || cur.name || fr.title }, owner, changes: shown, comment, updateId: r.updateId });
       } catch (err) {
         closeSheet();
-        return toast(`${r.changes.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, 'bad');
+        return toast(`${all.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, 'bad');
       }
       done();
       closeSheet();
-      toast(`${r.changes.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`);
+      toast(`${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`);
     } catch (err) {
       busy(e.target, false, 'Save');
       toast(errText(err), 'bad');
@@ -188,7 +209,7 @@ export async function startFrEdit(ctx) {
 export async function loadTestPages(mcp) {
   const [issue, fr] = await Promise.all([readIssue(mcp, TEST_ISSUE), readFrLive(mcp, TEST_FR)]);
   return {
-    issue: { id: TEST_ISSUE, name: issue.name || 'Test Tom - ignore', url: `https://app.notion.com/p/${TEST_ISSUE}`, start: issue.start, end: issue.end, committed: null, skillEfforts: {}, status: '' },
+    issue: { id: TEST_ISSUE, name: issue.name || 'Test Tom - ignore', url: `https://app.notion.com/p/${TEST_ISSUE}`, start: issue.start, end: issue.end, committed: null, skillEfforts: {}, status: issue.status || '' },
     fr: { id: TEST_FR, title: fr.name || 'Test Tom - ignore FR', url: `https://app.notion.com/p/${TEST_FR}`, priority: fr.priority, successCommitted: fr.successCommitted, dealId: null },
   };
 }

@@ -5,7 +5,7 @@
 
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
-  TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, frUpdateInput, ownerCommentInput, ownerCommentMarkdown,
+  TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentMarkdown,
   auditRowInput, readIssueDates, readFr, moveWarnings,
 } from '../notion/writes.js';
 
@@ -65,6 +65,19 @@ export async function setIssuePriority(mcp, { issue, priority }) {
     issueId: issue.id, itemName: issue.name || before.name, updateId: updateId(),
   });
   return { before, changed: true };
+}
+
+/** Set an engineering issue's Status (FR edit sheet), then audit it. Returns the change for the comment. */
+export async function setIssueStatus(mcp, { issue, status, reason, updateId: uid }) {
+  assertAllowed('issue', issue.id);
+  const before = await readIssue(mcp, issue.id);
+  if (before.status === status) return { before, change: null };
+  await call(mcp, NOTION, 'notion-update-page', issueStatusInput(issue.id, status));
+  await audit(mcp, {
+    category: 'EI status changed', field: 'Status', before: before.status || '', after: status,
+    reason, issueId: issue.id, itemName: issue.name || before.name, updateId: uid || updateId(),
+  });
+  return { before, change: { field: 'EI Status', category: 'EI status changed', label: 'EI status', before: before.status, after: status } };
 }
 
 /** Change an FR's Success Committed and/or Priority. Returns the changes for the owner ping. */

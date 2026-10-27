@@ -44,6 +44,17 @@ export function issuePriorityInput(issueId, priority) {
   return { page_id: dashed(issueId), command: 'update_properties', properties: { Priority: priority } };
 }
 
+// Engineering issue Status (Bugs & Features), every option, set from the FR edit sheet (Tom, 2026-10-27).
+// Notion order: to do, in progress, complete.
+export const EI_STATUSES = ['Product scoping TODO', 'Claude - to review', 'Product scoping in progress', 'Product scoping complete', 'Backlog', 'Blocked/on hold', 'Ready to implement',
+  'Support standby', 'To design/scope this week', 'Designing/scoping', 'To implement this week', 'Implementing', 'To test',
+  'PS - Ready to preplan', 'Production Ready', 'Done', 'Duplicate', "Won't do"];
+export function issueStatusInput(issueId, status) {
+  assertAllowed('issue', issueId);
+  if (!EI_STATUSES.includes(status)) throw new Error(`Unknown issue status ${status}`);
+  return { page_id: dashed(issueId), command: 'update_properties', properties: { Status: status } };
+}
+
 /** notion-update-page input for an FR: only Success Committed and Priority are ever sent. */
 export function frUpdateInput(frId, { successCommitted, priority, status } = {}) {
   assertAllowed('fr', frId);
@@ -126,7 +137,7 @@ export function parseFetchedProperties(payload) {
 
 export function readIssueDates(payload) {
   const p = parseFetchedProperties(payload);
-  return { name: p.Name || '', start: p['date:Start:start']?.slice(0, 10) || null, end: p['date:End:start']?.slice(0, 10) || null, priority: p.Priority || null };
+  return { name: p.Name || '', start: p['date:Start:start']?.slice(0, 10) || null, end: p['date:End:start']?.slice(0, 10) || null, priority: p.Priority || null, status: p.Status || null };
 }
 
 export function readFr(payload) {
