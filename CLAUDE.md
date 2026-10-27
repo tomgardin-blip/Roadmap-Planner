@@ -36,6 +36,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Slack: only the "No estimate" issues and "No engineering issue" FRs the viewer ticks, as the viewer, after an editable preview, when they click Post. One post per issue, in the channel (no thread, never grouped); no other tags. Two buttons, both kept (Tom, 2026-10-26 / 2026-10-27):
   - #product-create-ei-skill-trigger (`C0CC87L21GW`): "@claude_code run the product-feature skill on <issue link>" (claude_code = `U0BKLA7U9EW`).
   - #dev_effort_estimate (`C0C1CPJKZKK`, the old flow): "@Qai estimate <issue link>" (Qai = `U0C0Y7E5SQ4`).
+- Slack post to #roadmap_product (`C0A32B4JQS1`) from any issue card or Quarter plan row (Tom, 2026-10-27): one post per click, as the viewer, in the channel (no thread), after the viewer writes the message and sees the preview. Starts with a tag of the team's responsible (Order + Invoice: Sam Persoon `U01MKAWUTV4`; Transport Planning: Sam Buysse `U02SD5QCSSH`; Trip Execution: Jone Hoong `U041Z01AKFC`; Application Platform: Wim Onderbeke `U0421DD1LLC`; no team: no tag), then the viewer's text, and always ends with the engineering issue link, the planned start and end (a pot: the pot date only, e.g. "29/01/2027 (Jan pot)"), and the committed date.
 - Slack DM to Qai (`U0C0Y7E5SQ4`) from At risk → "No team" (Tom, 2026-10-27): only the issues the viewer ticks, as the viewer, after an editable preview, one DM per issue: "Please set the missing Team on this engineering issue (decide-issue-team skill): <issue link>".
 
 ## Working style

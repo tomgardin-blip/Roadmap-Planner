@@ -179,8 +179,11 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
 
 /** Planning actions for one issue (Quarter plan row): its FRs with Edit, then the month and quarter pot buttons. */
 export function planActions(issue, horizon, score) {
-  return `${frBlock(score, issue.committed, issue.id)}${dateButtons(issue, horizon)}`;
+  return `${frBlock(score, issue.committed, issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue)}`;
 }
+
+// Post in #roadmap_product about this issue (Tom, 2026-10-27).
+const roadmapBtn = (issue) => (readOnly || !issue.id ? '' : `<div class="cardacts"><button type="button" class="fredit rmpost" data-rmpost="${issue.id}" title="Post in #roadmap_product: your message, tagging the team's responsible, ending with the link, planned dates and committed date">Post in #roadmap_product</button></div>`);
 
 export const setDealNames = (m) => { dealNames = m; };
 // (issueId, day) → html naming what sets an issue's committed date when no listed FR does (Tom, 2026-10-27).
@@ -204,7 +207,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
     <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
     ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
     ${frBlock(score, issue.committed, issue.id)}
-    ${dateButtons(issue, horizon)}</div>`;
+    ${dateButtons(issue, horizon)}${roadmapBtn(issue)}</div>`;
 }
 
 /** FR card for the "no engineering issue" queue. */

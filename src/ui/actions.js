@@ -5,6 +5,7 @@ import { formatDate, potQuarters } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
+import { ROADMAP_CHANNEL, roadmapMessage } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -290,5 +291,37 @@ export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.produ
       }
     }
     closeSheet(); toast(`Posted ${posts.length} issue${posts.length === 1 ? '' : 's'} to ${ch.name}.`);
+  });
+}
+
+/**
+ * Post in #roadmap_product about one engineering issue (Tom, 2026-10-27): the viewer's message, tagged to
+ * the team's responsible, always ending with the issue link, planned start and end, and committed date.
+ * ctx: { mcp, issue, lead: { name, id } | null }
+ */
+export function startRoadmapPost({ mcp, issue, lead }) {
+  if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
+  const sheet = openSheet(`
+    <h3>Post in ${esc(ROADMAP_CHANNEL.name)}</h3>
+    <div class="srow muted">${esc(issue.name)} · posted as you, in the channel${lead ? `, tagging ${esc(lead.name)} (${esc(issue.team || '')})` : ', no team so no tag'}.</div>
+    <label class="sfld">Your message <textarea id="sRm" rows="4" class="smsg" maxlength="2500" placeholder="e.g. This still sits on the Jan pot but is committed for 15/01. Can we plan a week for it?"></textarea></label>
+    <div class="sfld">Always added at the end</div>
+    <div class="squote" id="sRmPrev"></div>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend" disabled>Post</button></div>`);
+  const txt = sheet.querySelector('#sRm');
+  const draw = () => {
+    sheet.querySelector('#sRmPrev').textContent = roadmapMessage(txt.value, issue, lead, { preview: true });
+    sheet.querySelector('#sSend').disabled = !txt.value.trim();
+  };
+  txt.addEventListener('input', draw); draw(); txt.focus();
+  sheet.querySelector('#sSend').addEventListener('click', () => {
+    const message = roadmapMessage(txt.value, issue, lead);
+    closeSheet();
+    inBackground(`post in ${ROADMAP_CHANNEL.name}`, async () => {
+      try { await postSlack(mcp, ROADMAP_CHANNEL.id, message); } catch (err) {
+        throw fail(`Not posted in ${ROADMAP_CHANNEL.name}: ${err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err)}`, err);
+      }
+      return `Posted in ${ROADMAP_CHANNEL.name}${lead ? `, ${lead.name} tagged` : ''}.`;
+    });
   });
 }

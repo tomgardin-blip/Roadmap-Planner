@@ -6,7 +6,7 @@
 // All three run through the same capacity engine.
 
 import { horizon as buildHorizon, formatDate, formatDateTime, potQuarters } from '../periods.js';
-import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams } from '../capacity.js';
+import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams, issueTeams } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
@@ -23,7 +23,8 @@ import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost } from './actions.js';
+import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost, startRoadmapPost } from './actions.js';
+import { TEAM_LEADS } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -189,6 +190,15 @@ function shell() {
     if (dm) {
       const c = state.pushback?.find((x) => x.fr.id === dm.dataset.dismiss);
       if (c) startDismiss({ mcp: state.mcp, fr: c.fr, issue: c.issue, onDone: ({ reason }) => { state.audit = [{ category: 'Pushback override', frId: c.fr.id.replace(/-/g, '').toLowerCase(), itemName: c.fr.title, reason, at: new Date().toISOString(), field: 'Pushback' }, ...(state.audit || [])]; recompute(); draw(); } });
+      return;
+    }
+    const rp = e.target.closest('button[data-rmpost]');
+    if (rp) {
+      const issue = shownIssue(rp.dataset.rmpost) || state.run?.issues.find((i) => i.id === rp.dataset.rmpost);
+      if (!issue) return;
+      // The team's responsible: by the issue's Team property, else the team its assignees route it to.
+      const team = TEAMS.find((t) => t.toLowerCase() === String(issue.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, issue)].find((t) => TEAM_LEADS[t]) : null);
+      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team }, lead: TEAM_LEADS[team] || null });
       return;
     }
     const qt = e.target.closest('button[data-qaiteam]');
