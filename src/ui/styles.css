@@ -344,3 +344,85 @@ input.bsel { width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px;
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; vertical-align: middle; }
 .seg button { border: 0; border-radius: 0; padding: 5px 10px; background: transparent; }
 .seg button.on { background: var(--navy); color: #fff; font-weight: 700; }
+
+/* ---------- Go Live Schedule V177 components (Tom, 2026-10-27: look & feel only) ----------
+   Liam's newer layer on the same palette: navy-headed windows that pop in, small uppercase field
+   labels, 30px toolbar controls, the primary view select outlined in green, square icon buttons,
+   top-bar buttons like his mode switch, green focus rings, bottom-right toast. */
+:root { --faint: #9a9a92; --field-line: #dcdcda; }
+:root[data-theme="dark"] { --faint: #7d888a; --field-line: var(--line); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --faint: #7d888a; --field-line: var(--line); } }
+
+:where(button, input, select, textarea, a, summary, [tabindex]):focus-visible { outline: 2px solid var(--green-dark); outline-offset: 2px; }
+input[type=text], input[type=search], input[type=date], textarea {
+  font: inherit; font-size: 12px; padding: 5px 8px; border: 1px solid var(--field-line); border-radius: 8px; background: var(--card); color: var(--ink);
+}
+:is(input, textarea, select):focus { outline: none; border-color: var(--green-dark); box-shadow: 0 0 0 2px rgba(0,194,102,.18); }
+select, button { border-color: var(--field-line); }
+button.primary { background: var(--green-dark); border-color: var(--green-dark); color: #fff; font-weight: 600; }
+@media (hover: hover) { button.primary:hover:not(:disabled) { background: #00a856; border-color: #00a856; } }
+
+/* Toolbar: 30px controls, the team select reads as the view picker, Theme as a square icon button. */
+.toolbar select { height: 30px; }
+.toolbar label.fld select { font-weight: 600; border-color: var(--green-dark); }
+#themeBtn { width: 34px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+#themeBtn .tlabel { display: none; } #themeBtn .ticon { display: inline; width: 15px; height: 15px; }
+
+/* Top bar buttons, like the Live / Simulation switch. */
+.topbar .testbtn { padding: 4px 11px; font-size: 11px; font-weight: 600; letter-spacing: .01em; color: rgba(255,255,255,.78); border: 1px solid rgba(255,255,255,.24); }
+@media (hover: hover) { .topbar .testbtn:hover:not(:disabled) { background: rgba(255,255,255,.1); color: #fff; } }
+.pill.ro, .pill.fake { border-radius: 8px; font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.pill.ro { background: rgba(255,255,255,.14); color: rgba(255,255,255,.78); }
+
+/* Tabs: the active one in ink with the green rule, counts as small grey badges. */
+.tabs { background: var(--paper); }
+.tabs .cnt { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--grey); font-size: 10.5px; font-weight: 600; text-align: center; }
+.tabs button.on .cnt { background: rgba(0,194,102,.14); color: var(--ok-ink); }
+
+/* Section labels: small caps, faint, as Liam's group bands and window field labels. */
+.lgroup { margin: 22px 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em; color: var(--faint); }
+.lsubhead { font-size: 9.5px; letter-spacing: .07em; color: var(--faint); }
+.drawer h4 { color: var(--faint); letter-spacing: .07em; font-size: 9.5px; }
+.teamblock h3 { font-size: 13px; letter-spacing: -.01em; }
+
+/* Cards and sections: hairline border, soft lift, 10px corners. */
+.lsec, .qcard { box-shadow: 0 1px 2px rgba(0,30,35,.04); }
+.issue, .sugg { border-radius: 9px; }
+.lsec > summary { padding: 11px 14px; }
+.lsec .cnt, .lgroup .cnt, .lsubhead .cnt { font-size: 11px; }
+.datebtns button { padding: 3px 10px; border-radius: 8px; }
+.frs summary { border-radius: 8px; background: var(--card); }
+.fredit { border-radius: 8px; padding: 2px 10px; }
+
+/* Windows (every sheet): navy title bar, pop-in, scrim fade. Phones keep the plain bottom sheet. */
+@keyframes rpScrimIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rpModalIn { from { opacity: 0; transform: translateX(-50%) scale(.95) translateY(6px); } to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); } }
+@keyframes rpSheetUp { from { transform: translateX(-50%) translateY(24px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
+#rp-sheet .sheet-bg { background: rgba(20,20,20,.34); animation: rpScrimIn .14s ease-out; }
+#rp-sheet .sheet { animation: rpSheetUp .18s ease-out; }
+.sfld { font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); margin-top: 14px; }
+.sfld .muted { text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 400; color: var(--muted); }
+.sfld input, .sfld select { min-height: 32px; padding: 5px 8px; font-size: 13px; border-color: var(--field-line); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); }
+.sfld select { padding-right: 28px; }
+.sfld .smsg { font: 13px/1.45 inherit; font-family: inherit; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); margin-top: 4px; }
+.smsg { border-color: var(--field-line); }
+.sact { margin: 18px -16px -20px; padding: 11px 16px; border-top: 1px solid var(--line); background: var(--card); position: sticky; bottom: -20px; }
+@media (min-width: 701px) {
+  #rp-sheet .sheet { width: min(480px, 94vw); max-height: 82vh; top: 10vh; border-radius: 10px; padding: 0 16px 20px; box-shadow: 0 12px 40px rgba(0,0,0,.28); animation: rpModalIn .16s ease-out; }
+  #rp-sheet .sheet > h3:first-child { position: sticky; top: 0; z-index: 2; margin: 0 -16px 4px; padding: 13px 16px; font-size: 14px; font-weight: 600; background: var(--navy); color: #fff; border-radius: 10px 10px 0 0; }
+  #rp-sheet .sheet > .srow:nth-child(2) { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #rp-sheet .sheet, #rp-sheet .sheet-bg { animation: none; } }
+
+/* Toast: bottom right on desktop, as Liam's. */
+@media (min-width: 701px) {
+  .toast { left: auto; top: auto; right: 18px; bottom: 18px; max-width: 380px; font-size: 12px; padding: 11px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.26); transform: translateY(8px); transition: opacity .16s ease, transform .16s ease; }
+  .toast.show { transform: translateY(0); }
+}
+.toast.bad { background: var(--red); }
+
+/* Drawer: summary stats as quiet tiles, body on the app background so cards lift off it. */
+.drawer .dsum { background: var(--paper); }
+.drawer .dsum .stat { border-radius: 9px; }
+.drawer .dbody { background: var(--app); }
+@media (max-width: 700px) { .toolbar select { height: 36px; } #themeBtn { width: 40px; height: 36px; } }

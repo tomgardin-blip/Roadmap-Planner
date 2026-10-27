@@ -288,7 +288,7 @@ Read the model from Lightdash, overlay live Notion, write to Notion, log every w
 
 **Build path**
 
-1. **No separate design step.** Copy colours, typography and components from Liam's Go Live Schedule (skill `success:go-live-schedule-artifact`), not its single-file structure. Start with a static grid on fake data and iterate on layout before wiring data.
+1. **No separate design step.** Copy colours, typography and components from Liam's Go Live Schedule (skill `success:go-live-schedule-artifact`), not its single-file structure. Start with a static grid on fake data and iterate on layout before wiring data. Refreshed to the Go Live Schedule V177 components on 2026-10-27 (Tom: "look & feel only", source: Liam's Drive folder, latest go-live-schedule-V177.html): navy-headed windows that pop in, small uppercase field labels, 30px toolbar controls with the team select outlined in green, square Theme icon button, top-bar buttons like Liam's mode switch, tab counts as badges, faint small-caps section labels, green focus rings, toast bottom right on desktop. Behaviour unchanged.
 2. **Claude Code:** source in a GitHub repo, scoring and capacity logic split into testable functions with tests against real data. Bundled into one HTML file only at publish time.
 3. **Publish from Claude Code** as a claude.ai artifact with the `mcp` capability for Notion and Lightdash. Confirmed working on 2026-10-09 with a read-only test.
 4. **Skill per release:** a planner skill (like `go-live-schedule-artifact`) that installs, updates and republishes, with a changelog.
