@@ -13,7 +13,7 @@ Oct 9, 2026 · Tom Gardin
 
 The tool keeps every quarter full and on capacity per team and per skill, protects committed dates, and makes every planning decision visible.
 
-- **Teams in scope:** Transport Planning, Order + Invoice, Trip Execution, Application Platform. All other teams (connectors, Integration Hub, PS, SRE, AI, BI) are out.
+- **Teams in scope:** Order + Invoice, Transport Planning, Trip Execution, Application Platform, shown in that order everywhere (Tom, 2026-10-27). All other teams (connectors, Integration Hub, PS, SRE, AI, BI) are out.
 - **Skills in scope:** frontend, backend, mobile. AI and BI effort is ignored in the puzzle.
 - **Horizon:** current quarter and next quarter kept tight; the quarter after is the pot.
 - **End state:** the tool suggests and eventually optimises the plan, e.g. "move these 2 non-committed issues to Q2 and these 3 higher-demand issues fit in Q1".

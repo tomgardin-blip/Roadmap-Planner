@@ -7,7 +7,8 @@
 
 import * as Engine from '../vendor/capacity-engine.js';
 
-export const TEAMS = ['Transport Planning', 'Order + Invoice', 'Trip Execution', 'Application Platform'];
+// Display order (Tom, 2026-10-27): O+I, Transport Planning, Trip Execution, Application Platform.
+export const TEAMS = ['Order + Invoice', 'Transport Planning', 'Trip Execution', 'Application Platform'];
 export const SKILLS = ['FE', 'BE', 'MOB'];
 const ENGINE_SKILL = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
 
