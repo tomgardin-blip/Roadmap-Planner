@@ -96,7 +96,7 @@ function frLine(f, cust, titleHtml) {
   const edit = !readOnly && isAllowed('fr', f.id)
     ? `<button class="fredit" data-fr-edit="${f.id}">Edit</button>`
     : '';
-  return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.status ? ` · ${esc(f.status)}` : ''}</div></li>`;
+  return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
 }
 
 /** Drawer for the test pages: the write path end to end, on "Test Tom - ignore" and its FR. */
@@ -122,7 +122,7 @@ function suggestion(x, skill, label) {
     x.late ? `<span class="tag late">After commit ${formatDate(issue.committed)}</span>` : issue.committed ? `<span class="tag commit">Commit ${formatDate(issue.committed)}</span>` : '',
     scoreTag(x.score),
     `<span class="tag">${whenOf(issue)}</span>`,
-    issue.status ? `<span class="tag">${esc(issue.status)}</span>` : '',
+    issue.status ? `<span class="tag" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
   ].join('');
   return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score)}</div>`;
 }
@@ -170,7 +170,7 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
     `<span class="tag ${pot ? 'qtr' : ''}">${when}</span>`,
     scoreTag(score),
     issue.priority ? `<span class="tag">${esc(issue.priority)}</span>` : '',
-    issue.status === 'Blocked' ? '<span class="tag blocked">Blocked</span>' : '',
+    issue.status ? `<span class="tag ${/^Blocked/.test(issue.status) ? 'blocked' : ''}" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
     change ? `<span class="tag live" title="${esc(change.fields.map((k) => `${FIELD_LABEL[k]}: ${showVal(k, change.before[k])} → ${showVal(k, change.after[k])}`).join('\n'))}">Live from Notion: ${esc(change.fields.map((k) => FIELD_LABEL[k]).join(', '))} changed</span>` : '',
   ].join('');
   const title = issue.url && !issue.url.includes('example.invalid')
@@ -192,7 +192,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
     `<span class="tag">${whenOf(issue)}</span>`,
     scoreTag(score),
     issue.team ? `<span class="tag">${esc(issue.team)}</span>` : '',
-    issue.status ? `<span class="tag ${issue.status === 'Blocked/on hold' ? 'blocked' : ''}">${esc(issue.status)}</span>` : '',
+    issue.status ? `<span class="tag ${issue.status === 'Blocked/on hold' ? 'blocked' : ''}" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
     extraTags,
   ].join('');
   const title = issue.url ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
@@ -207,8 +207,8 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
 export function frCard(fr, comments) {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
-  const status = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team', fr.status].filter(Boolean).join(' · ');
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, status }, cust, title)}</ul>${commentLine(comments)}</div>`;
+  const meta = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team'].filter(Boolean).join(' · ');
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title)}</ul>${commentLine(comments)}</div>`;
 }
 
 // Comments on the FR in Notion: count, and the latest one (who, when, first words).
