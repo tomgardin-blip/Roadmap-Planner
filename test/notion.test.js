@@ -76,3 +76,21 @@ test('applyOverlay addMissing:false only patches, never adds rows', () => {
   assert.equal(r.added.length, 0);
   assert.equal(r.rows.length, 1);
 });
+
+test('FR overlay: live priority, status and recomputed committed date patched onto customer task rows', async () => {
+  const { parseFrOverlay, applyFrOverlay, frOverlayQueryInput } = await import('../src/data/notion.js');
+  const A = '2c4e32e8-f8c8-8088-a6c9-d94280c4fbe3'; const B = 'aaaaaaaabbbbccccddddeeeeeeeeeeee'; const C = 'cccccccccccccccccccccccccccccccc';
+  const ov = parseFrOverlay([
+    { url: 'https://app.notion.com/2c4e32e8f8c88088a6c9d94280c4fbe3', 'Priority ': 'Needed after go-live', Status: 'Not Started', 'date:Success Committed:start': '2027-03-26' },
+    { url: `https://app.notion.com/${B}`, 'Priority ': 'Needed for go-live', Status: 'Not Started', 'date:Success Committed:start': '2027-06-25' },
+    { url: `https://app.notion.com/${C}`, 'Priority ': 'High', Status: "Won't do", 'date:Success Committed:start': '2027-01-29' },
+  ]);
+  const t = (id, deal) => { const x = new Array(10).fill(null); x[0] = id; x[4] = 'Needed for go-live'; x[5] = 'Not Started'; x[6] = deal; x[8] = '2026-11-30'; return x; };
+  const rows = [{ serve_engineering_capacity_customer_tasks: JSON.stringify([t(A, 'd1'), t(B, 'd1'), t(C, 'd1'), t('other', 'd1')]) }];
+  const out = JSON.parse(applyFrOverlay(rows, ov, new Map([['d1', '2027-02-26']]))[0].serve_engineering_capacity_customer_tasks);
+  assert.deepEqual([out[0][4], out[0][8]], ['Needed after go-live', '2027-03-26']); // no go-live rule any more
+  assert.equal(out[1][8], '2027-02-26'); // go-live earlier than Success Committed
+  assert.equal(out[2][8], null); // Won't do: no commit
+  assert.deepEqual(out[3], t('other', 'd1'));
+  assert.match(frOverlayQueryInput('2026-10-27T10:00:00Z').data.query, /"Priority ".*Last edited time/);
+});

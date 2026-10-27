@@ -553,7 +553,7 @@ async function loadAllLiveOnce(mcp) {
   show(rows);
   renderDrawer();
   const background = [
-    loadExtras(mcp, status.overlay, onExtra),
+    loadExtras(mcp, status.overlay, onExtra, { frOverlay: status.frOverlay, golive: status.golive }),
     loadAudit(mcp)
       .then(async (audit) => {
         state.audit = audit; state.auditError = null;

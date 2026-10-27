@@ -5,7 +5,7 @@
 
 import { CAPACITY_DS, feedQueryInput, parseFeed } from './capacityFeed.js';
 import { parseComments } from '../notion/comments.js';
-import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE } from './notion.js';
+import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
@@ -123,9 +123,10 @@ export function loadDealSizes(mcp) {
  * first (scores), then the unplanned features (pull-forward backlog). The Notion overlay is
  * applied to the backlog rows too. onStep(name, payload | {error}) reports each step.
  */
-export async function loadExtras(mcp, overlay, onStep) {
+export async function loadExtras(mcp, overlay, onStep, { frOverlay = null, golive = new Map() } = {}) {
   try {
-    const [deals, tasks, signed, frs] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp), await loadFeatureFrs(mcp)];
+    const [deals, tasks0, signed, frs] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp), await loadFeatureFrs(mcp)];
+    const tasks = applyFrOverlay(tasks0, frOverlay, golive);
     onStep('scores', { deals, tasks, signed, frs });
   } catch (err) {
     onStep('scores', { error: explainError(LIGHTDASH, err) });
@@ -137,6 +138,17 @@ export async function loadExtras(mcp, overlay, onStep) {
   } catch (err) {
     onStep('backlog', { error: explainError(LIGHTDASH, err) });
   }
+}
+
+async function loadFrOverlay(mcp, since) {
+  const all = [];
+  for (let offset = 0; offset < 5000; offset += OVERLAY_PAGE_SIZE) {
+    const page = await call(mcp, NOTION, 'notion-query-data-sources', frOverlayQueryInput(since, offset));
+    const results = page?.results || [];
+    all.push(...results);
+    if (!page?.has_more && results.length < OVERLAY_PAGE_SIZE) break;
+  }
+  return parseFrOverlay(all);
 }
 
 export async function loadOverlay(mcp, since) {
@@ -176,6 +188,12 @@ export async function loadLive(mcp) {
     status.notion = 'error';
     status.notionError = explainError(NOTION, err);
   }
+  // FRs edited since the sync: a failure here only means FRs show Lightdash's values, as before.
+  try {
+    status.golive = goliveMap(rows);
+    status.frOverlay = await loadFrOverlay(mcp, status.syncedAt || '1970-01-01T00:00:00Z');
+    rows = applyFrOverlay(rows, status.frOverlay, status.golive);
+  } catch { status.frOverlay = null; }
   return { rows, status };
 }
 

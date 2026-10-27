@@ -4,6 +4,8 @@
 // Team and Status onto the Lightdash feature rows before the capacity engine runs.
 // Notion values win. Pure functions; the MCP call itself lives in live.js.
 
+import { effectiveCommitted } from '../notion/writes.js';
+
 export const ISSUES_DS = 'collection://18fe3fdb-2a33-4c08-b93c-7fd34931ee01';
 const PAGE = 100; // Notion SQL caps every query at 100 rows
 
@@ -107,4 +109,65 @@ export function applyOverlay(lightdashRows, overlay, { addMissing = true } = {})
     rows.push({ serve_engineering_capacity_features: JSON.stringify(extra), serve_engineering_capacity_engineering_team_allocations: '[]' });
   }
   return { rows, changed, added };
+}
+
+// FR overlay (Tom, 2026-10-27): the same "edited since the Lightdash sync" read for Customer Tasks, so
+// an FR edited in the planner (or in Notion) shows its live priority, status and committed date after
+// a reload too, not Lightdash's stale copy. Patched onto the customer_tasks rows before scoring.
+export const TASKS_DS = 'collection://0d55b141-941e-473a-9240-4983e8790f92';
+const T = { id: 0, priority: 4, status: 5, deal: 6, committed: 8 };
+
+export function frOverlayQueryInput(sinceIso, offset = 0) {
+  return {
+    data: {
+      data_source_urls: [TASKS_DS],
+      query: `SELECT url, "Priority ", "Status", "date:Success Committed:start", "Last edited time" FROM "${TASKS_DS}" WHERE datetime("Last edited time") > datetime(?) ORDER BY "Last edited time" DESC, url DESC LIMIT ${PAGE} OFFSET ${offset}`,
+      params: [sinceIso],
+    },
+  };
+}
+
+/** Notion SQL result rows → Map(FR page id → { priority, status, successCommitted }). */
+export function parseFrOverlay(results) {
+  const out = new Map();
+  for (const r of results || []) {
+    const id = pageIdFromUrl(r.url);
+    if (id) out.set(id, { priority: r['Priority '] || null, status: r.Status || null, successCommitted: day(r['date:Success Committed:start']) });
+  }
+  return out;
+}
+
+/**
+ * Patch the FR overlay onto every customer_tasks column in rows. The committed date is Lightdash's
+ * "Committed" formula recomputed: earliest of Success Committed and, for "Needed for go-live", the
+ * deal's go-live (golive: Map(deal id → date)); none for Won't do / No longer needed. Returns new rows.
+ */
+export function applyFrOverlay(rows, overlay, golive = new Map()) {
+  if (!overlay?.size) return rows;
+  return rows.map((r) => {
+    const blob = r.serve_engineering_capacity_customer_tasks;
+    if (blob == null) return r;
+    let hit = false;
+    const tasks = (typeof blob === 'string' ? JSON.parse(blob || '[]') : blob).map((t) => {
+      const o = overlay.get(nid(t[T.id]));
+      if (!o) return t;
+      hit = true;
+      const g = t.slice();
+      const gone = o.status === "Won't do" || o.priority === "Won't do" || o.priority === 'No longer needed';
+      g[T.priority] = o.priority; g[T.status] = o.status;
+      g[T.committed] = gone ? null : effectiveCommitted({ successCommitted: o.successCommitted, priority: o.priority, golive: golive.get(nid(g[T.deal])) || null });
+      return g;
+    });
+    return hit ? { ...r, serve_engineering_capacity_customer_tasks: JSON.stringify(tasks) } : r;
+  });
+}
+
+/** Deal id → go-live date from the deals column of the loaded rows. */
+export function goliveMap(rows) {
+  const out = new Map();
+  for (const r of rows) {
+    const blob = r.serve_engineering_capacity_deals;
+    for (const d of (typeof blob === 'string' ? JSON.parse(blob || '[]') : blob || [])) if (d[0] && d[5]) out.set(nid(d[0]), String(d[5]).slice(0, 10));
+  }
+  return out;
 }
