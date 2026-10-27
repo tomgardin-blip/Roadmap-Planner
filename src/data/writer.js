@@ -5,7 +5,7 @@
 
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
-  TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentMarkdown,
+  TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentText,
   auditRowInput, readIssueDates, readFr, moveWarnings,
 } from '../notion/writes.js';
 
@@ -124,8 +124,8 @@ export async function findOwner(mcp, frId) {
 }
 
 export function previewComment({ owner, changes, comment }) {
-  const md = ownerCommentMarkdown({ ownerId: owner?.id, changes, comment });
-  return owner ? md.replace(/<mention-user[^>]*\/>/, `@${owner.name}`) : md;
+  const text = ownerCommentText({ changes, comment });
+  return owner ? `@${owner.name} ${text}` : text;
 }
 
 /** Post the comment on the FR (tagging the owner when there is one), then audit it. */

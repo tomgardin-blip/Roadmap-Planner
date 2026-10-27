@@ -95,16 +95,23 @@ export function moveWarnings(issue, end, blockers = []) {
  * "@Owner fyi: Committed: 18 Dec 2026 → 29 Jan 2027. <comment>", or "@Owner <comment>" with no change.
  * No owner: the same text without a tag. Never "(via Roadmap Planner, by …)": posted as the viewer.
  */
-export function ownerCommentMarkdown({ ownerId, changes = [], comment }) {
+export function ownerCommentText({ changes = [], comment }) {
   const what = changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; ');
-  const tag = ownerId ? `<mention-user url="user://${ownerId}"/> ` : '';
-  const text = [what ? `fyi: ${what}.` : '', (comment || '').trim()].filter(Boolean).join(' ');
-  return `${tag}${text}`.trim();
+  return [what ? `fyi: ${what}.` : '', (comment || '').trim()].filter(Boolean).join(' ');
 }
 
-export function ownerCommentInput(frId, args) {
+/**
+ * notion-create-comment input. The tag is a rich_text user mention, not markdown: the connector
+ * changed its markdown mention syntax and the old <mention-user/> tag posted as plain text (Tom,
+ * 2026-10-27). Text goes in chunks of at most 2000 characters (the rich_text limit).
+ */
+export function ownerCommentInput(frId, { ownerId, changes, comment }) {
   assertAllowed('fr', frId);
-  return { page_id: dashed(frId), markdown: ownerCommentMarkdown(args) };
+  const text = ownerCommentText({ changes, comment });
+  const body = ownerId ? ` ${text}` : text;
+  const rich = ownerId ? [{ type: 'mention', mention: { type: 'user', user: { id: ownerId } } }] : [];
+  for (let i = 0; i < body.length; i += 2000) rich.push({ type: 'text', text: { content: body.slice(i, i + 2000) } });
+  return { page_id: dashed(frId), rich_text: rich };
 }
 
 /** notion-create-pages input for one audit row. */
