@@ -191,6 +191,13 @@ function shell() {
       if (c) startDismiss({ mcp: state.mcp, fr: c.fr, issue: c.issue, onDone: ({ reason }) => { state.audit = [{ category: 'Pushback override', frId: c.fr.id.replace(/-/g, '').toLowerCase(), itemName: c.fr.title, reason, at: new Date().toISOString(), field: 'Pushback' }, ...(state.audit || [])]; recompute(); draw(); } });
       return;
     }
+    const qt = e.target.closest('button[data-qaiteam]');
+    if (qt) {
+      // One issue from a prep card: the same DM to Qai as At risk → No team, that issue ticked.
+      const issue = shownIssue(qt.dataset.qaiteam) || state.run?.issues.find((i) => i.id === qt.dataset.qaiteam);
+      if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id] });
+      return;
+    }
     const ep = e.target.closest('button[data-estpost]');
     if (ep) {
       // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.

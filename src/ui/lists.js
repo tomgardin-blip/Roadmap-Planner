@@ -54,6 +54,9 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
 
+// "No team" on a prep card, with a button to DM Qai for that one issue (Tom, 2026-10-27), as on At risk.
+const noTeamTag = (e, readOnly) => (!e.noTeam ? '' : `<span class="tag late">No team</span>${readOnly ? '' : `<button type="button" class="fredit qaiteam" data-qaiteam="${e.issue.id}" title="Send Qai a Slack DM to set the missing Team (preview first)">DM Qai for the team</button>`}`);
+
 export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly, sort = 'value', comments = new Map() }) {
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
@@ -72,8 +75,8 @@ export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, r
     const body = (withC.length ? sub('Has comments: check manually', withC.length) + capped(withC, (e) => frCard(e.fr, cm(e)), `${g.key}-noIssueC`) : '')
       + (withC.length && rest.length ? sub('No comments yet', rest.length) : '') + capped(rest, (e) => frCard(e.fr, cm(e)), `${g.key}-noIssue`);
     h += section(`prep-${g.key}-noIssue`, 'No engineering issue', noIssue.length, withC.length ? `Product to create or link one · ${withC.length} with comments` : 'Product to create or link one', noIssue.length ? body : '<div class="placeholder">None.</div>');
-    h += section(`prep-${g.key}-noEstimate`, 'No estimate', q.noEstimate.length, 'Issue without FE/BE/MOB effort', capped(q.noEstimate, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-noEstimate`));
-    h += section(`prep-${g.key}-notPlanned`, 'Not planned', q.notPlanned.length, q.notPlanned.length ? `${days(q.notPlanned)} d · the to-do list, by committed date` : 'the to-do list', capped(q.notPlanned, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', e.noTeam ? '<span class="tag late">No team</span>' : ''), `${g.key}-notPlanned`), true);
+    h += section(`prep-${g.key}-noEstimate`, 'No estimate', q.noEstimate.length, 'Issue without FE/BE/MOB effort', capped(q.noEstimate, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', noTeamTag(e, readOnly)), `${g.key}-noEstimate`));
+    h += section(`prep-${g.key}-notPlanned`, 'Not planned', q.notPlanned.length, q.notPlanned.length ? `${days(q.notPlanned)} d · the to-do list, by committed date` : 'the to-do list', capped(q.notPlanned, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', noTeamTag(e, readOnly)), `${g.key}-notPlanned`), true);
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

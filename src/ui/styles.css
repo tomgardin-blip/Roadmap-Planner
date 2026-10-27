@@ -483,3 +483,4 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 .toast.busy::before { content: ''; flex: 0 0 auto; width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; animation: rpSpin .8s linear infinite; }
 @keyframes rpSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .toast.busy::before { animation: none; } }
+.fredit.qaiteam { float: none; padding: 1px 8px; font-size: 10.5px; }

@@ -244,13 +244,13 @@ export function startDismiss({ mcp, fr, issue, onDone }) {
  * Pick which "No estimate" issues to post (none ticked by default, Tom 2026-10-10), preview and
  * edit the text, then post to Slack as the viewer. groups: [{ label, entries: [{ issue, frs }] }].
  */
-export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature }) {
+export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature, preselect = [] }) {
   const ch = target.channel;
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
   const list = groups.filter((g) => g.entries.length).map((g) => `
     <div class="pickgrp"><div class="pickhead"><b>${esc(g.label)}</b> <span class="muted">(${g.entries.length})</span>
       <button type="button" class="chip" data-pickall="${esc(g.label)}">All</button><button type="button" class="chip" data-picknone="${esc(g.label)}">None</button></div>
-      ${g.entries.map((e) => `<label class="pickrow" data-grp="${esc(g.label)}"><input type="checkbox" data-pick="${e.issue.id}">
+      ${g.entries.map((e) => `<label class="pickrow" data-grp="${esc(g.label)}"><input type="checkbox" data-pick="${e.issue.id}"${preselect.includes(e.issue.id) ? ' checked' : ''}>
         <span><b>${esc(e.issue.name)}</b><span class="muted"> · ${e.fr ? 'FR, no engineering issue yet' : `${esc(e.issue.team || 'No team')} · ${e.frs.length} FR${e.frs.length === 1 ? '' : 's'}`}${e.issue.committed ? ` · commit ${fd(String(e.issue.committed).slice(0, 10))}` : ''}</span></span></label>`).join('')}
     </div>`).join('');
   const sheet = openSheet(`
@@ -269,6 +269,7 @@ export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.produ
     sheet.querySelector('#sSend').disabled = !picked.size;
   };
   sheet.addEventListener('change', (e) => { if (e.target.matches('input[data-pick]')) rebuild(); });
+  if (preselect.length) rebuild();
   sheet.addEventListener('click', (e) => {
     const all = e.target.closest('[data-pickall]'); const none = e.target.closest('[data-picknone]');
     const grp = (all || none)?.dataset.pickall || (all || none)?.dataset.picknone;
