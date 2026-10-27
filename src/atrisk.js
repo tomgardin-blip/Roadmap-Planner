@@ -1,7 +1,7 @@
 // At-risk rules (SPEC "Features and screens" > 4. At risk). Pure functions over the engine issues.
 // Rules that need data the planner cannot reach yet are listed in UNAVAILABLE, never guessed.
 
-import { formatDate } from './periods.js';
+import { formatDate, lateVsCommit } from './periods.js';
 import { issueTeams, TEAMS } from './capacity.js';
 import { effortGrowth } from './notion/baseline.js';
 
@@ -39,7 +39,7 @@ export function atRisk(run, { team = 'all', baseline = null } = {}) {
   for (const i of open) {
     const planned = i.start || i.end;
     if (inScope(i)) {
-      if (i.committed && i.end && i.end > i.committed) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
+      if (lateVsCommit(i)) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
       if (i.committed && !planned && effortOf(i) > 0) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
       if (i.committed && i.status === 'Blocked/on hold') out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
       // A blocker that ends after this issue starts (pot issues: Start = End).

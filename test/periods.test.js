@@ -34,3 +34,15 @@ test('dates show as DD/MM/YYYY everywhere', () => {
   assert.equal(formatDate(null), '');
   assert.equal(formatDatesIn('2026-11-27 / 2027-01-29'), '27/11/2026 / 29/01/2027');
 });
+
+import { lateVsCommit } from '../src/periods.js';
+test('after commit: month pot in the commit month is covered, a later pot or dated end is late', () => {
+  const pot = (d, c) => lateVsCommit({ start: d, end: d, committed: c });
+  assert.equal(pot('2027-01-29', '2027-01-15'), false); // Jan month pot, commit 15/01: covered
+  assert.equal(pot('2027-03-26', '2027-01-15'), true);  // Q1 pot (last Fri of March), commit 15/01: late
+  assert.equal(pot('2027-03-26', '2027-03-10'), false); // March pot = Q1 pot date, commit in March: covered
+  assert.equal(pot('2027-02-26', '2027-01-30'), true);  // Feb pot, commit end of Jan: late
+  assert.equal(pot('2027-01-29', '2027-02-05'), false); // before the commit
+  assert.equal(lateVsCommit({ start: '2027-01-04', end: '2027-01-20', committed: '2027-01-15' }), true); // dated work ends after
+  assert.equal(lateVsCommit({ start: null, end: null, committed: '2027-01-15' }), false);
+});

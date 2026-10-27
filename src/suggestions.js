@@ -9,6 +9,7 @@
 // - Quick wins: uncommitted quick wins that fit, highest score first.
 // Pure functions; scores = Map(issue id → scoreIssue result) or null while loading.
 
+import { lateVsCommit } from './periods.js';
 import { cellIssues, issueTeams } from './capacity.js';
 import { SCORING_DEFAULTS } from './scoring.js';
 
@@ -67,7 +68,7 @@ export function pullForward({ run, scores, team, skill, quarter, free, backlog =
     if (!later) continue;
     if (!issueTeams(run, issue).has(team)) continue;
     const s = scores?.get(issue.id) || null;
-    const late = !!(issue.committed && issue.end && issue.end > issue.committed);
+    const late = lateVsCommit(issue);
     const x = { issue, days: need, score: s, quickWin: isQuickWin(s, quickWinMaxEffort), late, tier: late ? 1 : issue.committed ? 2 : 3 };
     if (x.tier === 3 && x.quickWin) quickWins.push(x); else main.push(x);
   }

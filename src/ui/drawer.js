@@ -3,7 +3,7 @@
 // push-out / pull-forward / quick-win suggestions (src/suggestions.js).
 
 import { cellIssues } from '../capacity.js';
-import { formatDate } from '../periods.js';
+import { formatDate, lateVsCommit } from '../periods.js';
 import { pushOut, pullForward } from '../suggestions.js';
 import { isAllowed } from '../notion/writes.js';
 
@@ -167,7 +167,7 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
 }
 
 function issueCard({ issue, days }, skill, horizon, change, score) {
-  const late = issue.committed && issue.end && issue.end > issue.committed;
+  const late = lateVsCommit(issue);
   const eff = ['FE', 'BE', 'MOB'].map((s) => {
     const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0;
     return v ? (s === skill ? `<b>${s} ${fmt(v)}</b>` : `${s} ${fmt(v)}`) : null;
@@ -195,7 +195,7 @@ export const setDealNames = (m) => { dealNames = m; };
 /** Issue card for the list screens (at risk, prep queues): same tags, FRs and date buttons as the drawer. */
 export function listCard(issue, horizon, score, detail, extraTags = '') {
   const eff = ['FE', 'BE', 'MOB'].map((s) => { const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0; return v ? `${s} ${fmt(v)}` : null; }).filter(Boolean).join(' · ') || 'No effort';
-  const late = issue.committed && issue.end && issue.end > issue.committed;
+  const late = lateVsCommit(issue);
   const tags = [
     issue.committed ? `<span class="tag ${late ? 'late' : 'commit'}">${late ? 'After commit ' : 'Commit '}${formatDate(issue.committed)}</span>` : '',
     `<span class="tag">${whenOf(issue)}</span>`,
