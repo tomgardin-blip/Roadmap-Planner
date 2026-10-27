@@ -90,10 +90,10 @@ function shell() {
       </div>
       <nav class="tabs">
         <button class="on" data-tab="capacity">Capacity</button>
+        <button data-tab="qplan">Quarter plan</button>
         <button data-tab="prep">Prep queues<span class="cnt" id="cntPrep"></span></button>
         <button data-tab="risk">At risk<span class="cnt" id="cntRisk"></span></button>
         <button data-tab="pushback">Pushback<span class="cnt" id="cntPb"></span></button>
-        <button data-tab="qplan">Quarter plan</button>
         <button data-tab="history">History</button>
       </nav>
       <div class="toolbar">
