@@ -174,6 +174,10 @@ function shell() {
     if (ep) {
       // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.
       const frEntry = (fr) => ({ fr: true, issue: { id: fr.id, name: fr.title || 'FR', url: fr.url, team: null, committed: fr.committed }, frs: [fr] });
+      if (ep.dataset.estpost === 'qaiTeam') {
+        startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam });
+        return;
+      }
       const groups = GROUPS.flatMap((g) => [
         { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
         { label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => state.allFrTeams || e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) },
@@ -413,7 +417,7 @@ function draw() {
   const onGrid = state.tab === 'capacity';
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
-  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort }); return; }
+  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { list: state.pushback, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, overbookedOnly: state.pbOverbooked, readOnly: state.readOnly, team: state.teamFilter }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }

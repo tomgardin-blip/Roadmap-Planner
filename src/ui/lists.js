@@ -35,7 +35,7 @@ function capped(items, render, key) {
   return head + (rest ? `<details class="more" data-more="${key}"><summary>Show all ${items.length}</summary>${rest}</details>` : '');
 }
 
-export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError, sort = 'value' }) {
+export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError, sort = 'value', readOnly = false }) {
   const baselineNote = baselineError ? `Effort baseline unavailable: ${baselineError}` : 'Reading the effort baseline from Notion…';
   const total = RULES.reduce((a, r) => a + (risk[r.key]?.length || 0), 0);
   let h = `<div class="lhead"><b>At risk</b><span class="lsub">${total} flags across ${RULES.length} rules${loading ? ' · scores loading' : ''}. Commit dates are effective commits (earliest of the issue, its FRs and what it blocks).</span>${sortSel(sort)}</div>`;
@@ -43,7 +43,9 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
     const list = risk[r.key] && sortEntries(risk[r.key], scores, sort);
     if (!list) { h += section(`risk-${r.key}`, r.label, '…', baselineNote, `<div class="placeholder">${baselineNote}</div>`); continue; }
     const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10 Oct 2026)' : list.length ? `${days(list)} d` : '';
-    h += section(`risk-${r.key}`, r.label, list.length, sub, capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
+    // No team: ask Qai to set the Team, one DM per ticked issue (Tom, 2026-10-27).
+    const tools = r.key === 'noTeam' && list.length && !readOnly ? `<div class="lhead small"><button class="estbtn" data-estpost="qaiTeam" title="One DM to Qai per ticked issue, asking it to set the Team">${ESTIMATE_TARGETS.qaiTeam.button}</button></div>` : '';
+    h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

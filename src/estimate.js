@@ -13,6 +13,14 @@ export const ESTIMATE_TARGETS = {
     button: 'Post No estimate to #product-create-ei-skill-trigger',
     how: 'each asking @claude_code to run the product-feature skill (writes the estimate and updates the issue)',
   },
+  // "No team" issues (Tom, 2026-10-27): a DM to Qai per issue, asking it to set the Team.
+  qaiTeam: {
+    channel: { id: 'U0C0Y7E5SQ4', name: 'a DM with Qai' },
+    bot: null,
+    line: (url) => `Please set the missing Team on this engineering issue (decide-issue-team skill): ${url}`,
+    button: 'DM Qai to add the team',
+    how: 'each asking Qai to decide and set the Team',
+  },
   qai: {
     channel: { id: 'C0C1CPJKZKK', name: '#dev_effort_estimate' },
     bot: { name: 'Qai', id: 'U0C0Y7E5SQ4' },
@@ -29,6 +37,8 @@ export function estimateLines(entries, target = ESTIMATE_TARGETS.productFeature)
 
 /** Preview text → Slack messages: one per non-empty line, the leading @bot turned into a real mention. */
 export function estimatePosts(text, target = ESTIMATE_TARGETS.productFeature) {
+  const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  if (!target.bot) return lines;
   const at = new RegExp(`^@${target.bot.name}\\b`, 'i');
-  return String(text || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.replace(at, `<@${target.bot.id}>`));
+  return lines.map((l) => l.replace(at, `<@${target.bot.id}>`));
 }

@@ -36,6 +36,7 @@ A claude.ai artifact (published with the `mcp` capability) for planning engineer
 - Slack: only the "No estimate" issues and "No engineering issue" FRs the viewer ticks, as the viewer, after an editable preview, when they click Post. One post per issue, in the channel (no thread, never grouped); no other tags. Two buttons, both kept (Tom, 2026-10-26 / 2026-10-27):
   - #product-create-ei-skill-trigger (`C0CC87L21GW`): "@claude_code run the product-feature skill on <issue link>" (claude_code = `U0BKLA7U9EW`).
   - #dev_effort_estimate (`C0C1CPJKZKK`, the old flow): "@Qai estimate <issue link>" (Qai = `U0C0Y7E5SQ4`).
+- Slack DM to Qai (`U0C0Y7E5SQ4`) from At risk → "No team" (Tom, 2026-10-27): only the issues the viewer ticks, as the viewer, after an editable preview, one DM per issue: "Please set the missing Team on this engineering issue (decide-issue-team skill): <issue link>".
 
 ## Working style
 - Ask Tom when in doubt.

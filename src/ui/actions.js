@@ -222,7 +222,7 @@ export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.produ
         <span><b>${esc(e.issue.name)}</b><span class="muted"> · ${e.fr ? 'FR, no engineering issue yet' : `${esc(e.issue.team || 'No team')} · ${e.frs.length} FR${e.frs.length === 1 ? '' : 's'}`}${e.issue.committed ? ` · commit ${fd(String(e.issue.committed).slice(0, 10))}` : ''}</span></span></label>`).join('')}
     </div>`).join('');
   const sheet = openSheet(`
-    <h3>Post to ${esc(ch.name)}</h3>
+    <h3>${ch.id.startsWith('U') ? 'Send' : 'Post'} to ${esc(ch.name)}</h3>
     <div class="srow muted">Tick the issues (or FRs with no engineering issue yet) to post. One post per issue (one line below = one post), as you, ${esc(target.how)}. Changing the selection rebuilds the text.</div>
     <div class="picklist">${list || '<div class="placeholder">No issues without an estimate.</div>'}</div>
     <div class="srow"><b id="pickCount">0</b> selected</div>
