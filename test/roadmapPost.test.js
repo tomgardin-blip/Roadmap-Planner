@@ -12,4 +12,5 @@ test('roadmap post: Tom\'s text, then link, planned start and end, committed', (
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution']), /^<@U041Z01AKFC> Hi\n\n/);
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution'], { preview: true }), /^@Jone Hoong Hi/);
   assert.match(roadmapMessage('Hi', { name: 'X' }), /^Hi\n\n.*\*\*Committed:\*\* none$/s);
+  assert.match(roadmapMessage('Hi', { name: 'X', url: 'u', committed: '2027-01-04', commitBy: 'set by Tyneside Express' }), /\*\*Committed:\*\* 04\/01\/2027 \(set by Tyneside Express\)$/);
 });

@@ -198,7 +198,7 @@ function shell() {
       if (!issue) return;
       // The team's responsible: by the issue's Team property, else the team its assignees route it to.
       const team = TEAMS.find((t) => t.toLowerCase() === String(issue.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, issue)].find((t) => TEAM_LEADS[t]) : null);
-      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team }, lead: TEAM_LEADS[team] || null });
+      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null });
       return;
     }
     const qt = e.target.closest('button[data-qaiteam]');
@@ -472,6 +472,21 @@ function commitSourceOf(issueId, day) {
   }
   if (String(issue.committedOwn || '').slice(0, 10) === day) return '<span title="The committed date stored on the engineering issue in Lightdash, from an FR that is closed or no longer linked, or set by hand">commit set on the issue itself (no open FR has this date)</span>';
   return null;
+}
+
+/** Plain text for the Slack post (Tom, 2026-10-27): the customer(s) whose FR carries the committed date, or what else sets it. */
+function commitByText(issue) {
+  const day = issue.committed ? String(issue.committed).slice(0, 10) : null;
+  if (!day) return null;
+  const nid = (v) => String(v || '').replace(/-/g, '').toLowerCase();
+  const names = (frs) => [...new Set(frs.filter((f) => f.committed === day).map((f) => String(state.dealNames.get(nid(f.dealId)) || 'No customer').trim()))];
+  const shown = names(state.scores?.get(issue.id)?.frs || []);
+  if (shown.length) return `set by ${shown.join(', ')}`;
+  const byId = new Map([...(state.run?.issues || []), ...(state.backlog || [])].map((i) => [i.id, i]));
+  const blocked = (issue.blocks || []).map((id) => byId.get(id)).find((b) => b && String(b.committed || '').slice(0, 10) === day);
+  if (blocked) return `set by the issue it blocks: ${blocked.name}`;
+  const hidden = names(state.allScores?.get(issue.id)?.frs || []);
+  return hidden.length ? `set by ${hidden.join(', ')}` : null;
 }
 
 function rescore() {

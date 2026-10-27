@@ -32,7 +32,7 @@ export function roadmapFooter(issue) {
   return [
     `• **Engineering issue:** ${link}`,
     `• **Planned:** ${plannedText(issue)}`,
-    `• **Committed:** ${issue.committed ? formatDate(String(issue.committed).slice(0, 10)) : 'none'}`,
+    `• **Committed:** ${issue.committed ? `${formatDate(String(issue.committed).slice(0, 10))}${issue.commitBy ? ` (${issue.commitBy})` : ''}` : 'none'}`,
   ].join('\n');
 }
 
