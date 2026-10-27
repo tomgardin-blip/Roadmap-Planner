@@ -48,7 +48,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     if (seenTask.has(id)) continue;
     seenTask.add(id);
     const g = groupOf(t[4]);
-    if (!g || !isSigned(t[6]) || !isFeature(id, t[3])) continue;
+    if (!g || CLOSED.has(t[5]) || !isSigned(t[6]) || !isFeature(id, t[3])) continue;
     const hasFeature = t[7] && String(t[7]).replace(/[[\]"\s]/g, '').length;
     if (!hasFeature && !linked.has(id)) out[g].noIssue.push({ fr: { id, title: t[2], url: t[1], priority: t[4], status: t[5], dealId: t[6], committed: t[8], assignedTeam: t[9] || null } });
   }

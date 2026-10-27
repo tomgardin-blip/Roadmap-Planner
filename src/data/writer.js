@@ -55,18 +55,20 @@ export async function moveIssue(mcp, { issue, start, end, reason, blockers = [] 
 }
 
 /** Change an FR's Success Committed and/or Priority. Returns the changes for the owner ping. */
-export async function editFr(mcp, { fr, successCommitted, priority, reason }) {
+export async function editFr(mcp, { fr, successCommitted, priority, status, reason }) {
   assertAllowed('fr', fr.id);
   const before = await readFrLive(mcp, fr.id);
   const patch = {};
   if (successCommitted !== undefined && successCommitted !== before.successCommitted) patch.successCommitted = successCommitted;
   if (priority !== undefined && priority !== before.priority) patch.priority = priority;
+  if (status !== undefined && status !== before.status) patch.status = status;
   if (!Object.keys(patch).length) return { before, changes: [] };
   await call(mcp, NOTION, 'notion-update-page', frUpdateInput(fr.id, patch));
   const uid = updateId();
   const changes = [];
   if ('successCommitted' in patch) changes.push({ field: 'Success Committed', category: 'FR committed changed', label: 'Committed', before: before.successCommitted, after: patch.successCommitted });
   if ('priority' in patch) changes.push({ field: 'Priority', category: 'FR priority changed', label: 'Priority', before: before.priority, after: patch.priority });
+  if ('status' in patch) changes.push({ field: 'Status', category: 'FR status changed', label: 'Status', before: before.status, after: patch.status });
   for (const c of changes) {
     await audit(mcp, { category: c.category, field: c.field, before: c.before, after: c.after, reason, frId: fr.id, itemName: fr.title || before.name, updateId: uid });
   }
@@ -95,19 +97,19 @@ export async function findOwner(mcp, frId) {
   return u ? { id: u.id, name: u.name || email, email } : null;
 }
 
-export function previewComment({ owner, changes, reason, by }) {
-  return ownerCommentMarkdown({ ownerId: owner.id, changes, reason, by }).replace(/<mention-user[^>]*\/>/, `@${owner.name}`);
+export function previewComment({ owner, changes, comment }) {
+  const md = ownerCommentMarkdown({ ownerId: owner?.id, changes, comment });
+  return owner ? md.replace(/<mention-user[^>]*\/>/, `@${owner.name}`) : md;
 }
 
-/** Post the comment tagging the owner on the FR, then audit it. */
-export async function adviseOwner(mcp, { fr, owner, changes, reason, updateId: uid }) {
+/** Post the comment on the FR (tagging the owner when there is one), then audit it. */
+export async function adviseOwner(mcp, { fr, owner, changes = [], comment, updateId: uid }) {
   assertAllowed('fr', fr.id);
-  const by = (await whoAmI(mcp)).name;
-  await call(mcp, NOTION, 'notion-create-comment', ownerCommentInput(fr.id, { ownerId: owner.id, changes, reason, by }));
+  await call(mcp, NOTION, 'notion-create-comment', ownerCommentInput(fr.id, { ownerId: owner?.id, changes, comment }));
   await audit(mcp, {
     category: 'Owner advised', field: 'Comment', before: '',
-    after: changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; '),
-    reason, frId: fr.id, itemName: fr.title, ownerId: owner.id, updateId: uid || updateId(),
+    after: [changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; '), comment].filter(Boolean).join(' · '),
+    reason: comment, frId: fr.id, itemName: fr.title, ownerId: owner?.id, updateId: uid || updateId(),
   });
 }
 

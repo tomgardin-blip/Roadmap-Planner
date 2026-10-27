@@ -2,8 +2,8 @@
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
 import { formatDate } from '../periods.js';
-import { FR_PRIORITIES, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
-import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, previewComment, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { FR_PRIORITIES, FR_STATUS_CLOSE, REASONS, effectiveCommitted, moveWarnings, isAllowed, TEST_ISSUE, TEST_FR } from '../notion/writes.js';
+import { moveIssue, editFr, readFrLive, readIssue, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
@@ -125,10 +125,21 @@ export async function startFrEdit(ctx) {
     <label class="sfld">Priority
       <select id="sPr">${[cur.priority && !FR_PRIORITIES.includes(cur.priority) ? cur.priority : null, ...FR_PRIORITIES].filter(Boolean)
         .map((p) => `<option ${p === cur.priority ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+    <label class="sfld">Status
+      <select id="sSt">${cur.status === FR_STATUS_CLOSE ? `<option selected>${esc(FR_STATUS_CLOSE)}</option>`
+        : `<option value="" selected>Keep: ${esc(cur.status || 'none')}</option><option value="${esc(FR_STATUS_CLOSE)}">${esc(FR_STATUS_CLOSE)} (close the FR)</option>`}</select></label>
     <div class="srow muted" id="sEff"></div>
-    ${reasonField()}
+    <label class="sfld">Comment <span class="muted" id="sOwner">(posted on the FR in Notion; looking up the Responsible Success…)</span>
+      <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. What changed and why, or just a note to the owner"></textarea></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save</button></div>`);
-  wireReason(sheet);
+  // Every save posts one comment on the FR that tags its Responsible Success (Tom, 2026-10-27):
+  // the changes, then the comment. No owner: posted without a tag (never a fallback to Sales).
+  let owner; let ownerErr = null;
+  const ownerP = findOwner(mcp, fr.id).then((o) => { owner = o; }, (err) => { owner = null; ownerErr = errText(err); })
+    .then(() => {
+      const el = sheet.querySelector('#sOwner');
+      if (el) el.textContent = owner ? `(posted on the FR in Notion, tags ${owner.name}${fr.id.replace(/-/g, '') === TEST_FR ? ', test FR: you' : ''})` : `(posted on the FR in Notion without a tag: ${ownerErr ? `owner lookup failed, ${ownerErr}` : 'no Responsible Success'})`;
+    });
   const effLine = () => {
     const sc = sheet.querySelector('#sSc').value || null;
     const pr = sheet.querySelector('#sPr').value;
@@ -146,40 +157,26 @@ export async function startFrEdit(ctx) {
   });
   effLine();
   sheet.querySelector('#sSave').addEventListener('click', async (e) => {
-    const reason = sheet.querySelector('#sReason').value.trim();
+    const comment = sheet.querySelector('#sCmt').value.trim();
     busy(e.target, true, 'Saving…');
     try {
-      const r = await editFr(mcp, { fr, successCommitted: sheet.querySelector('#sSc').value || null, priority: sheet.querySelector('#sPr').value, reason });
-      if (!r.changes.length) { closeSheet(); return toast('Nothing changed.'); }
-      onDone?.(r);
-      await promptAdvise({ mcp, fr: { ...fr, title: r.name }, changes: r.changes, reason, updateId: r.updateId });
+      const st = sheet.querySelector('#sSt').value;
+      const r = await editFr(mcp, { fr, successCommitted: sheet.querySelector('#sSc').value || null, priority: sheet.querySelector('#sPr').value, status: st && st !== cur.status ? st : undefined, reason: comment });
+      if (!r.changes.length && !comment) { closeSheet(); return toast('Nothing changed.'); }
+      if (r.changes.length) onDone?.(r);
+      busy(e.target, true, 'Posting comment…');
+      await ownerP;
+      const shown = r.changes.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
+      try {
+        await adviseOwner(mcp, { fr: { ...fr, title: r.name || cur.name || fr.title }, owner, changes: shown, comment, updateId: r.updateId });
+      } catch (err) {
+        closeSheet();
+        return toast(`${r.changes.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, 'bad');
+      }
+      closeSheet();
+      toast(`${r.changes.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`);
     } catch (err) {
       busy(e.target, false, 'Save');
-      toast(errText(err), 'bad');
-    }
-  });
-}
-
-async function promptAdvise({ mcp, fr, changes, reason, updateId }) {
-  const shown = changes.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
-  openSheet(`<h3>Saved in Notion</h3><div class="srow muted">Looking up the FR's Responsible Success…</div>`);
-  let owner = null;
-  try { owner = await findOwner(mcp, fr.id); } catch (err) { closeSheet(); return toast(`Saved and logged. Owner lookup failed: ${errText(err)}`, 'bad'); }
-  if (!owner) { closeSheet(); return toast('Saved and logged. This FR has no Responsible Success, so no ping.'); }
-  const by = (await whoAmI(mcp).catch(() => ({}))).name;
-  const sheet = openSheet(`
-    <h3>Advise ${esc(owner.name)} in Notion?</h3>
-    <div class="srow muted">Saved and logged. This comment goes on the FR and tags ${esc(owner.name)}${fr.id.replace(/-/g, '') === TEST_FR ? ' (test FR: tags you)' : ''}:</div>
-    <div class="squote">${esc(previewComment({ owner, changes: shown, reason, by }))}</div>
-    <div class="sact"><button data-sheet-close>Skip</button><button class="primary" id="sSend">Send</button></div>`);
-  sheet.querySelector('#sSend').addEventListener('click', async (e) => {
-    busy(e.target, true, 'Sending…');
-    try {
-      await adviseOwner(mcp, { fr, owner, changes: shown, reason, updateId });
-      closeSheet();
-      toast(`${owner.name} tagged in Notion. Logged.`);
-    } catch (err) {
-      busy(e.target, false, 'Send');
       toast(errText(err), 'bad');
     }
   });

@@ -10,7 +10,9 @@ export const AUDIT_DS = '9b4b26f2-ea33-4578-89c2-252389cd5564';
 // All issues and FRs are writable since Tom approved it on 2026-10-10 ("unlock all").
 // The guard still refuses anything that is not a Notion page id.
 
-export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'Top 3', 'High', 'Medium', 'Low', 'Needed after go-live'];
+export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'Top 3', 'High', 'Medium', 'Low', 'Needed after go-live', 'No longer needed', "Won't do"];
+// FR Status: the planner may only close an FR as "Won't do" (Tom, 2026-10-27); no other status writes.
+export const FR_STATUS_CLOSE = "Won't do";
 export const GO_LIVE_PRIORITY = 'Needed for go-live';
 export const REASONS = ['Commit moved', 'Estimate grew', 'Capacity', 'Dependency', 'Customer asked'];
 
@@ -34,13 +36,17 @@ export function issueDatesInput(issueId, start, end) {
 }
 
 /** notion-update-page input for an FR: only Success Committed and Priority are ever sent. */
-export function frUpdateInput(frId, { successCommitted, priority } = {}) {
+export function frUpdateInput(frId, { successCommitted, priority, status } = {}) {
   assertAllowed('fr', frId);
   const properties = {};
   if (successCommitted !== undefined) Object.assign(properties, dateProps('Success Committed', successCommitted));
   if (priority !== undefined) {
     if (priority !== null && !FR_PRIORITIES.includes(priority)) throw new Error(`Unknown priority ${priority}`);
     properties['Priority '] = priority;
+  }
+  if (status !== undefined) {
+    if (status !== FR_STATUS_CLOSE) throw new Error(`Status can only be set to ${FR_STATUS_CLOSE}`);
+    properties.Status = status;
   }
   if (!Object.keys(properties).length) throw new Error('Nothing to write');
   return { page_id: dashed(frId), command: 'update_properties', properties };
@@ -64,12 +70,15 @@ export function moveWarnings(issue, end, blockers = []) {
 }
 
 /**
- * Comment text tagging the owner. Reason included when one was entered (Tom 2026-10-10). Never
- * "(via Roadmap Planner, by …)": the comment is posted as the viewer already (Tom 2026-10-27).
+ * Comment on the FR (Tom 2026-10-27): tags the owner, lists what changed, then Tom's comment.
+ * "@Owner fyi: Committed: 18 Dec 2026 → 29 Jan 2027. <comment>", or "@Owner <comment>" with no change.
+ * No owner: the same text without a tag. Never "(via Roadmap Planner, by …)": posted as the viewer.
  */
-export function ownerCommentMarkdown({ ownerId, changes, reason }) {
+export function ownerCommentMarkdown({ ownerId, changes = [], comment }) {
   const what = changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; ');
-  return `<mention-user url="user://${ownerId}"/> fyi: ${what}.${reason ? ` Reason: ${reason}` : ''}`;
+  const tag = ownerId ? `<mention-user url="user://${ownerId}"/> ` : '';
+  const text = [what ? `fyi: ${what}.` : '', (comment || '').trim()].filter(Boolean).join(' ');
+  return `${tag}${text}`.trim();
 }
 
 export function ownerCommentInput(frId, args) {
@@ -112,5 +121,5 @@ export function readIssueDates(payload) {
 
 export function readFr(payload) {
   const p = parseFetchedProperties(payload);
-  return { name: p.Task || '', successCommitted: p['date:Success Committed:start']?.slice(0, 10) || null, priority: p['Priority '] || null };
+  return { name: p.Task || '', successCommitted: p['date:Success Committed:start']?.slice(0, 10) || null, priority: p['Priority '] || null, status: p.Status || null };
 }

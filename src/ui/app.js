@@ -13,6 +13,7 @@ import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/
 import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
 import { userName } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
+import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer, renderTestPanel, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
@@ -260,19 +261,35 @@ function renderBulkBar() {
 }
 
 /** Patch an FR's priority in the loaded task rows and rescore. */
-function afterFrEdit(fr, { changes }) {
-  const pr = changes.find((c) => c.field === 'Priority');
-  if (pr) {
-    const patch = (rows) => rows.map((r) => {
-      const blob = r.serve_engineering_capacity_customer_tasks;
-      if (blob == null) return r;
-      const tasks = parseBlob(blob).map((t) => (String(t[0]).replace(/-/g, '').toLowerCase() === fr.id ? Object.assign(t.slice(), { 4: pr.after }) : t));
-      return { ...r, serve_engineering_capacity_customer_tasks: JSON.stringify(tasks) };
+/**
+ * Patch an FR edit into the loaded rows and recompute at once, so the change shows without a refresh
+ * (Tom, 2026-10-27): priority (moves it between prep groups or out), status (Won't do drops it), and
+ * the FR's effective committed date (earliest of Success Committed and go-live when "Needed for
+ * go-live"), which the engine also carries onto its issues.
+ */
+function afterFrEdit(fr, { changes, before = {} }) {
+  const val = (field, cur) => { const c = changes.find((x) => x.field === field); return c ? c.after : cur; };
+  if (!changes.length) return;
+  const priority = val('Priority', before.priority);
+  const status = val('Status', before.status);
+  const golive = fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null;
+  const committed = effectiveCommitted({ successCommitted: val('Success Committed', before.successCommitted), priority, golive });
+  // Closed or dropped FRs carry no committed date (as Lightdash: NULL for Won't do).
+  const gone = status === "Won't do" || priority === "Won't do" || priority === 'No longer needed';
+  const upd = { 4: priority, 5: status, 8: gone ? null : committed };
+  const patch = (rows) => rows.map((r) => {
+    const blob = r.serve_engineering_capacity_customer_tasks;
+    if (blob == null) return r;
+    let hit = false;
+    const tasks = parseBlob(blob).map((t) => {
+      if (String(t[0]).replace(/-/g, '').toLowerCase() !== fr.id) return t;
+      hit = true; return Object.assign(t.slice(), upd);
     });
-    state.rows = patch(state.rows);
-    state.extra.taskRows = patch(state.extra.taskRows);
-    if (state.extra.scores === 'ok') rescore();
-  }
+    return hit ? { ...r, serve_engineering_capacity_customer_tasks: JSON.stringify(tasks) } : r;
+  });
+  state.extra.taskRows = patch(state.extra.taskRows);
+  show(patch(state.rows)); // reruns the engine: the issue's committed date and TBD placement follow
+  if (state.extra.scores === 'ok') rescore();
   if (state.test) openTest();
 }
 

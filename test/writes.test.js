@@ -26,6 +26,9 @@ test('FR write sends only Success Committed and Priority; unknown priority refus
   assert.deepEqual(Object.keys(i.properties).sort(), ['Priority ', 'date:Success Committed:is_datetime', 'date:Success Committed:start']);
   assert.throws(() => W.frUpdateInput(W.TEST_FR, { priority: 'Urgent' }), /Unknown priority/);
   assert.throws(() => W.frUpdateInput(W.TEST_FR, {}), /Nothing to write/);
+  assert.equal(W.frUpdateInput(W.TEST_FR, { priority: 'No longer needed' }).properties['Priority '], 'No longer needed');
+  assert.equal(W.frUpdateInput(W.TEST_FR, { status: "Won't do" }).properties.Status, "Won't do");
+  assert.throws(() => W.frUpdateInput(W.TEST_FR, { status: 'Done' }), /only be set to Won't do/);
 });
 
 test('effective committed: earliest of Success Committed and go-live when Needed for go-live', () => {
@@ -41,11 +44,13 @@ test('move warnings: after commit and open blocker, never a block', () => {
   assert.deepEqual(W.moveWarnings({}, '2026-12-25'), []);
 });
 
-test('owner comment tags the owner and carries the reason', () => {
-  const m = W.ownerCommentMarkdown({ ownerId: 'u-1', changes: [{ label: 'Priority', before: 'High', after: 'Top 3' }], reason: 'Capacity', by: 'Test User' });
-  assert.match(m, /^<mention-user url="user:\/\/u-1"\/> fyi: Priority: High → Top 3\. Reason: Capacity$/);
-  assert.doesNotMatch(m, /Roadmap Planner|by Test User/);
-  assert.doesNotMatch(W.ownerCommentMarkdown({ ownerId: 'u', changes: [] }), /Reason/);
+test('owner comment: tag, changes, then the comment; comment-only and no-owner variants', () => {
+  const ch = [{ label: 'Priority', before: 'High', after: 'Top 3' }];
+  assert.equal(W.ownerCommentMarkdown({ ownerId: 'u-1', changes: ch, comment: 'Pushed by customer' }), '<mention-user url="user://u-1"/> fyi: Priority: High → Top 3. Pushed by customer');
+  assert.equal(W.ownerCommentMarkdown({ ownerId: 'u-1', changes: ch }), '<mention-user url="user://u-1"/> fyi: Priority: High → Top 3.');
+  assert.equal(W.ownerCommentMarkdown({ ownerId: 'u-1', comment: 'Can you check with the customer?' }), '<mention-user url="user://u-1"/> Can you check with the customer?');
+  assert.equal(W.ownerCommentMarkdown({ changes: ch, comment: 'x' }), 'fyi: Priority: High → Top 3. x');
+  assert.doesNotMatch(W.ownerCommentMarkdown({ ownerId: 'u-1', changes: ch, comment: 'x' }), /Roadmap Planner|Reason/);
 });
 
 test('audit row: relation, who, and update id', () => {
@@ -60,8 +65,8 @@ test('audit row: relation, who, and update id', () => {
 
 test('reads Start/End and FR values from a fetch result', () => {
   assert.deepEqual(W.readIssueDates(fetched({ Name: 'I', 'date:Start:start': '2026-11-27', 'date:End:start': '2026-11-27' })), { name: 'I', start: '2026-11-27', end: '2026-11-27' });
-  assert.deepEqual(W.readFr(fetched({ Task: 'F', 'Priority ': 'Medium', 'date:Success Committed:start': '2026-12-18' })), { name: 'F', successCommitted: '2026-12-18', priority: 'Medium' });
-  assert.deepEqual(W.readFr(fetched({ Task: 'F' })), { name: 'F', successCommitted: null, priority: null });
+  assert.deepEqual(W.readFr(fetched({ Task: 'F', 'Priority ': 'Medium', 'date:Success Committed:start': '2026-12-18' })), { name: 'F', successCommitted: '2026-12-18', priority: 'Medium', status: null });
+  assert.deepEqual(W.readFr(fetched({ Task: 'F' })), { name: 'F', successCommitted: null, priority: null, status: null });
 });
 
 // Fake mcp that records calls and answers like the real servers did on 2026-10-10.
@@ -118,11 +123,11 @@ test('findOwner: Lightdash email → Notion user; none → null (no fallback); t
   assert.equal(t, null); // viewer@example.invalid is not returned by the fake search: proves the email match is exact
 });
 
-test('adviseOwner: comment then audit, reason in both', async () => {
+test('adviseOwner: comment then audit, the comment text in both', async () => {
   const mcp = fakeMcp();
-  await adviseOwner(mcp, { fr: { id: W.TEST_FR, title: 'F' }, owner: { id: 'own-1', name: 'Owner' }, changes: [{ label: 'Committed', before: '2026-12-18', after: '2027-01-29' }], reason: 'Capacity' });
+  await adviseOwner(mcp, { fr: { id: W.TEST_FR, title: 'F' }, owner: { id: 'own-1', name: 'Owner' }, changes: [{ label: 'Committed', before: '2026-12-18', after: '2027-01-29' }], comment: 'Capacity' });
   const c = mcp.calls.find((x) => x.tool === 'notion-create-comment').input;
-  assert.match(c.markdown, /user:\/\/own-1.*Reason: Capacity/);
+  assert.match(c.markdown, /user:\/\/own-1.*2027-01-29\. Capacity$/);
   const row = mcp.calls.find((x) => x.tool === 'notion-create-pages').input.pages[0].properties;
   assert.equal(row.Category, 'Owner advised');
   assert.deepEqual(row.Owner, ['own-1']);

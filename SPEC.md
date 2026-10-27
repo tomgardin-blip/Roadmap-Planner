@@ -174,6 +174,10 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - Refresh (Tom, 2026-10-27): the page reads everything once on open and does not poll. A "↻ Refresh" button in the top bar (live page only) re-reads Lightdash, the Notion overlay, the capacity feed, scores and backlog, audit log, effort baseline and FR comments, and redraws without a page reload. It keeps the open tab, team filter, sort and ticked issues, and says when done (with the Lightdash sync time). Disabled while a load is running.
 - Theme (Tom, 2026-10-27): opens in the light (day) theme, also on devices set to dark mode. The Theme button switches to dark and the choice is remembered per viewer.
 - FR edit date buttons (Tom, 2026-10-27): under the Committed date field, the same month and quarter buttons as on issue cards (Oct … Jun, Q4 Q1 Q2). A click fills the date with that period's last Friday (the same date an issue move uses); typing a date still works.
+- FR edit sheet, 2026-10-27 (Tom):
+  - Priority offers every Notion option, incl. "No longer needed" and "Won't do". Status: keep, or "Won't do" (close the FR); no other status. Audit categories "FR priority changed" / "FR status changed" (field Status added to the audit log).
+  - No reason chips any more. One Comment box instead: every Save posts one Notion comment on the FR that tags its Responsible Success, lists what changed, then the comment ("@Owner fyi: Priority: Top 3 → Needed after go-live. <comment>"). Comment only (no field change) is allowed: "@Owner <comment>". No Responsible Success: posted without a tag. The comment is also the audit row's Reason. Issue moves and "Not a pushback" keep their optional reason (audit log only, no ping).
+  - The edit shows at once, no refresh: the FR's priority, status and effective committed date (earliest of Success Committed and go-live when "Needed for go-live"; none when Won't do / No longer needed) are patched into the loaded data and the engine reruns, so the issue moves group, drops out of a list or gets its new committed date straight away.
 
 **4. At risk**
 
