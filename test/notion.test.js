@@ -123,3 +123,10 @@ test('overlay: a "Blocked by" removed in Notion drops the link from the blocker 
   assert.deepEqual(out[2][11], [GLY]);
   assert.deepEqual(JSON.parse(rows[0].serve_engineering_capacity_features)[0][10], ['379e32e8-f8c8-81d8-96f8-ec6f6e242419', 'aaaa']); // input untouched
 });
+
+test('Lightdash cache bust: the limit changes per second, stays above what the queries return', async () => {
+  const { cacheBustLimit } = await import('../src/data/live.js');
+  const a = cacheBustLimit(2, 1793135000000); const b = cacheBustLimit(2, 1793135001000);
+  assert.notEqual(a, b); assert.ok(a >= 3 && a <= 901);
+  const big = cacheBustLimit(5000, 1793135000000); assert.ok(big > 4900 && big <= 5000);
+});

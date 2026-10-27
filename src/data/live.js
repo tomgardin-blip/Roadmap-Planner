@@ -45,8 +45,19 @@ export async function call(mcp, server, tool, input) {
   }
 }
 
+/**
+ * Lightdash caches results per identical query and ignores the connector's no-cache flag, so a Refresh
+ * kept getting an old sync (Tom, 2026-10-27: an updated go-live and commit did not show). Each call
+ * shifts the row limit by a per-second amount; every query here returns far fewer rows than either
+ * limit, so the data is the same, only fresh. Small limits go up, large ones down by under 100.
+ */
+export function cacheBustLimit(limit, now = Date.now()) {
+  const t = Math.floor(now / 1000);
+  return limit < 100 ? limit + 1 + (t % 899) : limit - (t % 97);
+}
+
 export async function runQuery(mcp, title, queryConfig) {
-  const input = { projectUuid: PROJECT, title, description: `${title} (Roadmap Planner)`, queryConfig };
+  const input = { projectUuid: PROJECT, title, description: `${title} (Roadmap Planner)`, queryConfig: { ...queryConfig, limit: cacheBustLimit(queryConfig.limit ?? 500) } };
   let res = (await call(mcp, LIGHTDASH, 'run_metric_query', input))?.result;
   for (let i = 0; res && res.status !== 'done' && i < 20; i++) {
     if (res.status === 'error' || res.status === 'cancelled' || res.status === 'expired') throw { code: 'tool_error', message: `query ${res.status}` };
