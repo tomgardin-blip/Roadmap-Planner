@@ -186,12 +186,12 @@ export function planActions(issue, horizon, score) {
 // Posts already made show as a link to the Slack message, to follow the replies (Tom, 2026-10-27).
 let roadmapPosts = () => [];
 export const setRoadmapPosts = (fn) => { roadmapPosts = fn; };
-const roadmapBtn = (issue) => {
+const roadmapBtn = (issue, rm = null) => {
   if (!issue.id) return '';
   const posts = roadmapPosts(issue.id);
   const last = posts[0];
   const links = last ? `<span class="rmlinks">${last.link ? `<a href="${esc(last.link)}" target="_blank" rel="noopener">Posted ${formatDate(String(last.at).slice(0, 10))} · open in Slack</a>` : `Posted ${formatDate(String(last.at).slice(0, 10))}`}${posts.length > 1 ? ` <span class="muted">(${posts.length} posts)</span>` : ''}</span>` : '';
-  const btn = readOnly ? '' : `<button type="button" class="fredit rmpost" data-rmpost="${issue.id}" title="Post in #roadmap_product: your message, tagging the team's responsible, ending with the link, planned dates and committed date">${last ? 'Post again' : 'Post in #roadmap_product'}</button>`;
+  const btn = readOnly ? '' : `<button type="button" class="fredit rmpost" data-rmpost="${issue.id}"${rm ? ` data-rmkind="${rm.kind}"${rm.blockerId ? ` data-rmblocker="${rm.blockerId}"` : ''}` : ''} title="Post in #roadmap_product: your message, tagging the team's responsible, ending with the link, planned dates and committed date">${last ? 'Post again' : 'Post in #roadmap_product'}</button>`;
   return btn || links ? `<div class="cardacts">${btn}${links}</div>` : '';
 };
 
@@ -201,7 +201,7 @@ let commitSource = () => null;
 export const setCommitSource = (fn) => { commitSource = fn; };
 
 /** Issue card for the list screens (at risk, prep queues): same tags, FRs and date buttons as the drawer. */
-export function listCard(issue, horizon, score, detail, extraTags = '') {
+export function listCard(issue, horizon, score, detail, extraTags = '', rm = null) {
   const eff = ['FE', 'BE', 'MOB'].map((s) => { const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0; return v ? `${s} ${fmt(v)}` : null; }).filter(Boolean).join(' · ') || 'No effort';
   const late = lateVsCommit(issue);
   const tags = [
@@ -217,7 +217,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '') {
     <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
     ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
     ${frBlock(score, issue.committed, issue.id)}
-    ${dateButtons(issue, horizon)}${roadmapBtn(issue)}</div>`;
+    ${dateButtons(issue, horizon)}${roadmapBtn(issue, rm)}</div>`;
 }
 
 /** FR card for the "no engineering issue" queue. */

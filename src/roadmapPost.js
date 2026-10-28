@@ -53,3 +53,45 @@ export function slackLink(result, channelId = ROADMAP_CHANNEL.id) {
   const ts = /"(?:message_)?ts"\s*:\s*"(\d+)\.(\d+)"/.exec(s) || /\bts[=:]\s*(\d{9,})\.(\d+)/.exec(s);
   return ts ? `https://qargotms.slack.com/archives/${channelId}/p${ts[1]}${ts[2]}` : null;
 }
+
+const linked = (i) => (i.url ? `[${i.name}](${i.url})` : `**${i.name}**`);
+const commitText = (i) => (i.committed ? `${formatDate(String(i.committed).slice(0, 10))}${i.commitBy ? ` (${i.commitBy})` : ''}` : 'none');
+const tags = (leads) => [...new Map((leads || []).filter(Boolean).map((l) => [l.id, l])).values()];
+
+/**
+ * At risk → "Dependency in the wrong order" (Tom, 2026-10-28): ask both teams' leads whether the
+ * "Blocked by" link is right; if it is, the planning has to change. Issues carry team and commitBy.
+ */
+export function dependencyMessage(issue, blocker, leads) {
+  const who = tags(leads).map((l) => `@${l.name}`).join(' ');
+  const blockerPlan = blocker.start || blocker.end ? plannedText(blocker) : 'not planned (no dates)';
+  return [
+    `${who ? `${who} ` : ''}Is this dependency correct?`,
+    '',
+    `• ${linked(issue)} (${issue.team || 'no team'}) is blocked by ${linked(blocker)} (${blocker.team || 'no team'}).`,
+    `• Blocked issue: planned ${plannedText(issue)}, committed ${commitText(issue)}.`,
+    `• Blocker: planned ${blockerPlan}, committed ${commitText(blocker)}.`,
+    '',
+    `The blocker ${blocker.end ? 'ends after' : 'has no dates, so it is not planned before'} the blocked issue starts. If the dependency is correct, we need to adjust the planning so the blocker lands first. If not, please remove the "Blocked by" link.`,
+  ].join('\n');
+}
+
+/** At risk → "Committed, status Blocked/on hold" (Tom, 2026-10-28): ask the team's lead if it is really blocked. */
+export function blockedMessage(issue, leads) {
+  const who = tags(leads).map((l) => `@${l.name}`).join(' ');
+  return [
+    `${who ? `${who} ` : ''}Is this issue really blocked/on hold?`,
+    '',
+    `• ${linked(issue)} (${issue.team || 'no team'}) is on Blocked/on hold.`,
+    `• Planned ${plannedText(issue)}, committed ${commitText(issue)}.`,
+    '',
+    'If it is blocked, what is blocking it and when do we expect it to be unblocked? Then we need to adjust the planning to still make the committed date. If not, please update the status so it can be planned.',
+  ].join('\n');
+}
+
+/** Preview text → Slack text: every "@Lead Name" of the given leads becomes a real mention. */
+export function withMentions(text, leads) {
+  let out = String(text || '');
+  for (const l of tags(leads)) out = out.split(`@${l.name}`).join(`<@${l.id}>`);
+  return out;
+}

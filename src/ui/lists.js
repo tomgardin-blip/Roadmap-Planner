@@ -49,7 +49,7 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
     const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10/10/2026)' : list.length ? `${days(list)} d` : '';
     // No team: ask Qai to set the Team, one DM per ticked issue (Tom, 2026-10-27).
     const tools = r.key === 'noTeam' && list.length && !readOnly ? `<div class="lhead small"><button class="estbtn" data-estpost="qaiTeam" title="One DM to Qai per ticked issue, asking it to set the Team">${ESTIMATE_TARGETS.qaiTeam.button}</button></div>` : '';
-    h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), r.key), r.key === 'afterCommit');
+    h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, '', r.key === 'dependency' ? { kind: 'dependency', blockerId: e.blocker?.id } : r.key === 'committedBlocked' ? { kind: 'blocked' } : null), r.key), r.key === 'afterCommit');
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

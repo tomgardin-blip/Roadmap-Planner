@@ -24,7 +24,7 @@ import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
 import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost, startRoadmapPost } from './actions.js';
-import { TEAM_LEADS } from '../roadmapPost.js';
+import { TEAM_LEADS, dependencyMessage, blockedMessage } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -197,8 +197,19 @@ function shell() {
       const issue = shownIssue(rp.dataset.rmpost) || state.run?.issues.find((i) => i.id === rp.dataset.rmpost);
       if (!issue) return;
       // The team's responsible: by the issue's Team property, else the team its assignees route it to.
-      const team = TEAMS.find((t) => t.toLowerCase() === String(issue.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, issue)].find((t) => TEAM_LEADS[t]) : null);
-      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null,
+      const teamOf = (i) => TEAMS.find((t) => t.toLowerCase() === String(i.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, i)].find((t) => TEAM_LEADS[t]) : null) || i.team || null;
+      const team = teamOf(issue);
+      const full = (i) => ({ ...i, team: teamOf(i), commitBy: commitByText(i) });
+      // At risk dependency / blocked: a template asking the leads whether it is right (Tom, 2026-10-28).
+      let template = null; let leads = [];
+      if (rp.dataset.rmkind === 'dependency') {
+        const blocker = state.run?.issues.find((i) => i.id === rp.dataset.rmblocker);
+        if (blocker) { leads = [TEAM_LEADS[teamOf(issue)], TEAM_LEADS[teamOf(blocker)]].filter(Boolean); template = dependencyMessage(full(issue), full(blocker), leads); }
+      } else if (rp.dataset.rmkind === 'blocked') {
+        leads = [TEAM_LEADS[team]].filter(Boolean); template = blockedMessage(full(issue), leads);
+      }
+      leads = [...new Map(leads.map((l) => [l.id, l])).values()];
+      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null, template, leads,
         onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: issue.id, itemName: issue.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); renderDrawer(); } });
       return;
     }

@@ -20,3 +20,16 @@ test('roadmap post: message link from the Slack result, permalink or built from 
   assert.equal(slackLink({ ok: true, channel: 'C0A32B4JQS1', ts: '1793132125.000100' }), 'https://qargotms.slack.com/archives/C0A32B4JQS1/p1793132125000100');
   assert.equal(slackLink({ ok: true }), null);
 });
+
+test('roadmap post templates: dependency asks both leads, blocked asks the team lead; mentions on send', async () => {
+  const { dependencyMessage, blockedMessage, withMentions } = await import('../src/roadmapPost.js');
+  const a = { name: 'A', url: 'ua', team: 'Trip Execution', start: '2027-03-26', end: '2027-03-26', committed: '2026-12-02', commitBy: 'set by Nijman' };
+  const b = { name: 'B', url: 'ub', team: 'Transport Planning', start: '2027-04-05', end: '2027-04-30', committed: null };
+  const m = dependencyMessage(a, b, [TEAM_LEADS['Trip Execution'], TEAM_LEADS['Transport Planning'], TEAM_LEADS['Trip Execution']]);
+  assert.match(m, /^@Jone Hoong @Sam Buysse Is this dependency correct\?/);
+  assert.match(m, /\[A\]\(ua\) \(Trip Execution\) is blocked by \[B\]\(ub\) \(Transport Planning\)/);
+  assert.match(m, /Blocked issue: planned 26\/03\/2027 \(Q1 pot\), committed 02\/12\/2026 \(set by Nijman\)/);
+  assert.match(m, /Blocker: planned 05\/04\/2027 → 30\/04\/2027, committed none/);
+  assert.match(withMentions(m, [TEAM_LEADS['Trip Execution'], TEAM_LEADS['Transport Planning']]), /^<@U041Z01AKFC> <@U02SD5QCSSH> /);
+  assert.match(blockedMessage(a, [TEAM_LEADS['Trip Execution']]), /^@Jone Hoong Is this issue really blocked\/on hold\?/);
+});

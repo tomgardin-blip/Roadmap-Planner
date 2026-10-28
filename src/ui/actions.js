@@ -5,7 +5,7 @@ import { formatDate, potQuarters } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { postRoadmap, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
-import { ROADMAP_CHANNEL, roadmapMessage } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, roadmapMessage, withMentions } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -307,8 +307,9 @@ export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.produ
  * the team's responsible, always ending with the issue link, planned start and end, and committed date.
  * ctx: { mcp, issue, lead: { name, id } | null }
  */
-export function startRoadmapPost({ mcp, issue, lead, onDone }) {
+export function startRoadmapPost({ mcp, issue, lead, onDone, template = null, leads = [] }) {
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
+  if (template != null) return startTemplatePost({ mcp, issue, onDone, template, leads });
   const sheet = openSheet(`
     <h3>Post in ${esc(ROADMAP_CHANNEL.name)}</h3>
     <div class="srow muted">${esc(issue.name)} · posted as you, in the channel${lead ? `, tagging ${esc(lead.name)} (${esc(issue.team || '')})` : ', no team so no tag'}.</div>
@@ -333,6 +334,35 @@ export function startRoadmapPost({ mcp, issue, lead, onDone }) {
       }
       onDone?.({ link, message });
       return `Posted in ${ROADMAP_CHANNEL.name}${lead ? `, ${lead.name} tagged` : ''}. Link shown next to the button.`;
+    });
+  });
+}
+
+/**
+ * At risk dependency / blocked posts (Tom, 2026-10-28): the whole message is a template the viewer sees
+ * and can edit before Send; "@Lead" names become real mentions. Logged like any #roadmap_product post.
+ */
+function startTemplatePost({ mcp, issue, onDone, template, leads }) {
+  const who = leads.length ? leads.map((l) => esc(l.name)).join(' and ') : '';
+  const sheet = openSheet(`
+    <h3>Post in ${esc(ROADMAP_CHANNEL.name)}</h3>
+    <div class="srow muted">Posted as you, in the channel${who ? `, tagging ${who}` : ', no team lead to tag'}. Edit the message if needed.</div>
+    <label class="sfld">Message <textarea id="sRm" rows="11" class="smsg" maxlength="3500"></textarea></label>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend">Send</button></div>`);
+  const txt = sheet.querySelector('#sRm');
+  txt.value = template;
+  txt.addEventListener('input', () => { sheet.querySelector('#sSend').disabled = !txt.value.trim(); });
+  sheet.querySelector('#sSend').addEventListener('click', () => {
+    const message = withMentions(txt.value.trim(), leads);
+    closeSheet();
+    inBackground(`post in ${ROADMAP_CHANNEL.name}`, async () => {
+      let link;
+      try { link = await postRoadmap(mcp, { issue, message }); } catch (err) {
+        if (err?.code === 'audit_failed') { onDone?.({ link: null }); throw fail(`Posted in ${ROADMAP_CHANNEL.name}, but its link was not saved: ${errText(err)}`, err); }
+        throw fail(`Not posted in ${ROADMAP_CHANNEL.name}: ${err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err)}`, err);
+      }
+      onDone?.({ link, message });
+      return `Posted in ${ROADMAP_CHANNEL.name}${who ? `, ${leads.map((l) => l.name).join(' and ')} tagged` : ''}. Link shown next to the button.`;
     });
   });
 }
