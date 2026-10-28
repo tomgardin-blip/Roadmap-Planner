@@ -16,7 +16,8 @@ import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
 import { openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
-import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, tabCounts } from './lists.js';
+import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, renderQuality, tabCounts } from './lists.js';
+import { dataQuality, qualityCount } from '../quality.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
@@ -40,7 +41,7 @@ function initialSort() {
 }
 
 const state = {
-  tab: 'capacity', qpQuarter: null, qpOpen: new Set(), allFrTeams: false, listSort: initialSort(), readOnly: false,
+  tab: 'capacity', qpQuarter: null, qpOpen: new Set(), listSort: initialSort(), readOnly: false,
   audit: null, auditError: null, owners: null, ownersLoading: false, users: new Map(), pushback: null,
   teamFilter: 'all', mode: 'loading', status: null, run: null, grid: null, noTeam: [],
   rows: null, // default Lightdash rows (overlaid)
@@ -94,6 +95,7 @@ function shell() {
         <button data-tab="prep">Prep queues<span class="cnt" id="cntPrep"></span></button>
         <button data-tab="risk">At risk<span class="cnt" id="cntRisk"></span></button>
         <button data-tab="pushback">Pushback<span class="cnt" id="cntPb"></span></button>
+        <button data-tab="quality">Data quality<span class="cnt" id="cntDq"></span></button>
         <button data-tab="history">History</button>
       </nav>
       <div class="toolbar">
@@ -120,7 +122,6 @@ function shell() {
     draw();
   });
   document.getElementById('grid').addEventListener('change', (e) => {
-    if (e.target.id === 'allFrTeams') { state.allFrTeams = e.target.checked; draw(); }
     if (e.target.matches?.('select.qpprio')) { setPriority(e.target); return; }
     if (e.target.id === 'listSort') { state.listSort = e.target.value; try { localStorage.setItem('rp.sort', state.listSort); } catch { /* storage unavailable */ } draw(); }
   });
@@ -246,7 +247,7 @@ function shell() {
       }
       const groups = GROUPS.flatMap((g) => [
         { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
-        { label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => state.allFrTeams || e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) },
+        { label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) },
       ]);
       startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost] });
       return;
@@ -298,7 +299,7 @@ function afterMoves(done) {
 function loadComments() {
   if (!state.mcp || !state.queues || state.frCommentsLoading) return;
   const ids = [...new Set(GROUPS.flatMap((g) => state.queues[g.key].noIssue)
-    .filter((e) => state.allFrTeams || e.fr.assignedTeam === 'Engineering').map((e) => e.fr.id))].filter((id) => !state.frComments.has(id));
+    .filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => e.fr.id))].filter((id) => !state.frComments.has(id));
   if (!ids.length) return;
   state.frCommentsLoading = true;
   loadFrComments(state.mcp, ids)
@@ -431,7 +432,7 @@ function afterFrEdit(fr, { changes, before = {}, commented = false, comment = ''
   const golive = fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null;
   const committed = effectiveCommitted({ successCommitted: val('Success Committed', before.successCommitted), priority, golive });
   // Closed or dropped FRs carry no committed date (as Lightdash: NULL for Won't do).
-  const gone = status === "Won't do" || priority === "Won't do" || priority === 'No longer needed';
+  const gone = status === "Won't do" || status === 'Done' || priority === "Won't do" || priority === 'No longer needed';
   const upd = { 4: priority, 5: status, 8: gone ? null : committed };
   const patch = (rows) => rows.map((r) => {
     const blob = r.serve_engineering_capacity_customer_tasks;
@@ -618,6 +619,12 @@ function recompute() {
     dealSize: x.deals, dismissed: notPushback, team: state.teamFilter,
   }) : null;
   state.pushback = state.fit ? [...state.fit.cells.flatMap((c) => (c.fits ? [] : c.committed)), ...state.fit.late] : null;
+  // Data quality (Tom, 2026-10-28): once all FRs and the backlog are in.
+  state.quality = x.scores === 'ok' && x.backlog !== 'loading' ? dataQuality({
+    run: state.run, backlog: state.backlog, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows],
+    dealRows: state.rows, signed: x.signed, team: state.teamFilter, today: TODAY,
+  }) : null;
+  document.getElementById('cntDq').textContent = qualityCount(state.quality) ?? '';
   state.weekly = state.audit ? weeklyLoadChanges({ audit: state.audit, changes: state.status?.changed || [], issues: state.run.issues, now: NOW }) : null;
   document.getElementById('cntPb').textContent = state.pushback ? new Set(state.pushback.map((x) => x.issue.id)).size : '';
   const c = tabCounts(state.risk, state.queues);
@@ -631,9 +638,10 @@ function draw() {
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
-  if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', allFrTeams: state.allFrTeams, readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
+  if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { fit: state.fit, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, readOnly: state.readOnly, team: state.teamFilter, asked: askedMap() }); return; }
   if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
+  if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }

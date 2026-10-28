@@ -12,8 +12,11 @@ export const AUDIT_DS = '9b4b26f2-ea33-4578-89c2-252389cd5564';
 // The guard still refuses anything that is not a Notion page id.
 
 export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'Top 3', 'High', 'Medium', 'Low', 'Needed after go-live', 'No longer needed', "Won't do"];
-// FR Status: the planner may only close an FR as "Won't do" (Tom, 2026-10-27); no other status writes.
+// FR Status: the planner may only close an FR as "Won't do" (Tom, 2026-10-27) or "Done" (Tom, 2026-10-28,
+// for Data quality "Engineering issue Done, FR still open"); no other status writes.
 export const FR_STATUS_CLOSE = "Won't do";
+export const FR_STATUS_DONE = 'Done';
+export const FR_STATUS_WRITES = [FR_STATUS_CLOSE, FR_STATUS_DONE];
 export const GO_LIVE_PRIORITY = 'Needed for go-live';
 export const MONTH_BEFORE_PRIORITY = 'Needed 1 month before';
 export const REASONS = ['Commit moved', 'Estimate grew', 'Capacity', 'Dependency', 'Customer asked'];
@@ -66,7 +69,7 @@ export function frUpdateInput(frId, { successCommitted, priority, status } = {})
     properties['Priority '] = priority;
   }
   if (status !== undefined) {
-    if (status !== FR_STATUS_CLOSE) throw new Error(`Status can only be set to ${FR_STATUS_CLOSE}`);
+    if (!FR_STATUS_WRITES.includes(status)) throw new Error(`Status can only be set to ${FR_STATUS_WRITES.join(' or ')}`);
     properties.Status = status;
   }
   if (!Object.keys(properties).length) throw new Error('Nothing to write');

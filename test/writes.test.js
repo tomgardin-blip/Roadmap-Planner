@@ -28,7 +28,8 @@ test('FR write sends only Success Committed and Priority; unknown priority refus
   assert.throws(() => W.frUpdateInput(W.TEST_FR, {}), /Nothing to write/);
   assert.equal(W.frUpdateInput(W.TEST_FR, { priority: 'No longer needed' }).properties['Priority '], 'No longer needed');
   assert.equal(W.frUpdateInput(W.TEST_FR, { status: "Won't do" }).properties.Status, "Won't do");
-  assert.throws(() => W.frUpdateInput(W.TEST_FR, { status: 'Done' }), /only be set to Won't do/);
+  assert.equal(W.frUpdateInput(W.TEST_FR, { status: 'Done' }).properties.Status, 'Done'); // Tom, 2026-10-28
+  assert.throws(() => W.frUpdateInput(W.TEST_FR, { status: 'In progress' }), /only be set to Won't do or Done/);
 });
 
 test('effective committed: earliest of Success Committed and go-live when Needed for go-live', () => {

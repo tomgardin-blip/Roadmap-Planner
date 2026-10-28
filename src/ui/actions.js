@@ -2,7 +2,7 @@
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
 import { formatDate, potQuarters } from '../periods.js';
-import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
+import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage } from '../roadmapPost.js';
@@ -153,8 +153,8 @@ export async function startFrEdit(ctx) {
       <select id="sPr">${[cur.priority && !FR_PRIORITIES.includes(cur.priority) ? cur.priority : null, ...FR_PRIORITIES].filter(Boolean)
         .map((p) => `<option ${p === cur.priority ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
     <label class="sfld">Feature request status <span class="muted">(this FR in Customer Tasks, not the engineering issue)</span>
-      <select id="sSt">${cur.status === FR_STATUS_CLOSE ? `<option selected>${esc(FR_STATUS_CLOSE)}</option>`
-        : `<option value="" selected>Keep current: ${esc(cur.status || 'none')}</option><option value="${esc(FR_STATUS_CLOSE)}">${esc(FR_STATUS_CLOSE)} (close the FR)</option>`}</select></label>
+      <select id="sSt"><option value="" selected>Keep current: ${esc(cur.status || 'none')}</option>${FR_STATUS_WRITES.filter((s) => s !== cur.status)
+        .map((s) => `<option value="${esc(s)}">${esc(s)} (${s === FR_STATUS_DONE ? 'delivered' : 'close the FR'})</option>`).join('')}</select></label>
     ${ei ? `<label class="sfld">Engineering issue status <span class="muted">(${esc(ei.name || issue.name || 'the issue')} in Bugs &amp; Features)</span>
       <select id="sEi">${[ei.status && !EI_STATUSES.includes(ei.status) ? ei.status : null, ...EI_STATUSES].filter(Boolean)
         .map((st) => `<option ${st === ei.status ? 'selected' : ''}>${esc(st)}</option>`).join('')}</select></label>` : ''}

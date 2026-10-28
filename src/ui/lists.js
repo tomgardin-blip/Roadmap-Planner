@@ -6,7 +6,8 @@ import { formatDate, formatDateTime, formatDatesIn, lateVsCommit } from '../peri
 import { issueTeams, TEAMS, pickedTeams } from '../capacity.js';
 import { ISSUE_PRIORITIES } from '../notion/writes.js';
 import { GROUPS } from '../prep.js';
-import { listCard, frCard, planActions } from './drawer.js';
+import { listCard, frCard, planActions, qualityFrCard } from './drawer.js';
+import { CHECKS, qualityCount } from '../quality.js';
 import { teamCard } from './grid.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
 
@@ -57,14 +58,14 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
 // "No team" on a prep card, with a button to DM Qai for that one issue (Tom, 2026-10-27), as on At risk.
 const noTeamTag = (e, readOnly) => (!e.noTeam ? '' : `<span class="tag late">No team</span>${readOnly ? '' : `<button type="button" class="fredit qaiteam" data-qaiteam="${e.issue.id}" title="Send Qai a Slack DM to set the missing Team (preview first)">DM Qai for the team</button>`}`);
 
-export function renderPrep(el, { queues, horizon, scores, loading, allFrTeams, readOnly, sort = 'value', comments = new Map() }) {
+export function renderPrep(el, { queues, horizon, scores, loading, readOnly, sort = 'value', comments = new Map() }) {
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
     ${readOnly ? '' : `<span class="estbtns"><button class="estbtn" data-estpost="productFeature" title="One post per ticked issue: @claude_code runs the product-feature skill">Post to #product-create-ei-skill-trigger</button><button class="estbtn" data-estpost="qai" title="One post per ticked issue: @Qai estimate (the old flow)">Ask @Qai in #dev_effort_estimate</button></span>`}
-    <label class="lchk"><input type="checkbox" id="allFrTeams" ${allFrTeams ? 'checked' : ''}> No-issue list: include FRs not assigned to Engineering</label>${sortSel(sort, ' No estimate')}</div>`;
+    ${sortSel(sort, ' No estimate')}</div>`;
   for (const g of GROUPS) {
     const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, 'commit') }; // Not planned: always by committed date (Tom, 2026-10-26)
-    const noIssue = allFrTeams ? q.noIssue : q.noIssue.filter((e) => e.fr.assignedTeam === 'Engineering');
+    const noIssue = q.noIssue.filter((e) => e.fr.assignedTeam === 'Engineering');
     h += `<h3 class="lgroup">${esc(g.label)}</h3>`;
     // FRs with Notion comments first: the product-feature skill usually ran but found or made no issue,
     // so they need a manual check (Tom, 2026-10-26). Then the ones without comments.
@@ -233,6 +234,25 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
       h += `<div class="qpcap">${card}<div class="chips qpsugg">${sugg}</div></div>`;
     }
     h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num" title="Frontend effort, days">FE</th><th class="num" title="Backend effort, days">BE</th><th class="num" title="Mobile effort, days">MOB</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
+  }
+  el.innerHTML = `<div class="lists">${h}</div>`;
+}
+
+/**
+ * Data quality (Tom, 2026-10-28): one section per check, FR checks first. FR cards have Edit (priority,
+ * committed date, Status Done / Won't do, the issue's status); issue cards the usual date buttons and
+ * the #roadmap_product post (a template asking the lead for "Blocked/on hold, no open blocker").
+ */
+export function renderQuality(el, { quality, horizon, scores, loading, team }) {
+  if (!quality) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Data quality needs all FRs and the backlog. Loading them from Lightdash…' : 'Data quality unavailable: the FR or backlog load failed.'}</div></div>`; return; }
+  const picked = pickedTeams(team);
+  let h = `<div class="lhead"><b>Data quality</b><span class="lsub">${qualityCount(quality)} to fix across ${CHECKS.length} checks. Only FRs of signed customers count.${picked ? ' FRs show when one of their issues is in the picked teams; FRs with no issue only under All teams.' : ''}</span></div>`;
+  let side = null;
+  for (const c of CHECKS) {
+    if (c.side !== side) { side = c.side; h += `<h3 class="lgroup">${side === 'fr' ? 'Feature requests' : 'Engineering issues'}</h3>`; }
+    const list = quality[c.key];
+    const card = (e) => (e.fr ? qualityFrCard(e.fr, e.detail, e.issue) : listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, '', c.key === 'blockedNoBlocker' ? { kind: 'blocked' } : null));
+    h += section(`dq-${c.key}`, c.label, list.length, c.fix, capped(list, card, `dq-${c.key}`));
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
