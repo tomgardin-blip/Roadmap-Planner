@@ -172,6 +172,8 @@ export function qualityDm(check, d) {
       return `Hi @Owner, ${fr} for ${d.customer} was committed for ${formatDate(d.committed)}, but ${iss} is still ${d.issue?.status || 'open'}. Could u check with ${d.customer} and agree a new date? Thx!`;
     case 'issueDoneFrOpen':
       return `Hi @Owner, ${iss} is Done, so ${fr} for ${d.customer} is delivered. Could u let ${d.customer} know and close the FR? Thx!`;
+    case 'integrationTagged':
+      return `Hi @Owner, ${fr} for ${d.customer} is tagged both Feature Request and Integrations. Is it product work for the roadmap, or an integration? If it's an integration, could u change the Type/Category so it leaves the roadmap? Thx!`;
     default:
       return `Hi @Owner, could u have a look at ${fr} for ${d.customer}? Thx!`;
   }

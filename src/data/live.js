@@ -137,6 +137,24 @@ export async function loadNonFeatureFrs(mcp) {
   ];
   return featureFrSet(rows);
 }
+/**
+ * Open feature requests whose Category has both "Feature Request" and "Integrations" (~10). They stay in
+ * every check and get their own Data quality topic so Tom can check them (Tom, 2026-10-28).
+ * Map(FR id → category text).
+ */
+export async function loadMixedIntegrationFrs(mcp) {
+  const rows = await runQuery(mcp, 'Roadmap Planner: feature requests tagged Integrations', {
+    exploreName: 'customer_tasks', dimensions: ['customer_tasks_customer_task_notion_page_id', 'customer_tasks_task_category'], metrics: [], sorts: [], limit: 1000,
+    filters: { type: 'and', dimensions: [
+      { fieldId: 'customer_tasks_task_type', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: ['Feature request'] },
+      { fieldId: 'customer_tasks_task_status', fieldType: 'string', fieldFilterType: 'string', operator: 'notEquals', values: ['Done', "Won't do", 'Duplicate'] },
+      { fieldId: 'customer_tasks_task_category', fieldType: 'string', fieldFilterType: 'string', operator: 'include', values: ['Feature Request'] },
+      { fieldId: 'customer_tasks_task_category', fieldType: 'string', fieldFilterType: 'string', operator: 'include', values: ['Integrations'] },
+    ] },
+  });
+  return mixedMap(rows);
+}
+export const mixedMap = (rows) => new Map((rows || []).map((r) => [String(r.customer_tasks_customer_task_notion_page_id || '').replace(/-/g, '').toLowerCase(), r.customer_tasks_task_category || '']).filter(([k]) => k));
 export const featureFrSet = (rows) => new Set((rows || []).map((r) => String(r.customer_tasks_customer_task_notion_page_id || '').replace(/-/g, '').toLowerCase()).filter(Boolean));
 
 /** Deal sizes of £25k and over: everything else counts ×1, so smaller deals are not needed. */
@@ -158,8 +176,9 @@ export async function loadExtras(mcp, overlay, onStep, { frOverlay = null, goliv
   try {
     const [deals, tasks0, signed, frs] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp), await loadFeatureFrs(mcp)];
     const nonFeature = await loadNonFeatureFrs(mcp).catch(() => null); // Data quality only; without it the Type rule still applies
+    const mixed = await loadMixedIntegrationFrs(mcp).catch(() => null);
     const tasks = applyFrOverlay(tasks0, frOverlay, golive);
-    onStep('scores', { deals, tasks, signed, frs, nonFeature });
+    onStep('scores', { deals, tasks, signed, frs, nonFeature, mixed });
   } catch (err) {
     onStep('scores', { error: explainError(LIGHTDASH, err) });
   }

@@ -59,3 +59,11 @@ test('data quality: product features only (Tom, 2026-10-28)', () => {
   const q = dataQuality({ run: run([]), taskRows: rows([integ, pdf, ok]), nonFeature: new Set([id(2)]), today: '2026-10-28' });
   assert.deepEqual(q.frNoIssue.map((e) => e.fr.id.slice(-1)), ['3']);
 });
+
+test('data quality: feature requests also tagged Integrations stay in and are listed apart', () => {
+  const t = task(1, { committed: '2027-01-01' });
+  const q = dataQuality({ run: run([]), taskRows: rows([t]), mixed: new Map([[id(1), 'Feature Request,Integrations']]), today: '2026-10-28' });
+  assert.equal(q.frNoIssue.length, 1);
+  assert.equal(q.integrationTagged.length, 1);
+  assert.match(q.integrationTagged[0].detail, /Feature Request,Integrations/);
+});

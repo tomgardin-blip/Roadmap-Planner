@@ -27,6 +27,7 @@ export const CHECKS = [
   { key: 'frCommitPast', side: 'fr', label: 'FR committed date in the past, issue not Done', fix: 'Edit FR → a new committed date' },
   { key: 'goLiveCustomerLive', side: 'fr', label: '"Needed for go-live", customer already Live / Churned / Lost', fix: 'Edit FR → Needed after go-live' },
   { key: 'goLiveNoDate', side: 'fr', label: '"Needed for go-live", deal has no go-live date', fix: 'Set the go-live on the deal' },
+  { key: 'integrationTagged', side: 'fr', label: 'Feature request also tagged Integrations', fix: 'Check it is product work, not an integration' },
   { key: 'blockedNoBlocker', side: 'issue', label: 'Blocked/on hold, no open blocker linked', fix: 'Ask the lead which issue blocks it' },
   { key: 'plannedScoping', side: 'issue', label: 'Planned, but still in Product scoping', fix: 'Edit → engineering issue status' },
   { key: 'plannedNoEffort', side: 'issue', label: 'Planned with dates, 0 effort', fix: 'Estimate it, or it counts 0 in capacity' },
@@ -40,11 +41,12 @@ export const CHECKS = [
  * @param featureRows Lightdash rows carrying features (default + extra), for FR → issue links from the issue side
  * @param dealRows  Lightdash rows carrying deals
  * @param signed    Set of signed deal ids, or null (not loaded: every FR counts)
+ * @param mixed     Map(FR id → category) of feature requests also tagged Integrations: kept, and listed apart
  * @param nonFeature Set of "Feature request" FR ids whose Category is not Feature Request (left out), or null
  * @param today     'YYYY-MM-DD'
  * @returns { [checkKey]: [{ issue?, fr?, detail }] }
  */
-export function dataQuality({ run, backlog = [], taskRows = [], featureRows = [], dealRows = [], signed = null, nonFeature = null, team = 'all', today }) {
+export function dataQuality({ run, backlog = [], taskRows = [], featureRows = [], dealRows = [], signed = null, nonFeature = null, mixed = null, team = 'all', today }) {
   const out = Object.fromEntries(CHECKS.map((c) => [c.key, []]));
   const picked = pickedTeams(team);
   const issues = new Map();
@@ -78,6 +80,8 @@ export function dataQuality({ run, backlog = [], taskRows = [], featureRows = []
     const deal = dealId ? deals.get(dealId) : null;
     const golive = deal ? day(deal[5]) : null;
     const entry = (detail, issue = openIssues[0] || linked[0] || null) => ({ fr, issue, detail });
+    // Category "Feature Request" and "Integrations" (Tom, 2026-10-28): stays in every check, and listed here to check.
+    if (mixed?.has(id)) out.integrationTagged.push(entry(`Category ${mixed.get(id)}${fr.committed ? ` · committed ${formatDate(fr.committed)}` : ''}`));
     if (fr.committed && !(frIssues.get(id)?.size)) out.frNoIssue.push(entry(`Committed ${formatDate(fr.committed)}${fr.assignedTeam ? ` · assigned to ${fr.assignedTeam}` : ''}`, null));
     if (doneIssue && !openIssues.length) out.issueDoneFrOpen.push(entry(`"${doneIssue.name}" is Done · FR status ${fr.status || 'none'}`, doneIssue));
     if (GO_LIVE.has(fr.priority) && deal) {

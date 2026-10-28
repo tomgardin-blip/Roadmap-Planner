@@ -10,7 +10,7 @@ import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
-import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, explainError, NOTION } from '../data/live.js';
+import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
 import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
@@ -331,6 +331,11 @@ function qualityFix(key, id) {
       { label: 'No longer needed', desc: `Deal ${stage || 'without go-live'}: FR edit with priority No longer needed`, run: frEdit({ priority: 'No longer needed', note: `The deal has no go-live${stage ? ` (stage ${stage})` : ''}: priority set to No longer needed. Check and Save.`, comment: `${customer} has no go-live date${stage ? ` (${stage})` : ''}, so this is no longer needed for now. Shout if that's wrong.` }) },
       { label: 'Needed after go-live', desc: 'Keep it, without a go-live commitment', run: frEdit({ priority: 'Needed after go-live', note: 'Priority set to Needed after go-live. Check and Save.' }) },
     ],
+    integrationTagged: [
+      { label: 'Open it in Notion', desc: 'Check the request; change Type or Category there if it is an integration', run: () => window.open(fr.url, '_blank', 'noopener') },
+      dmOpt('Ask the COM/AM', 'A DM: product work or an integration?'),
+      { label: 'Edit the FR', desc: 'Priority, committed date or status', run: frEdit(null) },
+    ],
     blockedNoBlocker: [
       { label: 'Ask the team lead what blocks it', desc: 'Ready-made post in #roadmap_product: is it still blocked, and which issue blocks it?', run: () => document.querySelector(`button[data-rmpost="${issue?.id}"]`)?.click() },
       { label: 'Not blocked: change the status', desc: 'Set the engineering issue status', run: status('No open blocker is linked. Pick the right status.') },
@@ -641,7 +646,7 @@ function rescore() {
 function onExtra(step, p) {
   const x = state.extra;
   if (p.error) { x[step] = 'error'; x[`${step}Error`] = p.error; }
-  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; x.featureFrs = p.frs instanceof Set ? p.frs : p.frs ? featureFrSet(p.frs) : null; x.nonFeature = p.nonFeature instanceof Set ? p.nonFeature : p.nonFeature ? featureFrSet(p.nonFeature) : null; }
+  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; x.featureFrs = p.frs instanceof Set ? p.frs : p.frs ? featureFrSet(p.frs) : null; x.nonFeature = p.nonFeature instanceof Set ? p.nonFeature : p.nonFeature ? featureFrSet(p.nonFeature) : null; x.mixed = p.mixed instanceof Map ? p.mixed : p.mixed ? mixedMap(p.mixed) : null; }
   else { x.backlog = 'ok'; x.featureRows = p.features; }
   if (x.scores === 'ok') rescore(); else { recompute(); renderChrome(); if (state.tab !== 'capacity') draw(); renderDrawer(); }
 }
@@ -718,7 +723,7 @@ function recompute() {
   // Data quality (Tom, 2026-10-28): once all FRs and the backlog are in.
   state.quality = x.scores === 'ok' && x.backlog !== 'loading' ? dataQuality({
     run: state.run, backlog: state.backlog, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows],
-    dealRows: state.rows, signed: x.signed, nonFeature: x.nonFeature, team: state.teamFilter, today: TODAY,
+    dealRows: state.rows, signed: x.signed, nonFeature: x.nonFeature, mixed: x.mixed, team: state.teamFilter, today: TODAY,
   }) : null;
   document.getElementById('cntDq').textContent = qualityCount(state.quality) ?? '';
   state.weekly = state.audit ? weeklyLoadChanges({ audit: state.audit, changes: state.status?.changed || [], issues: state.run.issues, now: NOW }) : null;
