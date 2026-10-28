@@ -32,4 +32,7 @@ test('roadmap post templates: dependency asks both leads, blocked asks the team 
   assert.match(m, /Blocker: planned 05\/04\/2027 → 30\/04\/2027, committed none/);
   assert.match(withMentions(m, [TEAM_LEADS['Trip Execution'], TEAM_LEADS['Transport Planning']]), /^<@U041Z01AKFC> <@U02SD5QCSSH> /);
   assert.match(blockedMessage(a, [TEAM_LEADS['Trip Execution']]), /^@Jone Hoong Is this issue really blocked\/on hold\?/);
+  const bb = blockedMessage(a, [TEAM_LEADS['Trip Execution']], [b]);
+  assert.match(bb, /• Blocked by \[B\]\(ub\) \(Transport Planning\): planned 05\/04\/2027 → 30\/04\/2027, committed none\./);
+  assert.match(blockedMessage(a, []), /No issue is linked in its "Blocked by"/);
 });

@@ -206,7 +206,11 @@ function shell() {
         const blocker = state.run?.issues.find((i) => i.id === rp.dataset.rmblocker);
         if (blocker) { leads = [TEAM_LEADS[teamOf(issue)], TEAM_LEADS[teamOf(blocker)]].filter(Boolean); template = dependencyMessage(full(issue), full(blocker), leads); }
       } else if (rp.dataset.rmkind === 'blocked') {
-        leads = [TEAM_LEADS[team]].filter(Boolean); template = blockedMessage(full(issue), leads);
+        // Its "Blocked by": open issues that list it in their blocks; their leads are tagged too.
+        const blockers = (state.run?.issues || []).filter((b) => (b.blocks || []).includes(issue.id) && !['Done', "Won't do", 'Duplicate'].includes(b.status)).map(full);
+        leads = [TEAM_LEADS[team], ...blockers.map((b) => TEAM_LEADS[b.team])].filter(Boolean);
+        leads = [...new Map(leads.map((l) => [l.id, l])).values()];
+        template = blockedMessage(full(issue), leads, blockers);
       }
       leads = [...new Map(leads.map((l) => [l.id, l])).values()];
       startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null, template, leads,

@@ -56,13 +56,16 @@ export function slackLink(result, channelId = ROADMAP_CHANNEL.id) {
 
 const linked = (i) => (i.url ? `[${i.name}](${i.url})` : `**${i.name}**`);
 const commitText = (i) => (i.committed ? `${formatDate(String(i.committed).slice(0, 10))}${i.commitBy ? ` (${i.commitBy})` : ''}` : 'none');
+// A blocker's commit that only comes from the issue it blocks is said briefly, not by repeating its name.
+const blockerOf = (b, issue) => (b.commitBy === `set by the issue it blocks: ${issue.name}` ? { ...b, commitBy: 'inherited from the blocked issue' } : b);
 const tags = (leads) => [...new Map((leads || []).filter(Boolean).map((l) => [l.id, l])).values()];
 
 /**
  * At risk → "Dependency in the wrong order" (Tom, 2026-10-28): ask both teams' leads whether the
  * "Blocked by" link is right; if it is, the planning has to change. Issues carry team and commitBy.
  */
-export function dependencyMessage(issue, blocker, leads) {
+export function dependencyMessage(issue, blocker0, leads) {
+  const blocker = blockerOf(blocker0, issue);
   const who = tags(leads).map((l) => `@${l.name}`).join(' ');
   const blockerPlan = blocker.start || blocker.end ? plannedText(blocker) : 'not planned (no dates)';
   return [
@@ -76,16 +79,26 @@ export function dependencyMessage(issue, blocker, leads) {
   ].join('\n');
 }
 
-/** At risk → "Committed, status Blocked/on hold" (Tom, 2026-10-28): ask the team's lead if it is really blocked. */
-export function blockedMessage(issue, leads) {
+/**
+ * At risk → "Committed, status Blocked/on hold" (Tom, 2026-10-28): ask the leads if it is really blocked.
+ * Its "Blocked by" issues are listed like the dependency message; none linked is called out, since the
+ * blocking issue should normally be linked there.
+ */
+export function blockedMessage(issue, leads, blockers = []) {
   const who = tags(leads).map((l) => `@${l.name}`).join(' ');
+  const lines = blockers.length
+    ? blockers.map((b) => blockerOf(b, issue)).map((b) => `• Blocked by ${linked(b)} (${b.team || 'no team'}): planned ${b.start || b.end ? plannedText(b) : 'not planned (no dates)'}, committed ${commitText(b)}.`)
+    : ['• No issue is linked in its "Blocked by". Which issue is blocking it? Please link it there.'];
   return [
     `${who ? `${who} ` : ''}Is this issue really blocked/on hold?`,
     '',
     `• ${linked(issue)} (${issue.team || 'no team'}) is on Blocked/on hold.`,
     `• Planned ${plannedText(issue)}, committed ${commitText(issue)}.`,
+    ...lines,
     '',
-    'If it is blocked, what is blocking it and when do we expect it to be unblocked? Then we need to adjust the planning to still make the committed date. If not, please update the status so it can be planned.',
+    blockers.length
+      ? `If it is still blocked, the blocker${blockers.length > 1 ? 's need' : ' needs'} to land before it, so we need to adjust the planning to still make the committed date. If not, please update the status (and the "Blocked by" link) so it can be planned.`
+      : 'If it is blocked, what is blocking it and when do we expect it to be unblocked? Then we need to adjust the planning to still make the committed date. If not, please update the status so it can be planned.',
   ].join('\n');
 }
 
