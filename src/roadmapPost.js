@@ -81,6 +81,8 @@ function shortPlan(i) {
   return plannedText(i);
 }
 const commitShort = (i, from) => (i.committed ? `commit ${formatDate(String(i.committed).slice(0, 10))}${shortSource(i.commitSrc, from)}` : 'no commit');
+// Both templates end with one ask (Tom, 2026-10-28, replaces the Correct / Not correct options).
+const ASK = 'Could u have a look and advise so we can amend accordingly?';
 const line = (label, i, from) => `**${label}:** ${linked(i)} · ${i.team || 'no team'} · ${shortPlan(i)} · ${commitShort(i, from)}`;
 
 /**
@@ -98,8 +100,8 @@ export function dependencyMessage(issue, blocker, leads) {
     blocker.end
       ? `⚠️ The blocker ends ${formatDate(String(blocker.end).slice(0, 10))}, after the blocked issue starts ${formatDate(String(start).slice(0, 10))}.`
       : `⚠️ The blocker has no dates, while the blocked issue starts ${formatDate(String(start).slice(0, 10))}.`,
-    '• **Correct:** we re-plan so the blocker lands first.',
-    '• **Not correct:** please remove the "Blocked by" link.',
+    '',
+    ASK,
   ].join('\n');
 }
 
@@ -114,10 +116,7 @@ export function blockedMessage(issue, leads, blockers = []) {
     line('Issue', issue),
     ...(blockers.length ? blockers.map((b) => line('Blocked by', b, issue)) : ['**Blocked by:** nothing linked']),
     '',
-    blockers.length
-      ? `• **Still blocked:** the blocker${blockers.length > 1 ? 's' : ''} must land first, so we re-plan to make the commit.`
-      : '• **Still blocked:** which issue blocks it? Please link it in "Blocked by" so we can plan around it.',
-    '• **Not blocked:** please update the status' + (blockers.length ? ' and the "Blocked by" link.' : '.'),
+    ASK,
   ].join('\n');
 }
 

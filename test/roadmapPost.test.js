@@ -32,8 +32,8 @@ test('roadmap post templates: one line per issue, linked commit source, concise 
     '**Blocked:** [A](ua) · Application Platform · 16/11 → 18/12/2026 · commit 31/12/2026 (via [C](uc))',
     '**Blocker:** [B](ub) · Application Platform · 02/11 → 25/12/2026 · commit 31/12/2026 (inherited from it)', '',
     '⚠️ The blocker ends 25/12/2026, after the blocked issue starts 16/11/2026.',
-    '• **Correct:** we re-plan so the blocker lands first.',
-    '• **Not correct:** please remove the "Blocked by" link.',
+    '',
+    'Could u have a look and advise so we can amend accordingly?',
   ].join('\n'));
   assert.match(withMentions(m, [TEAM_LEADS['Application Platform']]), /^<@U0421DD1LLC> Is this/);
   const p = { id: 'p', name: 'P', url: 'up', team: 'Trip Execution', start: '2027-03-26', end: '2027-03-26', committed: '2027-01-04', commitSrc: { customers: ['Tyneside Express'] } };
