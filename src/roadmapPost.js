@@ -28,11 +28,11 @@ export function plannedText({ start, end } = {}) {
 
 /** The fixed end of every post. */
 export function roadmapFooter(issue) {
-  const link = issue.url ? `[${issue.name || 'Engineering issue'}](${issue.url})` : (issue.name || 'Engineering issue');
+  const link = issue.url ? linked({ ...issue, name: issue.name || 'Engineering issue' }) : (issue.name || 'Engineering issue');
   return [
     `• **Engineering issue:** ${link}`,
     `• **Planned:** ${plannedText(issue)}`,
-    `• **Committed:** ${issue.committed ? `${formatDate(String(issue.committed).slice(0, 10))}${issue.commitBy ? ` (${issue.commitBy})` : ''}` : 'none'}`,
+    `• **Committed:** ${issue.committed ? `${formatDate(String(issue.committed).slice(0, 10))}${issue.commitSrc ? ` (${longSource(issue.commitSrc)})` : ''}` : 'none'}`,
   ].join('\n');
 }
 
@@ -54,51 +54,70 @@ export function slackLink(result, channelId = ROADMAP_CHANNEL.id) {
   return ts ? `https://qargotms.slack.com/archives/${channelId}/p${ts[1]}${ts[2]}` : null;
 }
 
-const linked = (i) => (i.url ? `[${i.name}](${i.url})` : `**${i.name}**`);
-const commitText = (i) => (i.committed ? `${formatDate(String(i.committed).slice(0, 10))}${i.commitBy ? ` (${i.commitBy})` : ''}` : 'none');
-// A blocker's commit that only comes from the issue it blocks is said briefly, not by repeating its name.
-const blockerOf = (b, issue) => (b.commitBy === `set by the issue it blocks: ${issue.name}` ? { ...b, commitBy: 'inherited from the blocked issue' } : b);
+// Square brackets in a name would break the markdown link: shown as round ones.
+const linked = (i) => (i.url ? `[${String(i.name).replace(/\[/g, '(').replace(/\]/g, ')')}](${i.url})` : `**${i.name}**`);
 const tags = (leads) => [...new Map((leads || []).filter(Boolean).map((l) => [l.id, l])).values()];
+const who = (leads) => tags(leads).map((l) => `@${l.name}`).join(' ');
 
 /**
- * At risk → "Dependency in the wrong order" (Tom, 2026-10-28): ask both teams' leads whether the
- * "Blocked by" link is right; if it is, the planning has to change. Issues carry team and commitBy.
+ * What sets an issue's committed date, as data (Tom, 2026-10-28: an issue named in a post must be a link):
+ * { customers: [names] } or { blocks: { id, name, url } } (an issue it blocks), or null.
  */
-export function dependencyMessage(issue, blocker0, leads) {
-  const blocker = blockerOf(blocker0, issue);
-  const who = tags(leads).map((l) => `@${l.name}`).join(' ');
-  const blockerPlan = blocker.start || blocker.end ? plannedText(blocker) : 'not planned (no dates)';
+function longSource(src) {
+  if (src.customers) return `set by ${src.customers.join(', ')}`;
+  return `set by the issue it blocks: ${linked(src.blocks)}`;
+}
+function shortSource(src, from) {
+  if (!src) return '';
+  if (src.customers) return ` (${src.customers.join(', ')})`;
+  return src.blocks.id === from?.id ? ' (inherited from it)' : ` (via ${linked(src.blocks)})`;
+}
+
+/** Short planned text: "16/11 → 18/12/2026", "26/03/2027 (Q1 pot)" or "not planned". */
+function shortPlan(i) {
+  if (!i.start && !i.end) return 'not planned';
+  const s = i.start ? String(i.start).slice(0, 10) : null; const e = i.end ? String(i.end).slice(0, 10) : null;
+  if (s && e && s !== e) return `${formatDate(s).slice(0, 5)}${s.slice(0, 4) === e.slice(0, 4) ? '' : formatDate(s).slice(5)} → ${formatDate(e)}`;
+  return plannedText(i);
+}
+const commitShort = (i, from) => (i.committed ? `commit ${formatDate(String(i.committed).slice(0, 10))}${shortSource(i.commitSrc, from)}` : 'no commit');
+const line = (label, i, from) => `**${label}:** ${linked(i)} · ${i.team || 'no team'} · ${shortPlan(i)} · ${commitShort(i, from)}`;
+
+/**
+ * At risk → "Dependency in the wrong order" (Tom, 2026-10-28): ask the teams' leads whether the "Blocked by"
+ * is right. One line per issue, the clash, then what each answer means.
+ */
+export function dependencyMessage(issue, blocker, leads) {
+  const start = issue.start || issue.end;
   return [
-    `${who ? `${who} ` : ''}Is this dependency correct?`,
+    `${who(leads)} Is this dependency correct?`.trim(),
     '',
-    `• ${linked(issue)} (${issue.team || 'no team'}) is blocked by ${linked(blocker)} (${blocker.team || 'no team'}).`,
-    `• Blocked issue: planned ${plannedText(issue)}, committed ${commitText(issue)}.`,
-    `• Blocker: planned ${blockerPlan}, committed ${commitText(blocker)}.`,
+    line('Blocked', issue),
+    line('Blocker', blocker, issue),
     '',
-    `The blocker ${blocker.end ? 'ends after' : 'has no dates, so it is not planned before'} the blocked issue starts. If the dependency is correct, we need to adjust the planning so the blocker lands first. If not, please remove the "Blocked by" link.`,
+    blocker.end
+      ? `⚠️ The blocker ends ${formatDate(String(blocker.end).slice(0, 10))}, after the blocked issue starts ${formatDate(String(start).slice(0, 10))}.`
+      : `⚠️ The blocker has no dates, while the blocked issue starts ${formatDate(String(start).slice(0, 10))}.`,
+    '• **Correct:** we re-plan so the blocker lands first.',
+    '• **Not correct:** please remove the "Blocked by" link.',
   ].join('\n');
 }
 
 /**
- * At risk → "Committed, status Blocked/on hold" (Tom, 2026-10-28): ask the leads if it is really blocked.
- * Its "Blocked by" issues are listed like the dependency message; none linked is called out, since the
- * blocking issue should normally be linked there.
+ * At risk → "Committed, status Blocked/on hold" (Tom, 2026-10-28): ask the leads whether it is still blocked.
+ * Its "Blocked by" issues are listed; none linked is called out, since the blocker should be linked there.
  */
 export function blockedMessage(issue, leads, blockers = []) {
-  const who = tags(leads).map((l) => `@${l.name}`).join(' ');
-  const lines = blockers.length
-    ? blockers.map((b) => blockerOf(b, issue)).map((b) => `• Blocked by ${linked(b)} (${b.team || 'no team'}): planned ${b.start || b.end ? plannedText(b) : 'not planned (no dates)'}, committed ${commitText(b)}.`)
-    : ['• No issue is linked in its "Blocked by". Which issue is blocking it? Please link it there.'];
   return [
-    `${who ? `${who} ` : ''}Is this issue really blocked/on hold?`,
+    `${who(leads)} Is this still blocked/on hold?`.trim(),
     '',
-    `• ${linked(issue)} (${issue.team || 'no team'}) is on Blocked/on hold.`,
-    `• Planned ${plannedText(issue)}, committed ${commitText(issue)}.`,
-    ...lines,
+    line('Issue', issue),
+    ...(blockers.length ? blockers.map((b) => line('Blocked by', b, issue)) : ['**Blocked by:** nothing linked']),
     '',
     blockers.length
-      ? `If it is still blocked, the blocker${blockers.length > 1 ? 's need' : ' needs'} to land before it, so we need to adjust the planning to still make the committed date. If not, please update the status (and the "Blocked by" link) so it can be planned.`
-      : 'If it is blocked, what is blocking it and when do we expect it to be unblocked? Then we need to adjust the planning to still make the committed date. If not, please update the status so it can be planned.',
+      ? `• **Still blocked:** the blocker${blockers.length > 1 ? 's' : ''} must land first, so we re-plan to make the commit.`
+      : '• **Still blocked:** which issue blocks it? Please link it in "Blocked by" so we can plan around it.',
+    '• **Not blocked:** please update the status' + (blockers.length ? ' and the "Blocked by" link.' : '.'),
   ].join('\n');
 }
 

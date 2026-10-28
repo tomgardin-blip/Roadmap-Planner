@@ -199,7 +199,7 @@ function shell() {
       // The team's responsible: by the issue's Team property, else the team its assignees route it to.
       const teamOf = (i) => TEAMS.find((t) => t.toLowerCase() === String(i.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, i)].find((t) => TEAM_LEADS[t]) : null) || i.team || null;
       const team = teamOf(issue);
-      const full = (i) => ({ ...i, team: teamOf(i), commitBy: commitByText(i) });
+      const full = (i) => ({ ...i, team: teamOf(i), commitSrc: commitSource(i) });
       // At risk dependency / blocked: a template asking the leads whether it is right (Tom, 2026-10-28).
       let template = null; let leads = [];
       if (rp.dataset.rmkind === 'dependency') {
@@ -213,7 +213,7 @@ function shell() {
         template = blockedMessage(full(issue), leads, blockers);
       }
       leads = [...new Map(leads.map((l) => [l.id, l])).values()];
-      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitBy: commitByText(issue) }, lead: TEAM_LEADS[team] || null, template, leads,
+      startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitSrc: commitSource(issue) }, lead: TEAM_LEADS[team] || null, template, leads,
         onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: issue.id, itemName: issue.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); renderDrawer(); } });
       return;
     }
@@ -491,19 +491,22 @@ function commitSourceOf(issueId, day) {
   return null;
 }
 
-/** Plain text for the Slack post (Tom, 2026-10-27): the customer(s) whose FR carries the committed date, or what else sets it. */
-function commitByText(issue) {
+/**
+ * What sets an issue's committed date, for Slack posts (Tom, 2026-10-28): { customers } whose FR has the
+ * date, or { blocks: issue } it inherits it from, or null. Same order as the card's commit source.
+ */
+function commitSource(issue) {
   const day = issue.committed ? String(issue.committed).slice(0, 10) : null;
   if (!day) return null;
   const nid = (v) => String(v || '').replace(/-/g, '').toLowerCase();
   const names = (frs) => [...new Set(frs.filter((f) => f.committed === day).map((f) => String(state.dealNames.get(nid(f.dealId)) || 'No customer').trim()))];
   const shown = names(state.scores?.get(issue.id)?.frs || []);
-  if (shown.length) return `set by ${shown.join(', ')}`;
+  if (shown.length) return { customers: shown };
   const byId = new Map([...(state.run?.issues || []), ...(state.backlog || [])].map((i) => [i.id, i]));
   const blocked = (issue.blocks || []).map((id) => byId.get(id)).find((b) => b && String(b.committed || '').slice(0, 10) === day);
-  if (blocked) return `set by the issue it blocks: ${blocked.name}`;
+  if (blocked) return { blocks: { id: blocked.id, name: blocked.name, url: blocked.url } };
   const hidden = names(state.allScores?.get(issue.id)?.frs || []);
-  return hidden.length ? `set by ${hidden.join(', ')}` : null;
+  return hidden.length ? { customers: hidden } : null;
 }
 
 function rescore() {

@@ -12,7 +12,7 @@ test('roadmap post: Tom\'s text, then link, planned start and end, committed', (
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution']), /^<@U041Z01AKFC> Hi\n\n/);
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution'], { preview: true }), /^@Jone Hoong Hi/);
   assert.match(roadmapMessage('Hi', { name: 'X' }), /^Hi\n\n.*\*\*Committed:\*\* none$/s);
-  assert.match(roadmapMessage('Hi', { name: 'X', url: 'u', committed: '2027-01-04', commitBy: 'set by Tyneside Express' }), /\*\*Committed:\*\* 04\/01\/2027 \(set by Tyneside Express\)$/);
+  assert.match(roadmapMessage('Hi', { name: 'X', url: 'u', committed: '2027-01-04', commitSrc: { customers: ['Tyneside Express'] } }), /\*\*Committed:\*\* 04\/01\/2027 \(set by Tyneside Express\)$/);
 });
 
 test('roadmap post: message link from the Slack result, permalink or built from ts', () => {
@@ -21,18 +21,24 @@ test('roadmap post: message link from the Slack result, permalink or built from 
   assert.equal(slackLink({ ok: true }), null);
 });
 
-test('roadmap post templates: dependency asks both leads, blocked asks the team lead; mentions on send', async () => {
-  const { dependencyMessage, blockedMessage, withMentions } = await import('../src/roadmapPost.js');
-  const a = { name: 'A', url: 'ua', team: 'Trip Execution', start: '2027-03-26', end: '2027-03-26', committed: '2026-12-02', commitBy: 'set by Nijman' };
-  const b = { name: 'B', url: 'ub', team: 'Transport Planning', start: '2027-04-05', end: '2027-04-30', committed: null };
-  const m = dependencyMessage(a, b, [TEAM_LEADS['Trip Execution'], TEAM_LEADS['Transport Planning'], TEAM_LEADS['Trip Execution']]);
-  assert.match(m, /^@Jone Hoong @Sam Buysse Is this dependency correct\?/);
-  assert.match(m, /\[A\]\(ua\) \(Trip Execution\) is blocked by \[B\]\(ub\) \(Transport Planning\)/);
-  assert.match(m, /Blocked issue: planned 26\/03\/2027 \(Q1 pot\), committed 02\/12\/2026 \(set by Nijman\)/);
-  assert.match(m, /Blocker: planned 05\/04\/2027 → 30\/04\/2027, committed none/);
-  assert.match(withMentions(m, [TEAM_LEADS['Trip Execution'], TEAM_LEADS['Transport Planning']]), /^<@U041Z01AKFC> <@U02SD5QCSSH> /);
-  assert.match(blockedMessage(a, [TEAM_LEADS['Trip Execution']]), /^@Jone Hoong Is this issue really blocked\/on hold\?/);
-  const bb = blockedMessage(a, [TEAM_LEADS['Trip Execution']], [b]);
-  assert.match(bb, /• Blocked by \[B\]\(ub\) \(Transport Planning\): planned 05\/04\/2027 → 30\/04\/2027, committed none\./);
-  assert.match(blockedMessage(a, []), /No issue is linked in its "Blocked by"/);
+test('roadmap post templates: one line per issue, linked commit source, concise answers', async () => {
+  const { dependencyMessage, blockedMessage, withMentions, roadmapMessage } = await import('../src/roadmapPost.js');
+  const C = { id: 'c', name: 'C', url: 'uc' };
+  const a = { id: 'a', name: 'A', url: 'ua', team: 'Application Platform', start: '2026-11-16', end: '2026-12-18', committed: '2026-12-31', commitSrc: { blocks: C } };
+  const b = { id: 'b', name: 'B', url: 'ub', team: 'Application Platform', start: '2026-11-02', end: '2026-12-25', committed: '2026-12-31', commitSrc: { blocks: { id: 'a', name: 'A', url: 'ua' } } };
+  const m = dependencyMessage(a, b, [TEAM_LEADS['Application Platform']]);
+  assert.equal(m, [
+    '@Wim Onderbeke Is this dependency correct?', '',
+    '**Blocked:** [A](ua) · Application Platform · 16/11 → 18/12/2026 · commit 31/12/2026 (via [C](uc))',
+    '**Blocker:** [B](ub) · Application Platform · 02/11 → 25/12/2026 · commit 31/12/2026 (inherited from it)', '',
+    '⚠️ The blocker ends 25/12/2026, after the blocked issue starts 16/11/2026.',
+    '• **Correct:** we re-plan so the blocker lands first.',
+    '• **Not correct:** please remove the "Blocked by" link.',
+  ].join('\n'));
+  assert.match(withMentions(m, [TEAM_LEADS['Application Platform']]), /^<@U0421DD1LLC> Is this/);
+  const p = { id: 'p', name: 'P', url: 'up', team: 'Trip Execution', start: '2027-03-26', end: '2027-03-26', committed: '2027-01-04', commitSrc: { customers: ['Tyneside Express'] } };
+  assert.match(blockedMessage(p, [TEAM_LEADS['Trip Execution']], []), /\*\*Issue:\*\* \[P\]\(up\) · Trip Execution · 26\/03\/2027 \(Q1 pot\) · commit 04\/01\/2027 \(Tyneside Express\)\n\*\*Blocked by:\*\* nothing linked/);
+  assert.match(blockedMessage(p, [], [b]), /\*\*Blocked by:\*\* \[B\]\(ub\)/);
+  assert.match(roadmapMessage('x', { ...a }), /set by the issue it blocks: \[C\]\(uc\)/);
+  assert.match(blockedMessage({ ...p, name: '[Elasticsearch] Global search' }, []), /\[\(Elasticsearch\) Global search\]\(up\)/);
 });
