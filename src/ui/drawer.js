@@ -229,11 +229,11 @@ export function frCard(fr, comments) {
 }
 
 /** FR card for Data quality (Tom, 2026-10-28): the FR with Edit (opened from its issue, so the issue status is editable too), what is wrong, and its issue. */
-export function qualityFrCard(fr, detail, issue = null) {
+export function qualityFrCard(fr, detail, issue = null, fix = '') {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
   const iss = issue ? `<div class="detail muted">Issue: ${issue.url ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name)}${issue.status ? ` · EI: ${esc(issue.status)}` : ''}${issue.team ? ` · ${esc(issue.team)}` : ''}</div>` : '';
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, setsCommit: false }, cust, title, issue?.id || null)}</ul>${detail ? `<div class="detail">${esc(detail)}</div>` : ''}${iss}</div>`;
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, setsCommit: false }, cust, title, issue?.id || null)}</ul>${detail ? `<div class="detail">${esc(detail)}</div>` : ''}${iss}${fix ? `<div class="cardacts">${fix}</div>` : ''}</div>`;
 }
 
 // Comments on the FR in Notion: count, and the latest one (who, when, first words).

@@ -23,9 +23,9 @@ import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost, startRoadmapPost, startAskOwner } from './actions.js';
+import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates } from './actions.js';
 import { planFit } from '../fit.js';
-import { TEAM_LEADS, dependencyMessage, blockedMessage } from '../roadmapPost.js';
+import { TEAM_LEADS, dependencyMessage, blockedMessage, qualityDm, staleBlockerMessage } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -230,6 +230,8 @@ function shell() {
         onDone: ({ link }) => { state.audit = [{ category: 'COM/AM asked', field: 'Slack', after: link || '', frId: nidf, issueId: row.issue.id, itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); } });
       return;
     }
+    const fx = e.target.closest('button[data-dqfix]');
+    if (fx) { qualityFix(fx.dataset.dqfix, fx.dataset.dqid); return; }
     const qt = e.target.closest('button[data-qaiteam]');
     if (qt) {
       // One issue from a prep card: the same DM to Qai as At risk → No team, that issue ticked.
@@ -265,6 +267,100 @@ function shell() {
     if (document.getElementById('rp-sheet')) { closeSheet(); return; }
     closeDrawer(document.getElementById('drawer')); state.drawer = null;
   });
+}
+
+/**
+ * Data quality → Fix (Tom, 2026-10-28): per check, the ways to solve one finding. Each opens an existing
+ * flow, pre-filled: the FR edit sheet (writes Notion, comment tags the COM/AM), a DM to the COM/AM, a
+ * #roadmap_product post to the team lead, the issue status, clearing the dates, or the estimate posts.
+ */
+function qualityFix(key, id) {
+  const e = (state.quality?.[key] || []).find((x) => (x.fr ? x.fr.id : x.issue.id) === id);
+  if (!e) return;
+  const nidv = (v) => String(v || '').replace(/-/g, '').toLowerCase();
+  const { fr, issue } = e;
+  const mcp = state.mcp;
+  const customer = fr ? String(state.dealNames.get(nidv(fr.dealId)) || 'the customer').trim() : '';
+  const golive = fr?.dealId ? state.dealGolive.get(nidv(fr.dealId)) : null;
+  const stage = fr?.dealId ? state.dealStage.get(nidv(fr.dealId)) : null;
+  const frEdit = (preset) => () => startFrEdit({ mcp, fr, issue, horizon, golive, preset, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus });
+  const frLink = fr && { name: fr.title || 'FR', url: fr.url, priority: fr.priority };
+  const issueLink = issue && { name: issue.name, url: issue.url, status: issue.status };
+  const dm = () => () => startAskOwner({ mcp, issue, fr, customer,
+    email: state.owners?.get(fr.id) || loadOwnerEmails(mcp, [fr.id]).then((m) => m.get(fr.id)),
+    ctx: { kind: 'text', text: qualityDm(key, { fr: frLink, issue: issueLink, customer, golive, stage, committed: fr.committed }) },
+    onDone: ({ link }) => { state.audit = [{ category: 'COM/AM asked', field: 'Slack', after: link || '', frId: fr.id, issueId: issue?.id, itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])]; } });
+  const post = (template = null, leads = []) => () => {
+    const team = teamOf(issue);
+    startRoadmapPost({ mcp, issue: { ...issue, team, commitSrc: commitSource(issue) }, lead: TEAM_LEADS[team] || null, template, leads,
+      onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: issue.id, itemName: issue.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); } });
+  };
+  const status = (note) => () => startIssueStatus({ mcp, issue, note, onDone: afterIssueStatus });
+  const unplan = (why) => () => startClearDates({ mcp, issue, why, onDone: ({ after }) => afterMoves([{ issue, r: { after } }]) });
+  const estimate = (target, entry) => () => startEstimatePost({ mcp, groups: [{ label: entry.fr ? 'No engineering issue' : 'No estimate', entries: [entry] }], target, preselect: [entry.issue.id] });
+  const frAsEntry = fr && { fr: true, issue: { id: fr.id, name: fr.title || 'FR', url: fr.url, team: null, committed: fr.committed }, frs: [fr] };
+  const dmOpt = (label, desc) => ({ label, desc, run: dm() });
+  const opts = {
+    frNoIssue: [
+      { label: 'Ask Claude to create or link the issue', desc: 'Post in #product-create-ei-skill-trigger: @claude_code runs the product-feature skill on this FR', run: estimate(ESTIMATE_TARGETS.productFeature, frAsEntry) },
+      { label: 'Not needed any more', desc: 'FR edit with Priority "No longer needed" and a comment to the COM/AM', run: frEdit({ priority: 'No longer needed', note: 'Not needed any more: priority set to No longer needed. Check and Save.', comment: 'Closing this: no longer needed. Shout if that\'s wrong.' }) },
+      { label: 'Edit the FR', desc: 'Priority, committed date or status, by hand', run: frEdit(null) },
+    ],
+    issueDoneFrOpen: [
+      { label: 'Mark the FR Done and tell the COM/AM', desc: 'Writes FR Status Done; the comment tags the COM/AM to tell the customer', run: frEdit({ status: 'Done', note: `${issue?.name || 'The issue'} is Done: FR Status set to Done. Check and Save.`, comment: `Delivered: ${issue?.name || 'the engineering issue'} is Done. Could u let ${customer} know? Thx!` }) },
+      dmOpt('Ask the COM/AM on Slack first', 'A DM asking them to tell the customer and close the FR'),
+      { label: 'Not delivered yet: edit the FR', desc: 'If the Done issue does not cover this request', run: frEdit(null) },
+    ],
+    goLivePassed: [
+      { label: 'Went live without it → Needed after go-live', desc: 'FR edit with the new priority and a comment to the COM/AM', run: frEdit({ priority: 'Needed after go-live', note: `Go-live ${golive ? formatDate(golive) : ''} has passed: priority set to Needed after go-live. Check and Save.`, comment: `${customer} went live without this, so it moves to Needed after go-live. Shout if that's wrong.` }) },
+      dmOpt('Ask the COM/AM whether the go-live moved', 'A DM asking to update the go-live on the deal if it slipped'),
+      { label: 'Edit the FR', desc: 'Priority, committed date or status, by hand', run: frEdit(null) },
+    ],
+    frCommitPast: [
+      { label: 'Set a new committed date', desc: 'FR edit: pick the new Success Committed; the comment tags the COM/AM', run: frEdit({ note: `Committed ${formatDate(fr?.committed)} has passed and ${issue?.name || 'the issue'} is still ${issue?.status || 'open'}. Pick the new date.`, comment: 'The committed date has passed: new date set. Could u let the customer know? Thx!' }) },
+      dmOpt('Ask the COM/AM to agree a new date', 'A DM asking them to check with the customer'),
+      ...(issue ? [{ label: 'Ask the team lead in #roadmap_product', desc: 'Your message, tagging the lead, with the issue link, planned and committed dates', run: post() }] : []),
+    ],
+    goLiveCustomerLive: [
+      { label: 'Needed after go-live', desc: `The customer is ${stage || 'past go-live'}: FR edit with the new priority`, run: frEdit({ priority: 'Needed after go-live', note: `Deal stage ${stage}: priority set to Needed after go-live. Check and Save.`, comment: `${customer} is ${stage} already, so this is no longer needed for go-live: moved to Needed after go-live.` }) },
+      { label: 'No longer needed', desc: 'For a churned or lost customer', run: frEdit({ priority: 'No longer needed', note: `Deal stage ${stage}: priority set to No longer needed. Check and Save.`, comment: `${customer} is ${stage}, so this is no longer needed. Shout if that's wrong.` }) },
+      dmOpt('Ask the COM/AM', 'A DM asking whether it is still needed and at which priority'),
+    ],
+    goLiveNoDate: [
+      dmOpt('Ask the COM/AM to set the go-live', 'A DM: set the go-live on the deal, or say it is no longer needed'),
+      { label: 'No longer needed', desc: `Deal ${stage || 'without go-live'}: FR edit with priority No longer needed`, run: frEdit({ priority: 'No longer needed', note: `The deal has no go-live${stage ? ` (stage ${stage})` : ''}: priority set to No longer needed. Check and Save.`, comment: `${customer} has no go-live date${stage ? ` (${stage})` : ''}, so this is no longer needed for now. Shout if that's wrong.` }) },
+      { label: 'Needed after go-live', desc: 'Keep it, without a go-live commitment', run: frEdit({ priority: 'Needed after go-live', note: 'Priority set to Needed after go-live. Check and Save.' }) },
+    ],
+    blockedNoBlocker: [
+      { label: 'Ask the team lead what blocks it', desc: 'Ready-made post in #roadmap_product: is it still blocked, and which issue blocks it?', run: () => document.querySelector(`button[data-rmpost="${issue?.id}"]`)?.click() },
+      { label: 'Not blocked: change the status', desc: 'Set the engineering issue status', run: status('No open blocker is linked. Pick the right status.') },
+    ],
+    plannedScoping: [
+      { label: 'Change the status', desc: 'Scoping is done: set the engineering issue status', run: status(`Planned for ${formatDate(issue?.end || issue?.start)} but still ${issue?.status}.`) },
+      { label: 'Take it out of the plan', desc: 'Clear Start and End until scoping is done', run: unplan('Still in Product scoping') },
+      { label: 'Ask the team lead in #roadmap_product', desc: 'Your message, tagging the lead', run: post() },
+    ],
+    plannedNoEffort: [
+      { label: 'Ask Claude for an estimate', desc: 'Post in #product-create-ei-skill-trigger: @claude_code runs the product-feature skill', run: issue && estimate(ESTIMATE_TARGETS.productFeature, { issue, frs: state.scores?.get(issue.id)?.frs || [] }) },
+      { label: 'Ask @Qai to estimate', desc: 'Post in #dev_effort_estimate (the old flow)', run: issue && estimate(ESTIMATE_TARGETS.qai, { issue, frs: state.scores?.get(issue.id)?.frs || [] }) },
+      { label: 'Take it out of the plan', desc: 'Clear Start and End until it has an estimate', run: unplan('No estimate yet') },
+    ],
+    staleBlocker: [
+      { label: 'Ask the team lead to remove the link', desc: 'Ready-made post in #roadmap_product, tagging the lead (the planner never edits links)', run: () => {
+        const blockers = (state.run?.issues || []).concat(state.backlog || []).filter((b) => (b.blocks || []).includes(issue.id) && ['Done', "Won't do", 'Duplicate'].includes(b.status));
+        const lead = TEAM_LEADS[teamOf(issue)];
+        post(staleBlockerMessage({ ...issue, team: teamOf(issue), commitSrc: commitSource(issue) }, [lead], blockers), [lead].filter(Boolean))();
+      } },
+      { label: 'Open it in Notion', desc: 'Remove the "Blocked by" link yourself', run: () => window.open(issue.url, '_blank', 'noopener') },
+    ],
+  }[key];
+  const what = fr ? `${customer} · ${fr.title || 'FR'}` : issue.name;
+  startChoice({ title: 'Fix', sub: `${what}. ${e.detail}`, options: opts.filter((o) => o.run) });
+}
+
+/** The team an issue routes to: its Team property, else its assignees' team. */
+function teamOf(i) {
+  return TEAMS.find((t) => t.toLowerCase() === String(i.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, i)].find((t) => TEAM_LEADS[t]) : null) || i.team || null;
 }
 
 /** Patch a feature row's Start/End in the loaded rows so the grid follows the write. */
@@ -545,7 +641,7 @@ function rescore() {
 function onExtra(step, p) {
   const x = state.extra;
   if (p.error) { x[step] = 'error'; x[`${step}Error`] = p.error; }
-  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; x.featureFrs = p.frs instanceof Set ? p.frs : p.frs ? featureFrSet(p.frs) : null; }
+  else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; x.featureFrs = p.frs instanceof Set ? p.frs : p.frs ? featureFrSet(p.frs) : null; x.nonFeature = p.nonFeature instanceof Set ? p.nonFeature : p.nonFeature ? featureFrSet(p.nonFeature) : null; }
   else { x.backlog = 'ok'; x.featureRows = p.features; }
   if (x.scores === 'ok') rescore(); else { recompute(); renderChrome(); if (state.tab !== 'capacity') draw(); renderDrawer(); }
 }
@@ -622,7 +718,7 @@ function recompute() {
   // Data quality (Tom, 2026-10-28): once all FRs and the backlog are in.
   state.quality = x.scores === 'ok' && x.backlog !== 'loading' ? dataQuality({
     run: state.run, backlog: state.backlog, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows],
-    dealRows: state.rows, signed: x.signed, team: state.teamFilter, today: TODAY,
+    dealRows: state.rows, signed: x.signed, nonFeature: x.nonFeature, team: state.teamFilter, today: TODAY,
   }) : null;
   document.getElementById('cntDq').textContent = qualityCount(state.quality) ?? '';
   state.weekly = state.audit ? weeklyLoadChanges({ audit: state.audit, changes: state.status?.changed || [], issues: state.run.issues, now: NOW }) : null;
@@ -641,7 +737,7 @@ function draw() {
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { fit: state.fit, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, readOnly: state.readOnly, team: state.teamFilter, asked: askedMap() }); return; }
   if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
-  if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter }); return; }
+  if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }
@@ -649,6 +745,7 @@ function draw() {
 function show(rows) {
   state.rows = rows;
   state.dealNames = dealNameMap(rows);
+  state.dealStage = new Map(rows.flatMap((r) => parseBlob(r.serve_engineering_capacity_deals)).filter((d) => d[0] && d[3]).map((d) => [String(d[0]).replace(/-/g, '').toLowerCase(), String(d[3]).trim()]));
   state.dealGolive = new Map(rows.flatMap((r) => parseBlob(r.serve_engineering_capacity_deals)).filter((d) => d[0] && d[5]).map((d) => [String(d[0]).replace(/-/g, '').toLowerCase(), String(d[5]).slice(0, 10)]));
   state.run = runCapacity(rows, { now: NOW });
   if (state.feed && feedAgeDays(state.feed) <= FEED_MAX_AGE_DAYS) applyFeed(state.run, state.feed);

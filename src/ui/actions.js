@@ -135,7 +135,7 @@ function dateChips(horizon, current) {
  * opened from (Tom, 2026-10-27: every EI status). ctx: { mcp, fr, issue?, golive, onDone, onIssueStatus }
  */
 export async function startFrEdit(ctx) {
-  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus } = ctx;
+  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, preset = null } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
@@ -162,6 +162,13 @@ export async function startFrEdit(ctx) {
     <label class="sfld">Comment <span class="muted" id="sOwner">(posted on the FR in Notion; looking up the Responsible Success…)</span>
       <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. Posted on the FR as you write it, tagging the owner. Empty: no comment"></textarea></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save</button></div>`);
+  // Data quality fixes open the sheet with the fix filled in (Tom, 2026-10-28); everything stays editable.
+  if (preset) {
+    if (preset.note) sheet.querySelector('h3').insertAdjacentHTML('afterend', `<div class="srow sfix">${esc(preset.note)}</div>`);
+    if (preset.priority) sheet.querySelector('#sPr').value = preset.priority;
+    if (preset.status && sheet.querySelector(`#sSt option[value="${CSS.escape(preset.status)}"]`)) sheet.querySelector('#sSt').value = preset.status;
+    if (preset.comment) sheet.querySelector('#sCmt').value = preset.comment;
+  }
   // A save with a comment posts it on the FR, tagging its Responsible Success (Tom, 2026-10-27): only
   // the tag and Tom's text, no list of changes. Empty comment: nothing posted. No owner: no tag.
   let owner; let ownerErr = null;
@@ -371,10 +378,13 @@ function startTemplatePost({ mcp, issue, onDone, template, leads }) {
  * Pushback → "Ask COM/AM" (Tom, 2026-10-28): finds the FR's Responsible Success on Slack by email, shows the
  * friendly DM in full (editable), and sends it as the viewer on Send. ctx: { kind: 'over', quarterLabel, team } | { kind: 'late' }.
  */
-export async function startAskOwner({ mcp, issue, fr, customer, email, ctx, onDone }) {
+export async function startAskOwner({ mcp, issue, fr, customer, email: emailIn, ctx, onDone }) {
   if (!mcp) return toast('Sending needs the live page in claude.ai.', 'bad');
-  if (!email) return toast('This FR has no Responsible Success to ask.', 'bad');
-  let sheet = openSheet(`<h3>Ask the COM/AM</h3><div class="srow muted">Finding ${esc(email)} on Slack…</div>`);
+  let sheet = openSheet('<h3>Ask the COM/AM</h3><div class="srow muted">Finding the Responsible Success…</div>');
+  // The email can still be loading (Data quality looks it up on click).
+  const email = await Promise.resolve(emailIn).catch(() => null);
+  if (!email) { closeSheet(); return toast('This FR has no Responsible Success to ask.', 'bad'); }
+  sheet = openSheet(`<h3>Ask the COM/AM</h3><div class="srow muted">Finding ${esc(email)} on Slack…</div>`);
   let user;
   try { user = await findSlackUser(mcp, email); } catch (err) {
     closeSheet();
@@ -388,7 +398,8 @@ export async function startAskOwner({ mcp, issue, fr, customer, email, ctx, onDo
     <label class="sfld">Message <textarea id="sAsk" rows="7" class="smsg" maxlength="3000"></textarea></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend">Send</button></div>`);
   const txt = sheet.querySelector('#sAsk');
-  txt.value = askOwnerMessage({ ownerName: user.name, issue, fr: frLink, customer, ctx });
+  // ctx.kind 'text': a ready-made message (Data quality) with "@Owner" for the person.
+  txt.value = ctx.kind === 'text' ? ctx.text.split('@Owner').join(`@${user.name}`) : askOwnerMessage({ ownerName: user.name, issue, fr: frLink, customer, ctx });
   txt.addEventListener('input', () => { sheet.querySelector('#sSend').disabled = !txt.value.trim(); });
   sheet.querySelector('#sSend').addEventListener('click', () => {
     const message = txt.value.trim();
@@ -401,6 +412,79 @@ export async function startAskOwner({ mcp, issue, fr, customer, email, ctx, onDo
       }
       onDone?.({ link });
       return `Sent to ${user.name}. Link shown on the card.`;
+    });
+  });
+}
+
+/**
+ * Data quality → Fix (Tom, 2026-10-28): the ways to solve one finding, as a list of choices. Each choice
+ * opens the existing flow (FR edit, DM, post, status, dates), which writes and logs as usual.
+ * options: [{ label, desc, run }]
+ */
+export function startChoice({ title, sub, options }) {
+  const sheet = openSheet(`
+    <h3>${esc(title)}</h3>
+    ${sub ? `<div class="srow muted">${esc(sub)}</div>` : ''}
+    <div class="fixopts">${options.map((o, i) => `<button type="button" class="fixopt" data-fixopt="${i}"><b>${esc(o.label)}</b>${o.desc ? `<span class="muted">${esc(o.desc)}</span>` : ''}</button>`).join('')}</div>
+    <div class="sact"><button data-sheet-close>Cancel</button></div>`);
+  sheet.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-fixopt]');
+    if (!b) return;
+    closeSheet();
+    options[+b.dataset.fixopt].run();
+  });
+}
+
+/** Set an engineering issue's Status on its own (Data quality, Tom 2026-10-28). Logged as "EI status changed". */
+export async function startIssueStatus({ mcp, issue, note, onDone }) {
+  if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
+  if (!isAllowed('issue', issue.id)) return toast('This issue has no Notion id.', 'bad');
+  let sheet = openSheet(`<h3>${esc(issue.name)}</h3><div class="srow muted">Reading the live status from Notion…</div>`);
+  let cur;
+  try { cur = await readIssue(mcp, issue.id); } catch (err) { closeSheet(); return toast(errText(err), 'bad'); }
+  sheet = openSheet(`
+    <h3>${esc(cur.name || issue.name)}</h3>
+    ${note ? `<div class="srow sfix">${esc(note)}</div>` : ''}
+    <label class="sfld">Engineering issue status <span class="muted">(Bugs &amp; Features)</span>
+      <select id="sEi">${[cur.status && !EI_STATUSES.includes(cur.status) ? cur.status : null, ...EI_STATUSES].filter(Boolean)
+        .map((st) => `<option ${st === cur.status ? 'selected' : ''}>${esc(st)}</option>`).join('')}</select></label>
+    <label class="sfld">Reason <span class="muted">(optional, audit log only)</span><input id="sReason" type="text" maxlength="200"></label>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save</button></div>`);
+  sheet.querySelector('#sSave').addEventListener('click', () => {
+    const status = sheet.querySelector('#sEi').value;
+    const reason = sheet.querySelector('#sReason').value.trim();
+    closeSheet();
+    if (status === cur.status) return toast('Nothing changed.');
+    onDone?.(issue, status); // shown at once
+    inBackground(`"${issue.name}"`, async () => {
+      try { await setIssueStatus(mcp, { issue, status, reason }); } catch (err) { throw fail(`Status not saved: ${errText(err)}. Refresh to see Notion's values.`, err); }
+      return `Status set to ${status}. Logged.`;
+    });
+  });
+}
+
+/** Take an issue out of the plan: empty Start and End (Data quality, Tom 2026-10-28). Logged as a move. */
+export function startClearDates({ mcp, issue, why, onDone }) {
+  if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
+  if (!isAllowed('issue', issue.id)) return toast('This issue has no Notion id.', 'bad');
+  const sheet = openSheet(`
+    <h3>Take "${esc(issue.name)}" out of the plan</h3>
+    <div class="srow">Clears Start and End (now ${fd(issue.start)} → ${fd(issue.end)}). It goes back to the unplanned backlog${issue.committed ? `; it stays committed for ${fd(String(issue.committed).slice(0, 10))}` : ''}.</div>
+    ${reasonField()}
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Clear dates</button></div>`);
+  wireReason(sheet);
+  if (why) sheet.querySelector('#sReason').value = why;
+  sheet.querySelector('#sSave').addEventListener('click', () => {
+    const reason = sheet.querySelector('#sReason').value.trim();
+    const was = { start: issue.start || null, end: issue.end || null };
+    closeSheet();
+    onDone?.({ before: was, after: { start: null, end: null } });
+    inBackground(`"${issue.name}" out of the plan`, async () => {
+      try { await moveIssue(mcp, { issue, start: null, end: null, reason }); } catch (err) {
+        onDone?.({ before: { start: null, end: null }, after: was });
+        throw fail(`"${issue.name}" not changed, put back: ${errText(err)}`, err);
+      }
+      return 'Dates cleared. Logged.';
     });
   });
 }

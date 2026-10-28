@@ -243,7 +243,7 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
  * committed date, Status Done / Won't do, the issue's status); issue cards the usual date buttons and
  * the #roadmap_product post (a template asking the lead for "Blocked/on hold, no open blocker").
  */
-export function renderQuality(el, { quality, horizon, scores, loading, team }) {
+export function renderQuality(el, { quality, horizon, scores, loading, team, readOnly = false }) {
   if (!quality) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Data quality needs all FRs and the backlog. Loading them from Lightdash…' : 'Data quality unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   const picked = pickedTeams(team);
   let h = `<div class="lhead"><b>Data quality</b><span class="lsub">${qualityCount(quality)} to fix across ${CHECKS.length} checks. Only FRs of signed customers count.${picked ? ' FRs show when one of their issues is in the picked teams; FRs with no issue only under All teams.' : ''}</span></div>`;
@@ -251,7 +251,9 @@ export function renderQuality(el, { quality, horizon, scores, loading, team }) {
   for (const c of CHECKS) {
     if (c.side !== side) { side = c.side; h += `<h3 class="lgroup">${side === 'fr' ? 'Feature requests' : 'Engineering issues'}</h3>`; }
     const list = quality[c.key];
-    const card = (e) => (e.fr ? qualityFrCard(e.fr, e.detail, e.issue) : listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, '', c.key === 'blockedNoBlocker' ? { kind: 'blocked' } : null));
+    // Fix… opens the ways to solve this finding (Tom, 2026-10-28).
+    const fix = (e) => (readOnly ? '' : `<button type="button" class="fixbtn" data-dqfix="${c.key}" data-dqid="${e.fr ? e.fr.id : e.issue.id}" title="${esc(c.fix)}">Fix…</button>`);
+    const card = (e) => (e.fr ? qualityFrCard(e.fr, e.detail, e.issue, fix(e)) : listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, fix(e), c.key === 'blockedNoBlocker' ? { kind: 'blocked' } : null));
     h += section(`dq-${c.key}`, c.label, list.length, c.fix, capped(list, card, `dq-${c.key}`));
   }
   el.innerHTML = `<div class="lists">${h}</div>`;

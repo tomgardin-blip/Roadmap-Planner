@@ -152,3 +152,39 @@ export function slackUserFromSearch(result, email) {
   }
   return null;
 }
+
+/**
+ * Data quality fixes (Tom, 2026-10-28): the DM to an FR's COM/AM, per check. "@Owner" is replaced by the
+ * owner's name (and becomes a mention on Send). d: { fr: {name,url,priority}, issue?, customer, golive?, stage?, committed? }
+ */
+export function qualityDm(check, d) {
+  const fr = linked(d.fr);
+  const iss = d.issue ? linked(d.issue) : null;
+  const gl = d.golive ? formatDate(d.golive) : null;
+  switch (check) {
+    case 'goLivePassed':
+      return `Hi @Owner, ${fr} for ${d.customer} is "${d.fr.priority}", but the go-live in Notion (${gl}) has passed. Did they go live without it, or did the go-live move? If it moved, could u update the go-live date on the deal? Thx!`;
+    case 'goLiveCustomerLive':
+      return `Hi @Owner, ${fr} for ${d.customer} is still "${d.fr.priority}", but the deal is ${d.stage}. Is it still needed? If so, which priority should it get now? Thx!`;
+    case 'goLiveNoDate':
+      return `Hi @Owner, ${fr} for ${d.customer} is "${d.fr.priority}", but the deal has no go-live date${d.stage ? ` (stage ${d.stage})` : ''}, so it has no committed date. Could u set the go-live, or let me know if it's no longer needed? Thx!`;
+    case 'frCommitPast':
+      return `Hi @Owner, ${fr} for ${d.customer} was committed for ${formatDate(d.committed)}, but ${iss} is still ${d.issue?.status || 'open'}. Could u check with ${d.customer} and agree a new date? Thx!`;
+    case 'issueDoneFrOpen':
+      return `Hi @Owner, ${iss} is Done, so ${fr} for ${d.customer} is delivered. Could u let ${d.customer} know and close the FR? Thx!`;
+    default:
+      return `Hi @Owner, could u have a look at ${fr} for ${d.customer}? Thx!`;
+  }
+}
+
+/** Data quality → "Blocker already Done": ask the lead to remove the stale "Blocked by" link. */
+export function staleBlockerMessage(issue, leads, blockers) {
+  return [
+    `${who(leads)} The "Blocked by" on this issue points to work that is already finished.`.trim(),
+    '',
+    line('Issue', issue),
+    ...blockers.map((b) => `**Blocked by:** ${linked(b)} · ${b.status}`),
+    '',
+    'Could u remove the link (or link the real blocker) so the planning is right? Thx!',
+  ].join('\n');
+}

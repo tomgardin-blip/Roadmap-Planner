@@ -117,6 +117,26 @@ export async function loadFeatureFrs(mcp) {
   const rows = [...await q('GO LIVE', ['Needed for go-live', 'Needed 1 month before']), ...await q('Top 3', ['Top 3'])];
   return featureFrSet(rows);
 }
+/**
+ * Open FRs of Type "Feature request" whose Category has no "Feature Request" (Integrations, Pallet Network,
+ * PDF templates, BigQuery…): ~180 rows, so Data quality can keep only product features (Tom, 2026-10-28:
+ * "this is a product roadmap planner, not integrations") without loading all 8,500 feature FR ids.
+ */
+export async function loadNonFeatureFrs(mcp) {
+  const base = [
+    { fieldId: 'customer_tasks_task_type', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: ['Feature request'] },
+    { fieldId: 'customer_tasks_task_status', fieldType: 'string', fieldFilterType: 'string', operator: 'notEquals', values: ['Done', "Won't do", 'Duplicate'] },
+  ];
+  const q = (title, cat) => runQuery(mcp, `Roadmap Planner: non-feature FRs ${title}`, {
+    exploreName: 'customer_tasks', dimensions: ['customer_tasks_customer_task_notion_page_id'], metrics: [], sorts: [], limit: 5000,
+    filters: { type: 'and', dimensions: [...base, cat] },
+  });
+  const rows = [
+    ...await q('other category', { fieldId: 'customer_tasks_task_category', fieldType: 'string', fieldFilterType: 'string', operator: 'doesNotInclude', values: ['Feature Request'] }),
+    ...await q('no category', { fieldId: 'customer_tasks_task_category', fieldType: 'string', fieldFilterType: 'string', operator: 'isNull' }),
+  ];
+  return featureFrSet(rows);
+}
 export const featureFrSet = (rows) => new Set((rows || []).map((r) => String(r.customer_tasks_customer_task_notion_page_id || '').replace(/-/g, '').toLowerCase()).filter(Boolean));
 
 /** Deal sizes of £25k and over: everything else counts ×1, so smaller deals are not needed. */
@@ -137,8 +157,9 @@ export function loadDealSizes(mcp) {
 export async function loadExtras(mcp, overlay, onStep, { frOverlay = null, golive = new Map() } = {}) {
   try {
     const [deals, tasks0, signed, frs] = [await loadDealSizes(mcp), await loadExtraColumn(mcp, 'customer_tasks'), await loadSignedDeals(mcp), await loadFeatureFrs(mcp)];
+    const nonFeature = await loadNonFeatureFrs(mcp).catch(() => null); // Data quality only; without it the Type rule still applies
     const tasks = applyFrOverlay(tasks0, frOverlay, golive);
-    onStep('scores', { deals, tasks, signed, frs });
+    onStep('scores', { deals, tasks, signed, frs, nonFeature });
   } catch (err) {
     onStep('scores', { error: explainError(LIGHTDASH, err) });
   }

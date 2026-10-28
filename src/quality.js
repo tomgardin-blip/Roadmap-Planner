@@ -9,6 +9,7 @@ import { issueTeams, TEAMS, pickedTeams } from './capacity.js';
 import { idList } from './scoring.js';
 
 const CLOSED = new Set(['Done', "Won't do", 'Duplicate']);
+const FR_TYPE = 'Feature request';
 const FR_CLOSED = new Set(['Done', "Won't do", 'Duplicate', 'Closed', 'Cancelled', 'No longer needed']);
 const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
 const NOT_LIVE_ANY_MORE = new Set(['Live', 'Churn', 'Deal Lost', 'Dropped']);
@@ -39,10 +40,11 @@ export const CHECKS = [
  * @param featureRows Lightdash rows carrying features (default + extra), for FR → issue links from the issue side
  * @param dealRows  Lightdash rows carrying deals
  * @param signed    Set of signed deal ids, or null (not loaded: every FR counts)
+ * @param nonFeature Set of "Feature request" FR ids whose Category is not Feature Request (left out), or null
  * @param today     'YYYY-MM-DD'
  * @returns { [checkKey]: [{ issue?, fr?, detail }] }
  */
-export function dataQuality({ run, backlog = [], taskRows = [], featureRows = [], dealRows = [], signed = null, team = 'all', today }) {
+export function dataQuality({ run, backlog = [], taskRows = [], featureRows = [], dealRows = [], signed = null, nonFeature = null, team = 'all', today }) {
   const out = Object.fromEntries(CHECKS.map((c) => [c.key, []]));
   const picked = pickedTeams(team);
   const issues = new Map();
@@ -62,6 +64,8 @@ export function dataQuality({ run, backlog = [], taskRows = [], featureRows = []
     if (!id || seen.has(id)) continue;
     seen.add(id);
     if (FR_CLOSED.has(t[5])) continue;
+    // Product features only (Tom, 2026-10-28): Type "Feature request" with a "Feature Request" category, as in Prep queues.
+    if (t[3] !== FR_TYPE || (nonFeature && nonFeature.has(id))) continue;
     const dealId = nid(t[6]);
     if (signed && (!dealId || !signed.has(dealId))) continue;
     for (const x of idList(t[7])) link(id, x);

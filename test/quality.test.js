@@ -51,3 +51,11 @@ test('data quality: issue checks', () => {
   assert.deepEqual(ids('plannedNoEffort'), ['6']);
   assert.deepEqual(ids('staleBlocker'), ['5']);
 });
+
+test('data quality: product features only (Tom, 2026-10-28)', () => {
+  const integ = task(1, { committed: '2027-01-01' }); integ[3] = 'Integration request';
+  const pdf = task(2, { committed: '2027-01-01' }); // Feature request type, but category PDF template
+  const ok = task(3, { committed: '2027-01-01' });
+  const q = dataQuality({ run: run([]), taskRows: rows([integ, pdf, ok]), nonFeature: new Set([id(2)]), today: '2026-10-28' });
+  assert.deepEqual(q.frNoIssue.map((e) => e.fr.id.slice(-1)), ['3']);
+});

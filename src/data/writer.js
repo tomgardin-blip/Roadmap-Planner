@@ -175,7 +175,7 @@ export async function askOwner(mcp, { user, issue, fr, message }) {
   const link = slackLink(res, user.id);
   await audit(mcp, {
     category: 'COM/AM asked', field: 'Slack', before: '', after: link || 'Sent (no link returned)',
-    reason: message.slice(0, 1900), frId: fr.id, issueId: issue.id, itemName: fr.title || fr.name, updateId: updateId(),
+    reason: message.slice(0, 1900), frId: fr.id, issueId: issue?.id, itemName: fr.title || fr.name, updateId: updateId(),
   });
   return link;
 }
