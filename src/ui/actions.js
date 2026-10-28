@@ -3,9 +3,9 @@
 
 import { formatDate, potQuarters } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_CLOSE, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postRoadmap, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
-import { ROADMAP_CHANNEL, roadmapMessage, withMentions } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -363,6 +363,44 @@ function startTemplatePost({ mcp, issue, onDone, template, leads }) {
       }
       onDone?.({ link, message });
       return `Posted in ${ROADMAP_CHANNEL.name}${who ? `, ${leads.map((l) => l.name).join(' and ')} tagged` : ''}. Link shown next to the button.`;
+    });
+  });
+}
+
+/**
+ * Pushback → "Ask COM/AM" (Tom, 2026-10-28): finds the FR's Responsible Success on Slack by email, shows the
+ * friendly DM in full (editable), and sends it as the viewer on Send. ctx: { kind: 'over', quarterLabel, team } | { kind: 'late' }.
+ */
+export async function startAskOwner({ mcp, issue, fr, customer, email, ctx, onDone }) {
+  if (!mcp) return toast('Sending needs the live page in claude.ai.', 'bad');
+  if (!email) return toast('This FR has no Responsible Success to ask.', 'bad');
+  let sheet = openSheet(`<h3>Ask the COM/AM</h3><div class="srow muted">Finding ${esc(email)} on Slack…</div>`);
+  let user;
+  try { user = await findSlackUser(mcp, email); } catch (err) {
+    closeSheet();
+    return toast(err?.code === 'not_in_manifest' || err?.code === 'approval_required' ? 'The page needs permission to look people up on Slack. Reload and allow it.' : `Slack lookup failed: ${explainError('Slack', err)}`, 'bad');
+  }
+  if (!user) { closeSheet(); return toast(`No Slack account found for ${email}.`, 'bad'); }
+  const frLink = { name: fr.title || 'FR', url: fr.url, priority: fr.priority };
+  sheet = openSheet(`
+    <h3>Ask ${esc(user.name)}</h3>
+    <div class="srow muted">A Slack DM to ${esc(user.name)} (${esc(email)}), as you. Edit it if needed.</div>
+    <label class="sfld">Message <textarea id="sAsk" rows="7" class="smsg" maxlength="3000"></textarea></label>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend">Send</button></div>`);
+  const txt = sheet.querySelector('#sAsk');
+  txt.value = askOwnerMessage({ ownerName: user.name, issue, fr: frLink, customer, ctx });
+  txt.addEventListener('input', () => { sheet.querySelector('#sSend').disabled = !txt.value.trim(); });
+  sheet.querySelector('#sSend').addEventListener('click', () => {
+    const message = txt.value.trim();
+    closeSheet();
+    inBackground(`DM to ${user.name}`, async () => {
+      let link;
+      try { link = await askOwner(mcp, { user, issue, fr, message }); } catch (err) {
+        if (err?.code === 'audit_failed') { onDone?.({ link: null }); throw fail(`Sent to ${user.name}, but its link was not saved: ${errText(err)}`, err); }
+        throw fail(`Not sent to ${user.name}: ${err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err)}`, err);
+      }
+      onDone?.({ link });
+      return `Sent to ${user.name}. Link shown on the card.`;
     });
   });
 }

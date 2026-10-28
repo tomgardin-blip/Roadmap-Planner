@@ -3,7 +3,7 @@
 // Order per action: read the live "before" from Notion, write, then audit. A failed audit after a
 // successful write is reported, never silently dropped.
 
-import { ROADMAP_CHANNEL, slackLink } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, slackLink, slackUserFromSearch } from '../roadmapPost.js';
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
   TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentText,
@@ -156,6 +156,26 @@ export async function postRoadmap(mcp, { issue, message }) {
   await audit(mcp, {
     category: 'Roadmap post', field: 'Slack', before: '', after: link || 'Posted (no link returned)',
     reason: message.slice(0, 1900), issueId: issue.id, itemName: issue.name, updateId: updateId(),
+  });
+  return link;
+}
+
+/** The Slack account of a person by email (slack_search_users), or null. */
+export async function findSlackUser(mcp, email) {
+  if (!email) return null;
+  return slackUserFromSearch(await call(mcp, 'Slack', 'slack_search_users', { query: email }), email);
+}
+
+/**
+ * Pushback → "Ask COM/AM" (Tom, 2026-10-28): a DM to the FR's Responsible Success as the viewer, then an
+ * audit row (category "COM/AM asked") holding the message link.
+ */
+export async function askOwner(mcp, { user, issue, fr, message }) {
+  const res = await postSlack(mcp, user.id, message.split(`@${user.name}`).join(`<@${user.id}>`));
+  const link = slackLink(res, user.id);
+  await audit(mcp, {
+    category: 'COM/AM asked', field: 'Slack', before: '', after: link || 'Sent (no link returned)',
+    reason: message.slice(0, 1900), frId: fr.id, issueId: issue.id, itemName: fr.title || fr.name, updateId: updateId(),
   });
   return link;
 }

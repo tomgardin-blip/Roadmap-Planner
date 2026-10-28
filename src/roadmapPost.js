@@ -126,3 +126,29 @@ export function withMentions(text, leads) {
   for (const l of tags(leads)) out = out.split(`@${l.name}`).join(`<@${l.id}>`);
   return out;
 }
+
+/**
+ * Pushback → "Ask COM/AM" (Tom, 2026-10-28): a friendly DM to the FR's Responsible Success asking whether
+ * the priority or date may change, and to check with the customer. Shown in full and editable before Send.
+ * ctx: { kind: 'over', quarterLabel, team } or { kind: 'late' }.
+ */
+export function askOwnerMessage({ ownerName, issue, fr, customer, ctx }) {
+  const hi = ownerName ? `Hi @${ownerName}` : 'Hi';
+  const commit = issue.committed ? formatDate(String(issue.committed).slice(0, 10)) : '–';
+  const why = ctx.kind === 'over'
+    ? `we're planning ${ctx.quarterLabel} and ${ctx.team} is overbooked. ${linked(issue)} is committed for ${commit}`
+    : `${linked(issue)} is planned ${shortPlan(issue)}, after its committed date ${commit}. That date is set`;
+  return `${hi}, ${why} because of ${customer}'s request ${linked(fr)} (${fr.priority || 'no priority'}). Would it be ok to lower the priority / move the date? Could u check with ${customer} and let me know? Thx!`;
+}
+
+/** slack_search_users result → { id, name } for the person with this email, or null. */
+export function slackUserFromSearch(result, email) {
+  const text = typeof result === 'string' ? result : result?.results || JSON.stringify(result ?? '');
+  for (const block of String(text).split(/### Result/)) {
+    const id = /User ID:\s*(U[A-Z0-9]+)/.exec(block)?.[1];
+    const mail = /Email:\s*(\S+)/.exec(block)?.[1];
+    const name = /Name:\s*(.+)/.exec(block)?.[1]?.trim();
+    if (id && mail && mail.toLowerCase() === String(email).toLowerCase()) return { id, name: name || email };
+  }
+  return null;
+}

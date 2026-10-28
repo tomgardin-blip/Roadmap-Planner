@@ -42,3 +42,14 @@ test('roadmap post templates: one line per issue, linked commit source, concise 
   assert.match(roadmapMessage('x', { ...a }), /set by the issue it blocks: \[C\]\(uc\)/);
   assert.match(blockedMessage({ ...p, name: '[Elasticsearch] Global search' }, []), /\[\(Elasticsearch\) Global search\]\(up\)/);
 });
+
+test('ask COM/AM: friendly DM with issue, FR, customer and the ask; Slack user from search by email', async () => {
+  const { askOwnerMessage, slackUserFromSearch } = await import('../src/roadmapPost.js');
+  const m = askOwnerMessage({ ownerName: 'Yana Kashparova', issue: { name: 'Issue X', url: 'ux', committed: '2027-01-15' }, fr: { name: 'FR Y', url: 'uy', priority: 'Needed for go-live' }, customer: 'Salva', ctx: { kind: 'over', quarterLabel: 'Q1 2027', team: 'Transport Planning' } });
+  assert.equal(m, "Hi @Yana Kashparova, we're planning Q1 2027 and Transport Planning is overbooked. [Issue X](ux) is committed for 15/01/2027 because of Salva's request [FR Y](uy) (Needed for go-live). Would it be ok to lower the priority / move the date? Could u check with Salva and let me know? Thx!");
+  const late = askOwnerMessage({ ownerName: null, issue: { name: 'I', url: 'u', start: '2027-03-26', end: '2027-03-26', committed: '2027-01-04' }, fr: { name: 'F', url: 'f', priority: 'High' }, customer: 'C', ctx: { kind: 'late' } });
+  assert.match(late, /^Hi, \[I\]\(u\) is planned 26\/03\/2027 \(Q1 pot\), after its committed date 04\/01\/2027\. That date is set because of C's request \[F\]\(f\) \(High\)\./);
+  const res = { results: '# Search Results\n## Users (1 results)\n### Result 1 of 1\nName: Buysse\nUser ID: U02SD5QCSSH\nTitle: x\nEmail: sam.buysse@qargo.com\n' };
+  assert.deepEqual(slackUserFromSearch(res, 'Sam.Buysse@qargo.com'), { id: 'U02SD5QCSSH', name: 'Buysse' });
+  assert.equal(slackUserFromSearch(res, 'other@qargo.com'), null);
+});

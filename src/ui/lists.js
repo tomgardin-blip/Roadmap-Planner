@@ -91,20 +91,62 @@ const fd = (iso) => (iso ? formatDate(iso) : '–');
 const link = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text));
 
 /** Pushback candidates: one row per committed FR, easiest to challenge first. */
-export function renderPushback(el, { list, loading, owners, names, overbookedOnly, readOnly, team }) {
-  if (!list) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Pushback needs all FRs and scores. Loading them from Lightdash…' : 'Pushback unavailable: the FR load failed.'}</div></div>`; return; }
-  const row = (c) => {
-    const owner = owners?.get(c.fr.id.replace(/-/g, ''));
-    const cust = names.get(String(c.fr.dealId || '').replace(/-/g, '').toLowerCase()) || 'No customer';
-    const btns = readOnly ? '' : `<button class="fredit" data-fr-edit="${c.fr.id}" data-issue="${c.issue.id}">Edit FR</button><button class="fredit" data-dismiss="${c.fr.id}" data-issue="${c.issue.id}">Not a pushback</button>`;
-    return `<div class="issue pb"><div class="t">${link(c.fr.url, c.fr.title || 'FR')} ${btns}</div>
-      <div class="meta"><span class="tag">${esc(c.fr.priority || 'No priority')}</span><span class="tag commit">Commit ${fd(c.fr.committed)}</span><b>${esc(cust)}</b>
-        <span class="tag ${owner ? '' : 'late'}">${owner ? `COM/AM ${esc(owner)}` : owners ? 'No Responsible Success' : 'COM/AM loading…'}</span></div>
-      <div class="meta">Issue ${link(c.issue.url, c.issue.name)} · ${esc(c.issue.team || '')} · <b>${c.customers}</b> customer${c.customers === 1 ? '' : 's'} · <b>${Math.round(c.effort * 10) / 10}</b> d${c.quarter ? ` · ${esc(c.quarter)}` : ''}${c.inOverbooked ? ' <span class="tag late">Overbooked quarter</span>' : ''}${c.deal ? ` · deal £${Math.round(c.deal / 1000)}k` : ''}</div></div>`;
+const SKILL_NAME = { FE: 'Frontend', BE: 'Backend', MOB: 'Mobile' };
+const r1 = (v) => Math.round(v * 10) / 10;
+
+/**
+ * Pushback = make the plan fit (Tom, 2026-10-28). fit: planFit() result. owners: Map(FR id → COM/AM email).
+ * asked: Map(FR id → [{ at, link }]) from the audit log ("COM/AM asked").
+ */
+export function renderPushback(el, { fit, loading, owners, names, readOnly, asked = new Map(), team }) {
+  if (!fit) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Pushback needs all FRs and scores. Loading them from Lightdash…' : 'Pushback unavailable: the FR load failed.'}</div></div>`; return; }
+  const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
+  const frRow = (f, issue, ctx) => {
+    const id = nid(f.id);
+    const owner = owners?.get(id);
+    const cust = names.get(nid(f.dealId)) || 'No customer';
+    const last = (asked.get(id) || [])[0];
+    const did = last ? (last.link ? ` <a class="rmlinks" href="${esc(last.link)}" target="_blank" rel="noopener">Asked ${fd(String(last.at).slice(0, 10))} · open in Slack</a>` : ` <span class="rmlinks">Asked ${fd(String(last.at).slice(0, 10))}</span>`) : '';
+    const btns = readOnly ? '' : `<span class="pbbtns"><button class="fredit" data-askowner="${f.id}" data-issue="${issue.id}" data-ctx="${esc(ctx)}" ${owner ? '' : 'disabled title="No Responsible Success on this FR"'}>${last ? 'Ask again' : 'Ask COM/AM'}</button><button class="fredit" data-fr-edit="${f.id}" data-issue="${issue.id}">Edit FR</button><button class="fredit" data-dismiss="${f.id}" data-issue="${issue.id}">Not a pushback</button></span>`;
+    return `<div class="pbfr"><div><span class="tag ${f.priority === 'Needed for go-live' ? 'late' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b> · ${link(f.url, f.title || 'FR')}${f.deal ? ` · deal £${Math.round(f.deal / 1000)}k` : ''}</div>
+      <div class="muted">${owner ? `COM/AM ${esc(owner)}` : owners ? '<span class="warnt">No Responsible Success</span>' : 'COM/AM loading…'}${did}</div>${btns}</div>`;
   };
-  el.innerHTML = `<div class="lists"><div class="lhead"><b>Pushback candidates</b><span class="lsub">${list.length} committed FRs${pickedTeams(team) ? ` · ${esc(pickedTeams(team).join(', '))}` : ''}. Easiest to challenge first: fewest customers on the issue, then highest effort, then smallest deal. A suggestion; "Not a pushback" is logged.</span>
-    <label class="lchk"><input type="checkbox" id="pbOverbooked" ${overbookedOnly ? 'checked' : ''}> Only issues in overbooked quarters</label></div>
-    ${capped(list, row, 'pushback')}</div>`;
+  const issueRow = (x, ctx, skill) => `<div class="issue pb">
+      <div class="t">${link(x.issue.url, x.issue.name)}</div>
+      <div class="meta"><span class="tag commit">Commit ${fd(day(x.issue.committed))}</span><span class="tag">${esc(planned(x.issue))}</span>${skill ? `<span><b>${r1(x.days)}</b> d ${esc(skill)} here</span>` : ''}<span>${x.customers} customer${x.customers === 1 ? '' : 's'}</span>${x.cumulative != null ? `<span class="muted">freed so far: ${r1(x.cumulative)} d</span>` : ''}</div>
+      ${x.commit.setters.map((f) => frRow(f, x.issue, ctx)).join('')}
+      <div class="pbnext">If pushed back: ${x.commit.next ? `commit becomes <b>${fd(x.commit.next)}</b> (next FR)` : '<b>no commit left</b>'}</div>
+    </div>`;
+  const pick = pickedTeams(team);
+  let h = `<div class="lhead"><b>Make the plan fit</b><span class="lsub">Per team and quarter over capacity: move the uncommitted work out first, then the committed issues easiest to push back (softest priority, fewest customers, most days freed, smallest deal). The line shows where it fits. Ask the COM/AM before changing a commit.${pick ? ` · ${esc(pick.join(', '))}` : ''}</span></div>`;
+  h += `<h3 class="lgroup">Over capacity <span class="cnt">${fit.cells.length}</span></h3>`;
+  if (!fit.cells.length) h += '<div class="placeholder">No team is over capacity in the visible quarters.</div>';
+  for (const c of fit.cells) {
+    const sk = SKILL_NAME[c.skill] || c.skill;
+    const ctx = `over|${c.quarter.label}|${c.team}`;
+    let body = `<div class="pbstep">1. Uncommitted work here: <b>${c.uncommitted.count}</b> issue${c.uncommitted.count === 1 ? '' : 's'}, <b>${r1(c.uncommitted.days)} d</b>. Move these out first. <button type="button" class="fredit" data-suggest="1" data-team="${esc(c.team)}" data-skill="${c.skill}" data-period="${c.quarter.key}">See them</button></div>`;
+    if (c.fits) body += '<div class="coverline">That alone makes it fit: no pushback needed here.</div>';
+    else {
+      body += `<div class="pbstep">2. Still ${r1(c.over - c.uncommitted.days)} d over after that. Committed issues, easiest to push back first:</div>`;
+      c.committed.forEach((x, k) => {
+        body += issueRow(x, ctx, sk);
+        if (k === c.coverIdx) body += '<div class="coverline">Fits from here: pushing back the issues above is enough</div>';
+      });
+      if (!c.committed.length) body += '<div class="placeholder">No committed issue here has an FR setting its date.</div>';
+      else if (c.coverIdx < 0) body += `<div class="coverline bad">Still ${r1(c.over - c.committed[c.committed.length - 1].cumulative)} d over after all of these: needs capacity or a later quarter</div>`;
+    }
+    h += section(`pb-${c.team}-${c.quarter.key}-${c.skill}`, `${c.team} · ${c.quarter.label} · ${sk}`, `${r1(c.over)} d over`, `${r1(c.planned)} d planned on ${r1(c.capacity)} d`, body, fit.cells.indexOf(c) === 0);
+  }
+  h += `<h3 class="lgroup">Planned after their commit <span class="cnt">${fit.late.length}</span></h3>`;
+  h += fit.late.length ? capped(fit.late, (x) => issueRow(x, 'late', ''), 'pb-late') : '<div class="placeholder">Nothing planned after its commit.</div>';
+  el.innerHTML = `<div class="lists">${h}</div>`;
+}
+
+const day = (d) => (d ? String(d).slice(0, 10) : null);
+function planned(i) {
+  if (!i.start && !i.end) return 'Not planned';
+  if (i.start && i.end && day(i.start) !== day(i.end)) return `${fd(day(i.start))} → ${fd(day(i.end))}`;
+  return `Pot · ${fd(day(i.end || i.start))}`;
 }
 
 /** History: this week per quarter, planner changes, Notion edits since the last sync. */

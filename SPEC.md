@@ -116,6 +116,15 @@ Decided 2026-10-10 (v2):
 - Scope: committed FRs linked to open issues of our 4 teams. Toggle "only issues in overbooked quarters". Each row shows the COM/AM (Lightdash "Responsible success email").
 - Override = "Not a pushback" button with an optional reason, logged in the audit DB (category "Pushback override"). Actual pushback uses the existing FR edit and owner ping.
 
+Rebuilt 2026-10-28 as "Make the plan fit" (Tom: the old list had too many options to act on). Tom plans every committed issue on its quarter pot, then uses this tab to see what to move or push back:
+- One section per over-capacity team × quarter × skill (FE/BE/MOB), biggest overbooking first, header "X d over".
+- Step 1: the uncommitted work that can simply move out (same push-out order as the Quarter plan, quick wins last), count and days, with "See them".
+- Step 2: the committed issues in that cell (not closed, not in progress, commit set by an FR), easiest to push back first: softest FR priority of the commit-setting FR(s) (Needed for go-live hardest, then Needed 1 month before, Needed after go-live, anything else), then fewest customers, then most days freed, then smallest deal. Each row shows commit, planned, days in this cell, customers, a running "freed so far" total and what the commit becomes if its setting FR(s) are pushed back ("commit becomes X" or "no commit left"). A line marks the point where the cell fits.
+- Each commit-setting FR shows priority, customer, FR link, deal size and COM/AM, with buttons Ask COM/AM, Edit FR and Not a pushback.
+- Below the sections: "Planned after their commit" (late vs commit, with an FR setting it), earliest commit first.
+- Ask COM/AM (Tom, 2026-10-28): a Slack DM to the FR's Responsible Success, as the viewer, after an editable preview. Template: "Hi @Owner, we're planning Q1 2027 and Transport Planning is overbooked. <Issue> is committed for 15/01/2027 because of <Customer>'s request <FR> (Needed for go-live). Would it be ok to lower the priority / move the date? Could u check with <Customer> and let me know? Thx!" (for a late issue: "<Issue> is planned after its commit"). The owner is found in Slack by email (slack_search_users). Each DM writes an audit row (category "COM/AM asked", field "Slack", After = message link) and the FR then shows "Asked <date> · open in Slack".
+- Tab count = unique issues listed. "Not a pushback" hides an FR; an issue leaves when all its commit-setting FRs are hidden.
+
 ## Features and screens
 
 The main screen is the capacity puzzle; everything else feeds it or warns about it.
@@ -214,7 +223,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Effort growth (decided 2026-10-10, the "alternative path"): the planner keeps its own baseline in the Notion database "Roadmap Planner Effort Baseline" (`collection://62afe97a-fdaf-4007-af81-5d1e1498661e`). On every live open it reads this quarter's rows and adds one row per committed issue of our 4 teams with effort that has none yet (its effort when first seen). Flag: effort now ≥ 1.5 × baseline. History starts 10 Oct 2026, so Q4 2026 growth is measured from then. Baseline rows are the record themselves; no audit row.
   - "Low confidence" dropped (Tom, 2026-10-10): no confidence field exists.
 
-**5. Pushback candidates:** ranked list (see Scoring), with the COM/AM to contact.
+**5. Pushback (Make the plan fit):** per overbooked team × quarter × skill, what to move out and which commits to challenge first, with an Ask COM/AM Slack DM (see Scoring).
 
 **6. Change history**
 
