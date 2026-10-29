@@ -14,7 +14,7 @@ const estimated = (i) => Object.values(i.skillEfforts || {}).some((v) => v > 0);
 export const RULES = [
   { key: 'afterCommit', label: 'Planned after the committed date' },
   { key: 'committedUnplanned', label: 'Committed, not planned' },
-  { key: 'committedBlocked', label: 'Committed, status Blocked/on hold' },
+  { key: 'committedBlocked', label: 'Committed in the next 6 months, status Blocked/on hold' },
   { key: 'dependency', label: 'Dependency in the wrong order' },
   { key: 'noTeam', label: 'No team: invisible in capacity' },
   { key: 'effortGrowth', label: 'Effort grew 50% or more on a committed issue this quarter' },
@@ -38,12 +38,15 @@ export function atRisk(run, { team = 'all', baseline = null } = {}) {
     return (picked || TEAMS).some((x) => t.has(x));
   };
   const out = Object.fromEntries(RULES.map((r) => [r.key, []]));
+  // Blocked/on hold: only commits up to 6 months ahead, overdue ones included (Tom, 2026-10-29).
+  const now = run.now instanceof Date ? run.now : new Date();
+  const sixMonths = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 6, now.getDate())).toISOString().slice(0, 10);
   for (const i of open) {
     const planned = i.start || i.end;
     if (inScope(i)) {
       if (lateVsCommit(i)) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
       if (i.committed && !planned && estimated(i)) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
-      if (i.committed && i.status === 'Blocked/on hold') out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
+      if (i.committed && i.status === 'Blocked/on hold' && String(i.committed).slice(0, 10) <= sixMonths) out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
       // A blocker that ends after this issue starts (pot issues: Start = End).
       const start = i.start || i.end;
       for (const b of blockedBy.get(i.id) || []) {
