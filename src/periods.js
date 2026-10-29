@@ -92,6 +92,25 @@ export function potQuarters(h, extra = 2) {
   return out;
 }
 
+/**
+ * Month buttons up to the last pot quarter (Tom, 2026-10-29: "month options for the entire year"):
+ * the horizon's months, then each month of the `extra` quarters after it, labelled with the year
+ * ("Jul '27") so they cannot be mixed up with this year's.
+ */
+export function potMonths(h, extra = 2) {
+  const out = h.flatMap((q) => q.months.map((m) => ({ lastFriday: m.lastFriday, label: m.label, quarterEnd: q.lastFriday })));
+  let cur = { year: h[h.length - 1].year, q: h[h.length - 1].q };
+  for (let i = 0; i < extra; i++) {
+    cur = nextQuarter(cur);
+    const qEnd = lastFridayOfQuarter(cur.year, cur.q);
+    for (let k = 0; k < 3; k++) {
+      const m0 = (cur.q - 1) * 3 + k;
+      out.push({ lastFriday: lastFridayOfMonth(cur.year, m0), label: `${MONTHS[m0]} '${String(cur.year).slice(2)}`, quarterEnd: qEnd });
+    }
+  }
+  return out;
+}
+
 // One date format everywhere in the planner: DD/MM/YYYY (Tom, 2026-10-27).
 const pad = (n) => String(n).padStart(2, '0');
 export function formatDate(iso) {

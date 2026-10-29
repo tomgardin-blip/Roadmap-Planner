@@ -5,7 +5,7 @@
 //   3. fake Lightdash-shaped rows.
 // All three run through the same capacity engine.
 
-import { horizon as buildHorizon, formatDate, formatDateTime, potQuarters } from '../periods.js';
+import { horizon as buildHorizon, formatDate, formatDateTime, potQuarters, potMonths } from '../periods.js';
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams, issueTeams } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
@@ -538,7 +538,7 @@ function renderBulkBar() {
   }
   const btn = (d, label) => `<button data-bulkmove="${d}" data-label="${label}" title="Set Start = End = ${d} on the ${n} selected">${label}</button>`;
   let h = `<span class="bcount"><b>${n}</b> selected</span><span class="datebtns">`;
-  for (const q of horizon) for (const m of q.months) h += btn(m.lastFriday, m.label);
+  for (const m of potMonths(horizon)) h += btn(m.lastFriday, m.label);
   h += '<span class="sep"></span>';
   for (const q of potQuarters(horizon)) h += btn(q.lastFriday, q.shortLabel);
   bar.innerHTML = `${h}</span><button class="bclear" data-bulkclear>Clear</button>${nf ? `<button class="bedit" data-frbulkedit>Edit ${nf} FR${nf === 1 ? '' : 's'}</button>` : ''}`;

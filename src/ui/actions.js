@@ -1,7 +1,7 @@
 // Write flows in the UI: move an issue (date buttons), edit an FR (Success Committed, Priority),
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
-import { formatDate, potQuarters } from '../periods.js';
+import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { postEstimate, postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
@@ -122,7 +122,7 @@ function dateChips(horizon, current) {
   if (!horizon.length) return '';
   const b = (d, label) => `<button type="button" class="${d === current ? 'cur' : ''}" data-scdate="${d}" title="${fd(d)}">${esc(label)}</button>`;
   let h = '<div class="datebtns">';
-  for (const q of horizon) for (const m of q.months) h += b(m.lastFriday, m.label);
+  for (const m of potMonths(horizon)) h += b(m.lastFriday, m.label);
   h += '<span class="sep"></span>';
   for (const q of potQuarters(horizon)) h += b(q.lastFriday, q.shortLabel);
   // Clear the committed date (Tom, 2026-10-27): writes an empty Success Committed.

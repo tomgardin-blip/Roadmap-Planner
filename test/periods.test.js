@@ -55,3 +55,12 @@ test('pot quarters: the three visible ones plus the next two, labelled with thei
   assert.deepEqual(p.map((x) => x.shortLabel), ['Q4', 'Q1', 'Q2', "Q3 '27", "Q4 '27"]);
   assert.deepEqual(p.slice(3).map((x) => x.lastFriday), ['2027-09-24', '2027-12-31']);
 });
+
+test('potMonths: month buttons up to the last pot quarter, later ones with the year (Tom, 2026-10-29)', async () => {
+  const { horizon, potMonths } = await import('../src/periods.js');
+  const m = potMonths(horizon('2026-10-29'));
+  assert.equal(m.length, 15);
+  assert.deepEqual(m.slice(9, 12).map((x) => x.label), ["Jul '27", "Aug '27", "Sep '27"]);
+  assert.equal(m[10].lastFriday, '2027-08-27');
+  assert.equal(m[14].label, "Dec '27");
+});
