@@ -3,7 +3,7 @@
 // 2. Notion: every issue edited since Lightdash's last sync, patched on top (Notion wins).
 // Each source fails on its own: no Notion still renders Lightdash with a stale warning.
 
-import { CAPACITY_DS, feedQueryInput, parseFeed } from './capacityFeed.js';
+import { CAPACITY_DS, feedQueryInput, parseFeed, ldCapacityQuery, parseLdCapacity } from './capacityFeed.js';
 import { parseComments } from '../notion/comments.js';
 import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
@@ -270,6 +270,11 @@ export async function syncBaseline(mcp, run, quarter, { write = true } = {}) {
 /** The latest audit rows (newest first), up to `max`. */
 /** Latest capacity run from Sander's feed (src/data/capacityFeed.js); null when the table is not set up or empty. */
 export async function loadCapacityFeed(mcp) {
+  // Lightdash engineering_capacity first (hourly, Sander 2026-10-29); the Notion feed only if that fails.
+  try {
+    const feed = parseLdCapacity(await runQuery(mcp, 'Roadmap Planner: engineering capacity per week', ldCapacityQuery()));
+    if (feed) return feed;
+  } catch { /* fall back to the Notion feed */ }
   if (!CAPACITY_DS) return null;
   const r = await call(mcp, NOTION, 'notion-query-data-sources', feedQueryInput());
   return parseFeed(r?.results);

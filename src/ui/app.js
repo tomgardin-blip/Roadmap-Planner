@@ -688,11 +688,12 @@ function renderChrome() {
   }
   pills.push(`<span class="pill">Today <b>${esc(formatDate(TODAY))}</b></span>`);
   if (state.mode === 'live' && state.run) {
-    // Where capacity comes from: Sander's daily run of the data app's engine, or our own copy.
+    // Where capacity comes from: Lightdash engineering_capacity (the data app's engine, rebuilt hourly), the Notion feed, or our own copy.
     const src = state.run.capacitySource;
-    if (src) pills.push(`<span class="pill" title="Capacity from the data app's own engine (Sander's daily run${src.engine ? `, engine ${esc(src.engine)}` : ''}). Demand from the planner's engine copy.">Capacity ${esc(fmtTime(src.run))}</span>`);
+    const ld = /Lightdash/.test(src?.engine || '');
+    if (src) pills.push(`<span class="pill" title="${ld ? 'Capacity from Lightdash engineering_capacity: the data app\'s own engine, rebuilt hourly, read when the planner opened.' : `Capacity from the data app's own engine (Sander's daily run${src.engine ? `, engine ${esc(src.engine)}` : ''}).`} Demand from the planner's engine copy.">Capacity ${ld ? 'Lightdash ' : ''}${esc(fmtTime(src.run))}</span>`);
     else {
-      const why = !CAPACITY_DS ? 'Sander\'s capacity feed is not set up yet' : state.feedError ? `Capacity feed unreadable: ${state.feedError}` : state.feed ? `Sander's capacity feed is stale (last run ${fmtTime(state.feed.run)})` : 'Sander\'s capacity feed has no runs yet';
+      const why = state.feedError ? `Lightdash capacity unreadable and no Notion feed: ${state.feedError}` : !CAPACITY_DS ? 'Sander\'s capacity feed is not set up yet' : state.feedError ? `Capacity feed unreadable: ${state.feedError}` : state.feed ? `Sander's capacity feed is stale (last run ${fmtTime(state.feed.run)})` : 'Sander\'s capacity feed has no runs yet';
       pills.push(`<span class="pill warn" title="${esc(why)}. Capacity comes from the planner's own copy of the engine (9 Oct export) and can differ from the data app per skill.">Capacity: own engine copy</span>`);
     }
   }

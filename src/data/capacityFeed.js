@@ -46,10 +46,46 @@ export function feedAgeDays(feed, now = new Date()) {
 export function applyFeed(run, feed) {
   if (!feed) return run;
   const cap = (run.computed.capWeekTeamSkill ||= {});
-  for (const [team, skills] of Object.entries(feed.weeks)) {
+  for (const [key, skills] of Object.entries(feed.weeks)) {
+    const team = run.teamIdByLabel?.[key] || key; // Lightdash gives team labels, the engine keys by id
     cap[team] ||= {};
     for (const [skill, weeks] of Object.entries(skills)) cap[team][skill] = { ...weeks };
   }
   run.capacitySource = { run: feed.run, engine: feed.engine };
   return run;
+}
+
+// Lightdash "engineering_capacity" explore (Sander, 2026-10-29): one row per person × skill × week,
+// net of part-time, ramp-up, holidays and the 0.6 productivity factor, rebuilt hourly by the data app's
+// own engine. Summed per team × skill × week it gives the planner's capacity cards. Replaces the Notion
+// feed as the capacity source (the feed had no runs).
+export const LD_CAPACITY_TEAMS = ['Order + Invoice', 'Transport Planning', 'Trip Execution', 'Application Platform'];
+export function ldCapacityQuery() {
+  return {
+    exploreName: 'engineering_capacity',
+    dimensions: ['engineering_team_allocations_team', 'engineering_capacity_skill', 'engineering_capacity_week_start'],
+    metrics: ['engineering_capacity_sum_capacity_days'], sorts: [], limit: 5000,
+    filters: { type: 'and', dimensions: [
+      { fieldId: 'engineering_team_allocations_team', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: LD_CAPACITY_TEAMS },
+      { fieldId: 'engineering_capacity_skill', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: [...SKILLS] },
+    ] },
+  };
+}
+
+/**
+ * Lightdash rows → the feed shape ({ run, engine, weeks: { team label: { skill: { Monday: days } } } }).
+ * Every team × skill of ours is present (empty when it has no capacity), so none falls back to the
+ * engine copy. Weeks are keyed by their Monday, as in the engine.
+ */
+export function parseLdCapacity(rows, at = new Date().toISOString()) {
+  if (!rows?.length) return null;
+  const weeks = {};
+  for (const t of LD_CAPACITY_TEAMS) { weeks[t] = {}; for (const s of SKILLS) weeks[t][s] = {}; }
+  for (const r of rows) {
+    const t = r.engineering_team_allocations_team; const s = r.engineering_capacity_skill;
+    const wk = String(r.engineering_capacity_week_start || '').slice(0, 10);
+    if (!weeks[t]?.[s] || !/^\d{4}-\d{2}-\d{2}$/.test(wk)) continue;
+    weeks[t][s][wk] = (weeks[t][s][wk] || 0) + (+r.engineering_capacity_sum_capacity_days || 0);
+  }
+  return { run: at, engine: 'Lightdash engineering_capacity', weeks };
 }
