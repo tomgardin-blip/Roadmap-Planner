@@ -31,14 +31,16 @@ export function blockedIds(issues) {
 /** Last calendar day of a horizon quarter. */
 const quarterEnd = (q) => `${q.year}-${String(q.q * 3).padStart(2, '0')}-${q.q === 1 || q.q === 4 ? 31 : 30}`;
 
-export function pushOut({ run, scores, team, skill, quarter, over, quickWinMaxEffort = SCORING_DEFAULTS.quickWinMaxEffort }) {
+export function pushOut({ run, scores, team, skill, quarter, over, kept = new Set(), quickWinMaxEffort = SCORING_DEFAULTS.quickWinMaxEffort }) {
   const all = cellIssues(run, team, skill, quarter.key);
-  const excluded = { committed: 0, inProgress: 0 };
+  const excluded = { committed: 0, inProgress: 0, kept: 0 };
   const items = [];
   for (const { issue, days } of all) {
     if (CLOSED.has(issue.status)) continue;
     if (issue.committed) { excluded.committed++; continue; }
     if (IN_PROGRESS.has(issue.status)) { excluded.inProgress++; continue; }
+    // Kept by the viewer (Tom, 2026-10-29: remove an issue from the suggestions), from the audit log.
+    if (kept.has(issue.id)) { excluded.kept++; continue; }
     const s = scores?.get(issue.id) || null;
     items.push({ issue, days, score: s, quickWin: isQuickWin(s, quickWinMaxEffort) });
   }

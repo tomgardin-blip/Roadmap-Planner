@@ -30,7 +30,7 @@ test('push out: no commit, not in progress; lowest score first, quick wins last;
   const s = sc([['low', 0.5, 6], ['high', 9, 4], ['qw', 20, 1], ['com', 1, 3], ['busy', 1, 3]]);
   const p = pushOut({ run: r, scores: s, team: TP, skill: 'BE', quarter: Q4, over: 6 });
   assert.deepEqual(ids(p.items), ['low', 'high', 'qw']);
-  assert.deepEqual(p.excluded, { committed: 1, inProgress: 1 });
+  assert.deepEqual(p.excluded, { committed: 1, inProgress: 1, kept: 0 });
   assert.equal(p.coverIdx, 0); // 6 >= 6
   assert.equal(p.items[2].cumulative, 11);
 });
@@ -73,4 +73,11 @@ test('team routing: Team property or assignee allocation team', () => {
 
 test('blockedIds ignores closed blockers', () => {
   assert.deepEqual([...blockedIds([{ status: 'Backlog', blocks: ['a'] }, { status: 'Done', blocks: ['b'] }])], ['a']);
+});
+
+test('push out: an issue kept by the viewer is not suggested (Tom, 2026-10-29)', () => {
+  const r = run([F({ id: 'a', team: TP, be: 6, ...pot('2026-12-25') }), F({ id: 'b', team: TP, be: 4, ...pot('2026-12-25') })]);
+  const p = pushOut({ run: r, scores: sc([['a', 1, 6], ['b', 2, 4]]), team: TP, skill: 'BE', quarter: Q4, over: 6, kept: new Set(['a']) });
+  assert.deepEqual(ids(p.items), ['b']);
+  assert.equal(p.excluded.kept, 1);
 });

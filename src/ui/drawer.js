@@ -122,8 +122,9 @@ function frLine(f, cust, titleHtml, issueId = null, pre = '') {
 }
 
 /** Compact row for a suggestion list. */
-function suggestion(x, skill, label) {
+function suggestion(x, skill, label, keepBtn = false) {
   const { issue } = x;
+  shown.issues.set(issue.id, issue); // the bulk bar moves ticked suggestions too (Tom, 2026-10-29)
   const title = issue.url ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
   const tags = [
     x.quickWin ? '<span class="tag qw">Quick win</span>' : '',
@@ -132,20 +133,29 @@ function suggestion(x, skill, label) {
     `<span class="tag">${whenOf(issue)}</span>`,
     issue.status ? `<span class="tag" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
   ].join('');
-  return `<div class="sugg"><div class="t">${title}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed, x.issue?.id)}</div>`;
+  const keep = keepBtn && !readOnly && isAllowed('issue', issue.id) ? `<button type="button" class="fredit keepbtn" data-keep="${issue.id}" title="Take it out of the push-out suggestions (logged; Suggest again undoes it)">Keep, don't suggest</button>` : '';
+  return `<div class="sugg"><div class="t">${selBox(issue)}${title}${keep}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed, x.issue?.id)}</div>`;
 }
 
-function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
+// "Select all" on a suggestion list (Tom, 2026-10-29), plus "down to the line" when part of it covers the overbooking.
+function selAll(items, toLine = null) {
+  if (readOnly) return '';
+  const ids = (xs) => xs.map((x) => x.issue.id).filter((id) => isAllowed('issue', id)).join(',');
+  return `<div class="selall"><button type="button" class="fredit" data-selall="${ids(items)}">Select all ${items.length}</button>${toLine && toLine.length < items.length ? `<button type="button" class="fredit" data-selall="${ids(toLine)}">Select down to the line (${toLine.length})</button>` : ''}<button type="button" class="fredit" data-selnone="${ids(items)}">Select none</button><span class="muted">then pick a month or quarter in the bar at the bottom</span></div>`;
+}
+
+function suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kept }) {
   const diff = c.planned - c.capacity;
   if (extra.scores === 'loading') return '<h4>Suggestions</h4><div class="placeholder">Loading FR demand from Lightdash for the scores…</div>';
   if (extra.scores === 'error') return `<h4>Suggestions</h4><div class="placeholder">Scores unavailable: ${esc(extra.scoresError || '')}</div>`;
   if (diff > 1e-9) {
-    const p = pushOut({ run, scores, team, skill, quarter, over: diff });
-    const ex = [p.excluded.committed && `${p.excluded.committed} committed`, p.excluded.inProgress && `${p.excluded.inProgress} in progress`].filter(Boolean).join(', ');
+    const p = pushOut({ run, scores, team, skill, quarter, over: diff, kept });
+    const ex = [p.excluded.committed && `${p.excluded.committed} committed`, p.excluded.inProgress && `${p.excluded.inProgress} in progress`, p.excluded.kept && `${p.excluded.kept} kept by you`].filter(Boolean).join(', ');
     let h = `<h4>Suggested to push out · ${fmt(diff)} d over</h4><div class="hint">No commit, not in progress. Lowest customer value per day first, then the biggest; quick wins last (keep those).${ex ? ` Not shown: ${ex}.` : ''}</div>`;
     if (!p.items.length) return `${h}<div class="placeholder">Nothing movable: everything here is committed or in progress.</div>`;
+    h += selAll(p.items, p.coverIdx >= 0 ? p.items.slice(0, p.coverIdx + 1) : null);
     p.items.forEach((x, i) => {
-      h += suggestion(x, skill, `${fmt(x.cumulative)} d moved`);
+      h += suggestion(x, skill, `${fmt(x.cumulative)} d moved`, true);
       if (i === p.coverIdx) h += `<div class="coverline">Overbooking covered above this line</div>`;
     });
     if (p.coverIdx < 0) h += `<div class="coverline bad">Still ${fmt(diff - p.items[p.items.length - 1].cumulative)} d over after moving all of these</div>`;
@@ -158,6 +168,7 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
   // Top 20, the rest behind "Show all" (decided 2026-10-10). Push out stays a full list.
   const top = p.items.slice(0, 20).map((x) => suggestion(x, skill)).join('');
   const rest = p.items.slice(20).map((x) => suggestion(x, skill)).join('');
+  if (p.items.length) h += selAll(p.items);
   h += top || '<div class="placeholder">Nothing fits the free days.</div>';
   if (rest) h += `<details class="more"><summary>Show all ${p.items.length}</summary>${rest}</details>`;
   h += `<h4>Quick wins that fit · ${p.quickWins.length}</h4><div class="hint">No commit, at most 2 d total effort, highest score first. Your call.</div>`;
@@ -165,7 +176,7 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) {
   return h;
 }
 
-function issueCard({ issue, days }, skill, horizon, change, score) {
+function issueCard({ issue, days }, skill, horizon, change, score, kept = false) {
   const late = lateVsCommit(issue);
   const eff = ['FE', 'BE', 'MOB'].map((s) => {
     const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0;
@@ -183,8 +194,9 @@ function issueCard({ issue, days }, skill, horizon, change, score) {
   ].join('');
   const title = issue.url && !issue.url.includes('example.invalid')
     ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name);
+  const keepTag = kept ? `<span class="tag">Kept, not suggested</span>${readOnly ? '' : `<button type="button" class="fredit keepbtn" data-unkeep="${issue.id}" title="Put it back in the push-out suggestions (logged)">Suggest again</button>`}` : '';
   return `<div class="issue"><div class="t">${selBox(issue)}${title}</div>
-    <div class="meta">${tags}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span></div>
+    <div class="meta">${tags}${keepTag}<span class="eff">${eff} d</span><span><b>${fmt(days)}</b> d in this cell</span></div>
     ${frBlock(score, issue.committed, issue.id)}
     ${dateButtons(issue, horizon)}</div>`;
 }
@@ -270,7 +282,7 @@ function commentLine(c) {
   return `<div class="cmt"><span class="tag qw">💬 ${c.count} comment${c.count === 1 ? '' : 's'}</span> <span class="muted">Latest${c.last.name ? ` by ${esc(c.last.name)}` : ''}${c.last.at ? `, ${formatDate(c.last.at.slice(0, 10))}` : ''}:</span> ${esc(t)}</div>`;
 }
 
-export function openDrawer(el, { run, grid, horizon, changes = [], scores = null, backlog = [], extra = {}, names = new Map(), team, skill, period }) {
+export function openDrawer(el, { run, grid, horizon, changes = [], scores = null, backlog = [], extra = {}, names = new Map(), kept = new Set(), team, skill, period }) {
   dealNames = names;
   const byId = new Map(changes.map((c) => [c.id, c]));
   const row = grid.rows.find((r) => r.team === team && r.skill === skill);
@@ -288,6 +300,14 @@ export function openDrawer(el, { run, grid, horizon, changes = [], scores = null
   const hasCap = c.capacity != null;
   const diff = hasCap ? Math.round((c.planned - c.capacity) * 10) / 10 : 0;
   const over = diff > 0;
+  // Cell list (Tom, 2026-10-29): suggestions first, then the other uncommitted issues (suggested ones not
+  // repeated), committed issues at the bottom.
+  const sugg = quarter ? suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kept }) : hasCap ? '<div class="hint">Suggestions are on the quarter total: month cells are neutral.</div>' : '';
+  const suggested = new Set(quarter && over && extra.scores === 'ok' ? pushOut({ run, scores, team, skill, quarter, over: diff, kept }).items.map((x) => x.issue.id) : []);
+  // Kept ones show in the uncommitted list with "Suggest again".
+  const card = (x) => issueCard(x, skill, horizon, byId.get(x.issue.id), scores?.get(x.issue.id), kept.has(x.issue.id));
+  const committed = list.filter((x) => x.issue.committed);
+  const rest = list.filter((x) => !x.issue.committed && !suggested.has(x.issue.id));
 
   el.innerHTML = `
     <div class="dh"><b>${esc(team)} · ${skill}</b><span class="sub">${label}</span><span class="spacer"></span>
@@ -299,9 +319,10 @@ export function openDrawer(el, { run, grid, horizon, changes = [], scores = null
       <div class="stat"><b>${list.length}</b>issues</div>
     </div>
     <div class="dbody">
-      ${quarter ? suggestions({ run, scores, backlog, extra, team, skill, quarter, c }) : hasCap ? '<div class="hint">Suggestions are on the quarter total: month cells are neutral.</div>' : ''}
-      <h4>Issues in this cell · by committed date, then score</h4>
-      ${list.map((x) => issueCard(x, skill, horizon, byId.get(x.issue.id), scores?.get(x.issue.id))).join('') || '<div class="placeholder">No issues.</div>'}
+      ${sugg}
+      ${rest.length ? `<h4>${suggested.size ? 'Other uncommitted issues in this cell, not suggested' : 'Uncommitted issues in this cell'} · ${rest.length}</h4>${suggested.size ? '<div class="hint">In progress, or kept by you, so not suggested. Suggested ones are listed above only.</div>' : ''}${rest.map(card).join('')}` : ''}
+      <h4>Committed issues in this cell · ${committed.length}</h4><div class="hint">Never suggested: moving them needs a pushback first. Earliest commit first.</div>
+      ${committed.map(card).join('') || '<div class="placeholder">None.</div>'}
     </div>`;
   el.classList.add('open');
 }

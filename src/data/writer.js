@@ -149,6 +149,15 @@ export async function dismissPushback(mcp, { fr, issue, reason }) {
   });
 }
 
+/** Keep an issue out of the push-out suggestions, or suggest it again (Tom, 2026-10-29). Audit row only. */
+export async function setPushOutKeep(mcp, { issue, keep, reason }) {
+  assertAllowed('issue', issue.id);
+  await audit(mcp, {
+    category: 'Push-out override', field: 'Pushback', before: keep ? 'Suggested to push out' : 'Kept', after: keep ? 'Kept' : 'Suggested to push out',
+    reason, issueId: issue.id, itemName: issue.name, updateId: updateId(),
+  });
+}
+
 /** #roadmap_product post about an issue, then an audit row holding the message link (Tom, 2026-10-27). */
 export async function postRoadmap(mcp, { issue, message }) {
   const res = await postSlack(mcp, ROADMAP_CHANNEL.id, message);

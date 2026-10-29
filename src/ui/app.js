@@ -11,7 +11,7 @@ import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed } from '../data/capacityFeed.js';
 import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
-import { userName, setIssuePriority } from '../data/writer.js';
+import { userName, setIssuePriority, setPushOutKeep } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
@@ -189,6 +189,28 @@ function shell() {
       const items = selectedIssues().map((id) => shownIssue(id)).filter(Boolean).map((issue) => ({ issue, blockers: blockersOf(issue) }));
       startBulkMove({ mcp: state.mcp, items, date: bm.dataset.bulkmove, label: bm.dataset.label, onDone: (done) => { done.forEach(({ issue }) => toggleSelected(issue.id, false)); afterMoves(done); renderBulkBar(); } });
       return;
+    }
+    const kp = e.target.closest('[data-keep],[data-unkeep]');
+    if (kp) {
+      const keep = kp.hasAttribute('data-keep');
+      const id = kp.dataset.keep || kp.dataset.unkeep;
+      const issue = shownIssue(id) || state.run?.issues.find((i) => i.id === id);
+      if (!issue || !state.mcp) return;
+      // Shown at once; the audit row is written in the background.
+      state.audit = [{ category: 'Push-out override', field: 'Pushback', after: keep ? 'Kept' : 'Suggested to push out', issueId: id, itemName: issue.name, at: new Date().toISOString() }, ...(state.audit || [])];
+      recompute(); renderDrawer();
+      toast(`${keep ? 'Kept, no longer suggested' : 'Suggested again'}: ${issue.name}. Saving…`, 'busy');
+      setPushOutKeep(state.mcp, { issue, keep }).then(() => toast(`${keep ? 'Kept' : 'Suggested again'}: ${issue.name}. Logged.`), (err) => toast(`Not logged: ${explainError(NOTION, err)}. It comes back on the next refresh.`, 'bad'));
+      return;
+    }
+    const sa = e.target.closest('[data-selall],[data-selnone]');
+    if (sa) {
+      const on = sa.hasAttribute('data-selall');
+      (sa.dataset.selall || sa.dataset.selnone || '').split(',').filter(Boolean).forEach((id) => {
+        toggleSelected(id, on);
+        document.querySelectorAll(`input.bsel[data-bsel="${id}"]`).forEach((x) => { x.checked = on; });
+      });
+      renderBulkBar(); return;
     }
     if (e.target.closest('[data-frbulkclear]')) { clearFrSelected(); document.querySelectorAll('input.frsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); return; }
     if (e.target.closest('[data-frbulkedit]')) {
@@ -517,6 +539,13 @@ function initTeamPicker() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) open(false); });
 }
 
+/** Issues kept out of the push-out suggestions (Tom, 2026-10-29): the latest "Push-out override" row per issue decides. */
+function keptSet() {
+  const last = new Map();
+  for (const a of [...(state.audit || [])].sort((x, y) => String(x.at).localeCompare(String(y.at)))) if (a.category === 'Push-out override' && a.issueId) last.set(a.issueId, a.after === 'Kept');
+  return new Set([...last].filter(([, k]) => k).map(([id]) => id));
+}
+
 /** FR id → its "COM/AM asked" DMs from the audit log, newest first. */
 function askedMap() {
   const m = new Map();
@@ -615,7 +644,7 @@ function renderDrawer() {
   if (!state.drawer || !state.run) return;
   openDrawer(document.getElementById('drawer'), {
     run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
-    scores: state.scores, backlog: state.backlog, extra: state.extra, names: state.dealNames, ...state.drawer,
+    scores: state.scores, backlog: state.backlog, extra: state.extra, names: state.dealNames, kept: keptSet(), ...state.drawer,
   });
   restoreFolds(document.getElementById('drawer'));
 }
@@ -752,7 +781,7 @@ function recompute() {
   const notPushback = new Set((state.audit || []).filter((a) => a.category === 'Pushback override' && a.frId).map((a) => a.frId));
   state.fit = x.scores === 'ok' && state.grid && capacityOk() ? planFit({
     run: state.run, grid: state.grid, horizon, scores: state.scores, allScores: state.allScores,
-    dealSize: x.deals, dismissed: notPushback, team: state.teamFilter,
+    dealSize: x.deals, dismissed: notPushback, kept: keptSet(), team: state.teamFilter,
   }) : null;
   state.pushback = state.fit ? [...state.fit.cells.flatMap((c) => (c.fits ? [] : c.committed)), ...state.fit.late] : null;
   // Data quality (Tom, 2026-10-28): once all FRs and the backlog are in.

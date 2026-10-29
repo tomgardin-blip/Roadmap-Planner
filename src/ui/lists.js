@@ -205,8 +205,8 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
   };
   const seg = `<span class="seg qpseg">${horizon.map((x) => `<button data-qp="${x.key}" class="${x.key === q.key ? 'on' : ''}">${esc(x.label)}</button>`).join('')}</span>`;
   const picked = pickedTeams(team);
-  const tseg = `<span class="seg qpteams" role="group" aria-label="Teams"><button data-qpteam="all" class="${picked ? '' : 'on'}">All teams</button>${TEAMS.map((t) => `<button data-qpteam="${esc(t)}" class="${picked?.includes(t) ? 'on' : ''}" aria-pressed="${!!picked?.includes(t)}">${esc(t)}</button>`).join('')}</span>`;
-  let h = `<div class="lhead"><b>Quarter plan</b>${seg}${tseg}<span class="lsub">Engineering issues planned in ${esc(q.label)} (end date in the quarter), per team. Set the issue Priority here; it is written to Notion and logged.</span></div>`;
+  // One team filter only: the toolbar's (Tom, 2026-10-29: "2 ways to filter on team" was a bit much).
+  let h = `<div class="lhead"><b>Quarter plan</b>${seg}<span class="lsub">Engineering issues planned in ${esc(q.label)} (end date in the quarter), per team. Set the issue Priority here; it is written to Notion and logged.</span></div>`;
   const teams = pickedTeams(team) || TEAMS;
   for (const tm of teams) {
     const list = run.issues.filter((i) => inQ(i) && issueTeams(run, i).has(tm)).sort(byPlan);

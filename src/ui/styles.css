@@ -516,3 +516,9 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 
 /* Quarter pots on their own row under the months (Tom, 2026-10-29) */
 .datebtns.qbtns { margin-top: 4px; }
+
+/* Select all on cell suggestions (Tom, 2026-10-29) */
+.selall { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 8px; }
+.selall .fredit { float: none; }
+.sugg .t .bsel { margin-right: 6px; }
+.keepbtn { margin-left: 8px; }

@@ -48,7 +48,7 @@ const byPushability = (a, b) => a.commit.hardness - b.commit.hardness
  *            committed: [{ issue, days, customers, commit, cumulative, covers }], coverIdx, fits }],
  *           late: [{ issue, customers, commit }] }
  */
-export function planFit({ run, grid, horizon, scores, allScores, dealSize, dismissed, team = 'all' }) {
+export function planFit({ run, grid, horizon, scores, allScores, dealSize, dismissed, kept = new Set(), team = 'all' }) {
   const picked = pickedTeams(team) || TEAMS;
   const ctx = { scores, allScores, dealSize, dismissed };
   const cells = [];
@@ -58,7 +58,7 @@ export function planFit({ run, grid, horizon, scores, allScores, dealSize, dismi
       const c = r.quarters[qi];
       const over = (c.planned || 0) - (c.capacity || 0);
       if (!(c.capacity > 0) || over <= 1e-9) return;
-      const out = pushOut({ run, scores, team: r.team, skill: r.skill, quarter: q, over });
+      const out = pushOut({ run, scores, team: r.team, skill: r.skill, quarter: q, over, kept });
       const uncommitted = { count: out.items.length, days: out.items.reduce((a, x) => a + x.days, 0) };
       const committed = [];
       for (const { issue, days } of cellIssues(run, r.team, r.skill, q.key)) {
