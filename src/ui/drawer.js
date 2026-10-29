@@ -61,9 +61,10 @@ function dateButtons(issue, horizon) {
   const pot = issue.start && issue.start === issue.end;
   const tip = (d) => (can ? `Set Start = End = ${formatDate(d)} in Notion` : 'No Notion id');
   const btn = (d, label, cur) => `<button ${can ? '' : 'disabled'} class="${cur ? 'cur' : ''}" data-move="${d}" data-label="${label}" data-issue="${issue.id}" title="${tip(d)}">${label}</button>`;
+  // Months on one row, quarter pots on the row below (Tom, 2026-10-29).
   let h = '<div class="datebtns">';
   for (const m of potMonths(horizon)) h += btn(m.lastFriday, m.label, pot && issue.end === m.lastFriday && issue.end !== m.quarterEnd);
-  h += '<span class="sep"></span>';
+  h += '</div><div class="datebtns qrow">';
   for (const q of potQuarters(horizon)) h += btn(q.lastFriday, q.shortLabel, pot && issue.end === q.lastFriday);
   return h + '</div>';
 }

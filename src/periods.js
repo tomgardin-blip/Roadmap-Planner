@@ -83,7 +83,8 @@ export function horizon(todayISO) {
  * Capacity cards stay on the three visible quarters.
  */
 export function potQuarters(h, extra = 2) {
-  const out = h.map((q) => ({ lastFriday: q.lastFriday, shortLabel: q.shortLabel }));
+  // Every button carries the year (Tom, 2026-10-29): "Q4 '26", "Q1 '27".
+  const out = h.map((q) => ({ lastFriday: q.lastFriday, shortLabel: `Q${q.q} '${String(q.year).slice(2)}` }));
   let cur = { year: h[h.length - 1].year, q: h[h.length - 1].q };
   for (let i = 0; i < extra; i++) {
     cur = nextQuarter(cur);
@@ -94,11 +95,12 @@ export function potQuarters(h, extra = 2) {
 
 /**
  * Month buttons up to the last pot quarter (Tom, 2026-10-29: "month options for the entire year"):
- * the horizon's months, then each month of the `extra` quarters after it, labelled with the year
- * ("Jul '27") so they cannot be mixed up with this year's.
+ * the horizon's months, then each month of the `extra` quarters after it. Every label carries the
+ * year ("Oct '26", "Jul '27"), Tom 2026-10-29.
  */
 export function potMonths(h, extra = 2) {
-  const out = h.flatMap((q) => q.months.map((m) => ({ lastFriday: m.lastFriday, label: m.label, quarterEnd: q.lastFriday })));
+  const yy = (iso) => `'${String(iso).slice(2, 4)}`;
+  const out = h.flatMap((q) => q.months.map((m) => ({ lastFriday: m.lastFriday, label: `${m.label} ${yy(m.lastFriday)}`, quarterEnd: q.lastFriday })));
   let cur = { year: h[h.length - 1].year, q: h[h.length - 1].q };
   for (let i = 0; i < extra; i++) {
     cur = nextQuarter(cur);

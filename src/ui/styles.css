@@ -513,3 +513,6 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 /* Bulk FR edit (Tom, 2026-10-29) */
 .frsel { margin: 0 6px 0 0; vertical-align: middle; width: 16px; height: 16px; accent-color: var(--green-dark); }
 .bulkbar .bedit { background: var(--green-dark); border-color: var(--green-dark); color: #fff; font-weight: 700; }
+
+/* Quarter pots on their own row under the months (Tom, 2026-10-29) */
+.datebtns.qrow { margin-top: 4px; }
