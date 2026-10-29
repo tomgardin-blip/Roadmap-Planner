@@ -83,31 +83,33 @@ export function horizon(todayISO) {
  * Capacity cards stay on the three visible quarters.
  */
 export function potQuarters(h, extra = 2) {
-  // Every button carries the year (Tom, 2026-10-29): "Q4 '26", "Q1 '27".
-  const out = h.map((q) => ({ lastFriday: q.lastFriday, shortLabel: `Q${q.q} '${String(q.year).slice(2)}` }));
+  const out = h.map((q) => ({ lastFriday: q.lastFriday, shortLabel: `Q${q.q}${yearTag(q.year)}` }));
   let cur = { year: h[h.length - 1].year, q: h[h.length - 1].q };
   for (let i = 0; i < extra; i++) {
     cur = nextQuarter(cur);
-    out.push({ lastFriday: lastFridayOfQuarter(cur.year, cur.q), shortLabel: `Q${cur.q} '${String(cur.year).slice(2)}` });
+    out.push({ lastFriday: lastFridayOfQuarter(cur.year, cur.q), shortLabel: `Q${cur.q}${yearTag(cur.year)}` });
   }
   return out;
 }
 
+// Year on the button only for 2026 (Tom, 2026-10-29: "only put the year on the '26 ones"), so "Oct '26"
+// and "Oct" (2027) stay apart while the rest stays short.
+const yearTag = (y) => (y === 2026 ? " '26" : '');
+
 /**
  * Month buttons up to the last pot quarter (Tom, 2026-10-29: "month options for the entire year"):
- * the horizon's months, then each month of the `extra` quarters after it. Every label carries the
- * year ("Oct '26", "Jul '27"), Tom 2026-10-29.
+ * the horizon's months, then each month of the `extra` quarters after it. Only 2026 labels carry the
+ * year ("Oct '26" … "Dec '26", then "Jan" … "Dec").
  */
 export function potMonths(h, extra = 2) {
-  const yy = (iso) => `'${String(iso).slice(2, 4)}`;
-  const out = h.flatMap((q) => q.months.map((m) => ({ lastFriday: m.lastFriday, label: `${m.label} ${yy(m.lastFriday)}`, quarterEnd: q.lastFriday })));
+  const out = h.flatMap((q) => q.months.map((m) => ({ lastFriday: m.lastFriday, label: `${m.label}${yearTag(Number(String(m.lastFriday).slice(0, 4)))}`, quarterEnd: q.lastFriday })));
   let cur = { year: h[h.length - 1].year, q: h[h.length - 1].q };
   for (let i = 0; i < extra; i++) {
     cur = nextQuarter(cur);
     const qEnd = lastFridayOfQuarter(cur.year, cur.q);
     for (let k = 0; k < 3; k++) {
       const m0 = (cur.q - 1) * 3 + k;
-      out.push({ lastFriday: lastFridayOfMonth(cur.year, m0), label: `${MONTHS[m0]} '${String(cur.year).slice(2)}`, quarterEnd: qEnd });
+      out.push({ lastFriday: lastFridayOfMonth(cur.year, m0), label: `${MONTHS[m0]}${yearTag(cur.year)}`, quarterEnd: qEnd });
     }
   }
   return out;

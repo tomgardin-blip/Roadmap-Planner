@@ -515,4 +515,4 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 .bulkbar .bedit { background: var(--green-dark); border-color: var(--green-dark); color: #fff; font-weight: 700; }
 
 /* Quarter pots on their own row under the months (Tom, 2026-10-29) */
-.datebtns.qrow { margin-top: 4px; }
+.datebtns.qbtns { margin-top: 4px; }

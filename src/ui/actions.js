@@ -123,7 +123,7 @@ function dateChips(horizon, current) {
   const b = (d, label) => `<button type="button" class="${d === current ? 'cur' : ''}" data-scdate="${d}" title="${fd(d)}">${esc(label)}</button>`;
   let h = '<div class="datebtns">';
   for (const m of potMonths(horizon)) h += b(m.lastFriday, m.label);
-  h += '</div><div class="datebtns qrow">';
+  h += '</div><div class="datebtns qbtns">';
   for (const q of potQuarters(horizon)) h += b(q.lastFriday, q.shortLabel);
   // Clear the committed date (Tom, 2026-10-27): writes an empty Success Committed.
   h += '<span class="sep"></span><button type="button" data-scclear title="Clear Success Committed">Clear</button>';
