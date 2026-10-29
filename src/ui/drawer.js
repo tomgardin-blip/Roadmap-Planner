@@ -95,7 +95,7 @@ function frBlock(s, committed = null, issueId = null) {
     const t = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title || 'FR')}</a>` : esc(f.title || 'FR');
     return frLine({ ...f, setsCommit: setsCommit(f) }, cust, t, issueId);
   }).join('');
-  return `<details class="frs"><summary>${sum}</summary><ul>${rows}</ul></details>`;
+  return `<details class="frs"${issueId ? ` data-fold="frs-${issueId}"` : ''}><summary>${sum}</summary><ul>${rows}</ul></details>`;
 }
 
 // issueId: the engineering issue the FR is shown under, so the edit sheet can also set its status.

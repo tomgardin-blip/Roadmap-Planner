@@ -592,6 +592,7 @@ function renderDrawer() {
     run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
     scores: state.scores, backlog: state.backlog, extra: state.extra, names: state.dealNames, ...state.drawer,
   });
+  restoreFolds(document.getElementById('drawer'));
 }
 
 /**
@@ -745,7 +746,31 @@ function recompute() {
 /** Live page: capacity read from Lightdash. No fallback (Tom, 2026-10-29); the local preview uses the engine copy. */
 const capacityOk = () => state.mode !== 'live' || !!state.run?.capacitySource;
 
+/**
+ * Open / closed toggles survive redraws (Tom, 2026-10-29: every action collapsed the lists again).
+ * Each section, "Show all" and FR list remembers what the viewer last did, per tab (and the cell drawer),
+ * for this page load.
+ */
+const folds = new Map();
+function foldKey(d) {
+  const id = d.id || d.dataset.more || d.dataset.fold;
+  return id ? `${d.closest('#drawer') ? 'drawer' : state.tab}:${id}` : null;
+}
+document.addEventListener('toggle', (e) => {
+  if (e.target.tagName !== 'DETAILS') return;
+  const k = foldKey(e.target);
+  if (k) folds.set(k, e.target.open);
+}, true);
+function restoreFolds(root) {
+  root?.querySelectorAll('details').forEach((d) => { const k = foldKey(d); if (k && folds.has(k)) d.open = folds.get(k); });
+}
+
 function draw() {
+  drawTab();
+  restoreFolds(document.getElementById('grid'));
+}
+
+function drawTab() {
   document.querySelectorAll('nav.tabs button[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab));
   const onGrid = state.tab === 'capacity';
   document.querySelector('.note').hidden = !onGrid;
