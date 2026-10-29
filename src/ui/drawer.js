@@ -39,6 +39,7 @@ function frSelBox(fr) {
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n) => (Math.round(n * 10) / 10).toString();
 const SKILL_KEY = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
+const ALL_SKILL_LABELS = { frontend: 'FE', backend: 'BE', mobile: 'MOB', ai: 'AI', bi: 'BI', analyst: 'Analyst', infra: 'Infra' };
 
 /** Resolve a cell's label and numbers from the grid row. */
 function cellInfo(row, horizon, period) {
@@ -224,7 +225,8 @@ export const setCommitSource = (fn) => { commitSource = fn; };
 
 /** Issue card for the list screens (at risk, prep queues): same tags, FRs and date buttons as the drawer. */
 export function listCard(issue, horizon, score, detail, extraTags = '', rm = null) {
-  const eff = ['FE', 'BE', 'MOB'].map((s) => { const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0; return v ? `${s} ${fmt(v)}` : null; }).filter(Boolean).join(' · ') || 'No effort';
+  // Every skill with effort, not only FE/BE/MOB (Tom, 2026-10-29: an AI-only issue showed "No effort").
+  const eff = Object.entries(ALL_SKILL_LABELS).map(([k, l]) => { const v = issue.skillEfforts?.[k] || 0; return v ? `${l} ${fmt(v)}` : null; }).filter(Boolean).join(' · ') || 'No effort';
   const late = lateVsCommit(issue);
   const tags = [
     issue.committed ? `<span class="tag ${late ? 'late' : 'commit'}">${late ? 'After commit ' : 'Commit '}${formatDate(issue.committed)}</span>` : '',

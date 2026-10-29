@@ -8,6 +8,8 @@ import { effortGrowth } from './notion/baseline.js';
 const CLOSED = new Set(['Done', "Won't do", 'Duplicate']);
 const SKILLS = ['frontend', 'backend', 'mobile'];
 const effortOf = (i) => SKILLS.reduce((a, s) => a + (i.skillEfforts?.[s] || 0), 0);
+// Estimated = effort on any skill, AI, BI, analyst and infra included (Tom, 2026-10-29).
+const estimated = (i) => Object.values(i.skillEfforts || {}).some((v) => v > 0);
 
 export const RULES = [
   { key: 'afterCommit', label: 'Planned after the committed date' },
@@ -40,7 +42,7 @@ export function atRisk(run, { team = 'all', baseline = null } = {}) {
     const planned = i.start || i.end;
     if (inScope(i)) {
       if (lateVsCommit(i)) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
-      if (i.committed && !planned && effortOf(i) > 0) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
+      if (i.committed && !planned && estimated(i)) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
       if (i.committed && i.status === 'Blocked/on hold') out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
       // A blocker that ends after this issue starts (pot issues: Start = End).
       const start = i.start || i.end;

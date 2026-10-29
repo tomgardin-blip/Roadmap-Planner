@@ -14,8 +14,8 @@ const FR_CLOSED = new Set(['Done', "Won't do", 'Duplicate', 'Closed', 'Cancelled
 const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
 const NOT_LIVE_ANY_MORE = new Set(['Live', 'Churn', 'Deal Lost', 'Dropped']);
 const SCOPING = new Set(['Product scoping TODO', 'Product scoping in progress']);
-const SKILLS = ['frontend', 'backend', 'mobile'];
-const effortOf = (i) => SKILLS.reduce((a, s) => a + (i.skillEfforts?.[s] || 0), 0);
+// Estimated = effort on any skill, AI, BI, analyst and infra included (Tom, 2026-10-29).
+const estimated = (i) => Object.values(i.skillEfforts || {}).some((v) => v > 0);
 const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
 const day = (d) => (d ? String(d).slice(0, 10) : null);
 const blob = (r, n) => { const v = r[`serve_engineering_capacity_${n}`]; return Array.isArray(v) ? v : v ? JSON.parse(v) : []; };
@@ -103,7 +103,7 @@ export function dataQuality({ run, backlog = [], taskRows = [], featureRows = []
     const doneBl = bl.filter((b) => CLOSED.has(b.status));
     if (i.status === 'Blocked/on hold' && !openBl.length) out.blockedNoBlocker.push({ issue: i, detail: doneBl.length ? `Only finished blockers: ${doneBl.map((b) => `"${b.name}" (${b.status})`).join(', ')}` : 'No "Blocked by" linked' });
     if (planned && SCOPING.has(i.status)) out.plannedScoping.push({ issue: i, detail: `Status ${i.status}, planned ${formatDate(i.end || i.start)}` });
-    if (planned && effortOf(i) === 0) out.plannedNoEffort.push({ issue: i, detail: `Planned ${formatDate(i.end || i.start)}, no FE/BE/MOB effort` });
+    if (planned && !estimated(i)) out.plannedNoEffort.push({ issue: i, detail: `Planned ${formatDate(i.end || i.start)}, no effort on any skill` });
     if (doneBl.length) out.staleBlocker.push({ issue: i, detail: `Blocked by ${doneBl.map((b) => `"${b.name}" (${b.status})`).join(', ')}` });
   }
   const by = (e) => String(e.fr?.committed || e.issue?.committed || e.issue?.end || '9');

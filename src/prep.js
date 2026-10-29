@@ -19,8 +19,8 @@ export const GROUPS = [
 ];
 const CLOSED = new Set(['Done', "Won't do", 'Duplicate']);
 export const FR_TYPE = 'Feature request';
-const SKILLS = ['frontend', 'backend', 'mobile'];
-const effortOf = (i) => SKILLS.reduce((a, s) => a + (i.skillEfforts?.[s] || 0), 0);
+// Estimated = effort on any skill, AI, BI, analyst and infra included (Tom, 2026-10-29).
+const estimated = (i) => Object.values(i.skillEfforts || {}).some((v) => v > 0);
 const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
 const groupOf = (priority) => GROUPS.find((g) => g.priorities.includes(priority))?.key || null;
 const blob = (r, n) => { const v = r[`serve_engineering_capacity_${n}`]; return Array.isArray(v) ? v : v ? JSON.parse(v) : []; };
@@ -67,7 +67,7 @@ export function prepQueues({ run, backlog = [], scores, taskRows = [], featureRo
     const picked = pickedTeams(team);
     if (picked ? !picked.some((x) => teams.has(x)) : !(ours || noTeam)) continue;
     const entry = { issue: i, frs: frs.filter((f) => groupOf(f.priority)), noTeam };
-    if (effortOf(i) === 0) out[g].noEstimate.push(entry);
+    if (!estimated(i)) out[g].noEstimate.push(entry);
     else if (!(i.start || i.end)) out[g].notPlanned.push(entry);
   }
   const byCommit = (a, b) => String((a.issue || a.fr).committed || '9').localeCompare(String((b.issue || b.fr).committed || '9'));
