@@ -59,12 +59,27 @@ function quiet(fn) {
  * Glue identical to the planner app (App.jsx): settings = ALLOCATION_SETTINGS,
  * emailToName = allocation email → allocation title, teams = buildTeams(allocation, TEAM_DISPLAY_ORDER).
  */
-export function runCapacity(lightdashRows, { now = new Date() } = {}) {
+export function runCapacity(lightdashRows, { now = new Date(), routeByTeamProperty = true } = {}) {
   return quiet(() => {
     const rows = toEngineRows(lightdashRows);
     const { issues, customerTasks } = Engine.transformRows(rows);
     const alloc = Engine.buildAllocation(rows, ALLOCATION_SETTINGS);
+    // Stopgap until Sander's current engine arrives (Tom, 2026-10-29): our 27 Aug engine leaves out an issue
+    // when none of its assignees is on a team: only product owners (Sander confirmed, 2026-10-29), or people
+    // whose allocation has no team (e.g. Sam Persoon). The data app counts those under the issue's Team
+    // property. Such assignees are cleared before compute, so the Team property routes the issue as
+    // unassigned demand, as in the data app. The full list stays in assignedToAll. Checked 29/10/2026:
+    // every Order + Invoice Q4 2026 and Q1 2027 cell then equals the data app.
     const teams = Engine.buildTeams(alloc, TEAM_DISPLAY_ORDER);
+    if (routeByTeamProperty) {
+      const teamIds = new Set(teams.map((t) => t.id));
+      const onTeam = new Set(alloc.people.filter((p) => p.email && p.allocations.some((a) => teamIds.has(a.teamId))).map((p) => p.email));
+      for (const iss of issues) {
+        const all = iss.assignedTo || [];
+        if (!all.length || all.some((e) => onTeam.has(e))) continue;
+        iss.assignedToAll = all; iss.assignedTo = [];
+      }
+    }
     const emailToName = {};
     alloc.people.forEach((p) => { if (p.email) emailToName[p.email] = p.name; });
     const { computed } = Engine.compute({ issues, config: { teams, emailToName } }, alloc, { now });

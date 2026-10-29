@@ -98,3 +98,4 @@ test('TBD: committed issues without dates count in their committed quarter (over
   assert.deepEqual(cellIssues(run, TP, 'FE', '2027-Q1-tbd').map((x) => x.issue.id), ['t1']);
   assert.deepEqual(cellIssues(run, TP, 'FE', '2026-Q4').map((x) => x.issue.id), ['t2']);
 });
+
