@@ -522,3 +522,12 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 .selall .fredit { float: none; }
 .sugg .t .bsel { margin-right: 6px; }
 .keepbtn { margin-left: 8px; }
+
+/* Tech improvement bar on the quarter cards (Tom, 2026-10-29), as in the engineering planner */
+.ti { margin-top: 10px; font-size: 11px; color: var(--muted); }
+.tihead { display: flex; justify-content: space-between; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.tibar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.tibar span { display: block; height: 100%; border-radius: 3px; }
+.tibar .tiunder { background: var(--green-dark); }
+.tibar .tiover { background: var(--orange); }
+b.tiunder { color: var(--ok-ink); } b.tiover { color: var(--orange); }

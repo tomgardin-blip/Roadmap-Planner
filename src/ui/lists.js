@@ -222,7 +222,8 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
       const ef = ['frontend', 'backend', 'mobile'].map((k) => Math.round((i.skillEfforts?.[k] || 0) * 10) / 10);
       const effCells = ef.map((v) => `<td class="num qpeff">${v ? v : '–'}</td>`).join('');
       const effLine = ['FE', 'BE', 'MOB'].map((s, k) => (ef[k] ? `${s} ${ef[k]}` : null)).filter(Boolean).join(' · ');
-      const row = `<tr class="${isOpen ? 'qpopen' : ''}"><td>${name}${effLine ? `<span class="qpeffm"> · ${effLine} d</span>` : ''}</td>${effCells}<td class="num">${planned(i)}</td><td class="num qpcom ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td><td class="qpacts">${plan}</td></tr>`;
+      const tiTag = /technical improvement/i.test(i.type || '') ? ' <span class="tag qtr" title="Technical improvement: counts against the team\'s tech improvement budget">Tech impr</span>' : '';
+      const row = `<tr class="${isOpen ? 'qpopen' : ''}"><td>${name}${tiTag}${effLine ? `<span class="qpeffm"> · ${effLine} d</span>` : ''}</td>${effCells}<td class="num">${planned(i)}</td><td class="num qpcom ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td><td class="qpacts">${plan}</td></tr>`;
       return isOpen ? `${row}<tr class="qpact"><td colspan="8">${planActions(i, horizon, scores?.get(i.id))}</td></tr>` : row;
     }).join('');
     h += `<h3 class="lgroup">${esc(tm)} <span class="cnt">${list.length}</span></h3>`;

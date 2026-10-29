@@ -18,6 +18,10 @@ export function pickedTeams(team) {
   return out.length && out.length < TEAMS.length ? out : null;
 }
 export const SKILLS = ['FE', 'BE', 'MOB'];
+// Tech improvement budget (Tom, 2026-10-29: "like the engineering planner"): 15% of the quarter's capacity,
+// read off the data app (O+I 20.0 of 133.3, TP 18.5 of 123.5, App Platform 20.2 / 37.3 / 45.7). Spent: FE +
+// BE + MOB days of "Technical improvement" issues in the quarter's months, Done ones included (engine tiSpentMonth).
+export const TECH_IMPR_SHARE = 0.15;
 const ENGINE_SKILL = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
 
 // Glue copied from the planner app (src/config.js, App.jsx in Sander's export of 9 Oct 2026).
@@ -156,7 +160,8 @@ export function buildGrid(run, horizon) {
         const pot = c.newTeamSkillPotQ?.[tid]?.[sk]?.[qi] || 0;
         const tbdDays = tbd.days[sk]?.[qi] || 0;
         const planned = months.reduce((s, m) => s + m.planned, 0) + pot + tbdDays;
-        return { key: q.key, months, pot, tbd: tbdDays, planned, capacity: cap, status: cellStatus(planned, cap) };
+        const ti = q.months.reduce((s, m) => s + (c.tiSpentMonth?.[tid]?.[sk]?.[m.key] || 0), 0);
+        return { key: q.key, months, pot, tbd: tbdDays, planned, capacity: cap, ti, status: cellStatus(planned, cap) };
       });
       rows.push({ team, skill, quarters });
     }

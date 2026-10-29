@@ -30,7 +30,7 @@ test('push out: no commit, not in progress; lowest score first, quick wins last;
   const s = sc([['low', 0.5, 6], ['high', 9, 4], ['qw', 20, 1], ['com', 1, 3], ['busy', 1, 3]]);
   const p = pushOut({ run: r, scores: s, team: TP, skill: 'BE', quarter: Q4, over: 6 });
   assert.deepEqual(ids(p.items), ['low', 'high', 'qw']);
-  assert.deepEqual(p.excluded, { committed: 1, inProgress: 1, kept: 0 });
+  assert.deepEqual(p.excluded, { committed: 1, inProgress: 1, kept: 0, fixed: 0 });
   assert.equal(p.coverIdx, 0); // 6 >= 6
   assert.equal(p.items[2].cumulative, 11);
 });
@@ -80,4 +80,11 @@ test('push out: an issue kept by the viewer is not suggested (Tom, 2026-10-29)',
   const p = pushOut({ run: r, scores: sc([['a', 1, 6], ['b', 2, 4]]), team: TP, skill: 'BE', quarter: Q4, over: 6, kept: new Set(['a']) });
   assert.deepEqual(ids(p.items), ['b']);
   assert.equal(p.excluded.kept, 1);
+});
+
+test('push out and pull forward never suggest dependency upgrades (Tom, 2026-10-29)', () => {
+  const r = run([F({ id: 'dep', title: 'Dependency upgrades - Transport Planning - January 2027', team: TP, be: 1, ...pot('2026-12-25') }), F({ id: 'x', team: TP, be: 2, ...pot('2026-12-25') })]);
+  const p = pushOut({ run: r, scores: sc([['dep', 0, 1], ['x', 1, 2]]), team: TP, skill: 'BE', quarter: Q4, over: 3 });
+  assert.deepEqual(ids(p.items), ['x']);
+  assert.equal(p.excluded.fixed, 1);
 });

@@ -150,7 +150,7 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kep
   if (extra.scores === 'error') return `<h4>Suggestions</h4><div class="placeholder">Scores unavailable: ${esc(extra.scoresError || '')}</div>`;
   if (diff > 1e-9) {
     const p = pushOut({ run, scores, team, skill, quarter, over: diff, kept });
-    const ex = [p.excluded.committed && `${p.excluded.committed} committed`, p.excluded.inProgress && `${p.excluded.inProgress} in progress`, p.excluded.kept && `${p.excluded.kept} kept by you`].filter(Boolean).join(', ');
+    const ex = [p.excluded.committed && `${p.excluded.committed} committed`, p.excluded.inProgress && `${p.excluded.inProgress} in progress`, p.excluded.kept && `${p.excluded.kept} kept by you`, p.excluded.fixed && `${p.excluded.fixed} dependency upgrades (never moved)`].filter(Boolean).join(', ');
     let h = `<h4>Suggested to push out · ${fmt(diff)} d over</h4><div class="hint">No commit, not in progress. Lowest customer value per day first, then the biggest; quick wins last (keep those).${ex ? ` Not shown: ${ex}.` : ''}</div>`;
     if (!p.items.length) return `${h}<div class="placeholder">Nothing movable: everything here is committed or in progress.</div>`;
     h += selAll(p.items, p.coverIdx >= 0 ? p.items.slice(0, p.coverIdx + 1) : null);
@@ -320,7 +320,7 @@ export function openDrawer(el, { run, grid, horizon, changes = [], scores = null
     </div>
     <div class="dbody">
       ${sugg}
-      ${rest.length ? `<h4>${suggested.size ? 'Other uncommitted issues in this cell, not suggested' : 'Uncommitted issues in this cell'} · ${rest.length}</h4>${suggested.size ? '<div class="hint">In progress, or kept by you, so not suggested. Suggested ones are listed above only.</div>' : ''}${rest.map(card).join('')}` : ''}
+      ${rest.length ? `<h4>${suggested.size ? 'Other uncommitted issues in this cell, not suggested' : 'Uncommitted issues in this cell'} · ${rest.length}</h4>${suggested.size ? '<div class="hint">In progress, kept by you, or a dependency upgrade, so not suggested. Suggested ones are listed above only.</div>' : ''}${rest.map(card).join('')}` : ''}
       <h4>Committed issues in this cell · ${committed.length}</h4><div class="hint">Never suggested: moving them needs a pushback first. Earliest commit first.</div>
       ${committed.map(card).join('') || '<div class="placeholder">None.</div>'}
     </div>`;

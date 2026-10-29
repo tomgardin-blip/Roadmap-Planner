@@ -19,6 +19,8 @@ export const IN_PROGRESS = new Set(['Implementing', 'To implement this week', 'T
 export const BLOCKED = new Set(['Blocked/on hold']);
 const SK = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
 
+// Never suggested to move (Tom, 2026-10-29): the monthly "Dependency upgrades - <team> - <month>" issues.
+export const neverMove = (issue) => /^dependency upgrades?\b/i.test(String(issue.name || '').trim());
 const isQuickWin = (s, max) => !!s && s.score > 0 && s.effort <= max;
 
 /** Ids of issues with an open "Blocked by": some open issue lists them in its `blocks`. */
@@ -33,7 +35,7 @@ const quarterEnd = (q) => `${q.year}-${String(q.q * 3).padStart(2, '0')}-${q.q =
 
 export function pushOut({ run, scores, team, skill, quarter, over, kept = new Set(), quickWinMaxEffort = SCORING_DEFAULTS.quickWinMaxEffort }) {
   const all = cellIssues(run, team, skill, quarter.key);
-  const excluded = { committed: 0, inProgress: 0, kept: 0 };
+  const excluded = { committed: 0, inProgress: 0, kept: 0, fixed: 0 };
   const items = [];
   for (const { issue, days } of all) {
     if (CLOSED.has(issue.status)) continue;
@@ -41,6 +43,7 @@ export function pushOut({ run, scores, team, skill, quarter, over, kept = new Se
     if (IN_PROGRESS.has(issue.status)) { excluded.inProgress++; continue; }
     // Kept by the viewer (Tom, 2026-10-29: remove an issue from the suggestions), from the audit log.
     if (kept.has(issue.id)) { excluded.kept++; continue; }
+    if (neverMove(issue)) { excluded.fixed++; continue; }
     const s = scores?.get(issue.id) || null;
     items.push({ issue, days, score: s, quickWin: isQuickWin(s, quickWinMaxEffort) });
   }
@@ -66,7 +69,7 @@ export function pullForward({ run, scores, team, skill, quarter, free, backlog =
   for (const issue of pool) {
     const need = issue.skillEfforts?.[sk] || 0;
     if (!(need > 0) || need > free + 1e-9) continue;
-    if (CLOSED.has(issue.status) || BLOCKED.has(issue.status) || blocked.has(issue.id) || issue.isParent) continue;
+    if (CLOSED.has(issue.status) || BLOCKED.has(issue.status) || blocked.has(issue.id) || issue.isParent || neverMove(issue)) continue;
     const planned = issue.start || issue.end;
     const later = planned ? planned > end : !issue.committed || issue.committed > end;
     if (!later) continue;
