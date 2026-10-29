@@ -260,14 +260,24 @@ export function startDismiss({ mcp, fr, issue, onDone }) {
  * Pick which "No estimate" issues to post (none ticked by default, Tom 2026-10-10), preview and
  * edit the text, then post to Slack as the viewer. groups: [{ label, entries: [{ issue, frs }] }].
  */
-export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature, preselect = [], onPosted }) {
+export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature, preselect = [], onPosted, posted = () => [] }) {
   const ch = target.channel;
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
+  // Already posted? (Tom, 2026-10-29: to see whether the skill has run.) The latest post per channel, this channel first.
+  const postedTag = (id) => {
+    const latest = new Map();
+    for (const p of posted(id)) if (!latest.has(p.channel)) latest.set(p.channel, p);
+    if (!latest.size) return ' <span class="tag">Not posted yet</span>';
+    return [...latest.values()].sort((a, b) => (b.channel === ch.name) - (a.channel === ch.name)).map((p) => {
+      const t = `Posted ${p.channel === ch.name ? 'here' : `in ${esc(p.channel)}`} ${fd(String(p.at).slice(0, 10))}`;
+      return ` <span class="tag ${p.channel === ch.name ? 'commit' : ''}">${p.link ? `<a href="${esc(p.link)}" target="_blank" rel="noopener" title="Open the Slack thread">${t} · open in Slack</a>` : t}</span>`;
+    }).join('');
+  };
   const list = groups.filter((g) => g.entries.length).map((g) => `
     <div class="pickgrp"><div class="pickhead"><b>${esc(g.label)}</b> <span class="muted">(${g.entries.length})</span>
       <button type="button" class="chip" data-pickall="${esc(g.label)}">All</button><button type="button" class="chip" data-picknone="${esc(g.label)}">None</button></div>
       ${g.entries.map((e) => `<label class="pickrow" data-grp="${esc(g.label)}"><input type="checkbox" data-pick="${e.issue.id}"${preselect.includes(e.issue.id) ? ' checked' : ''}>
-        <span><b>${esc(e.issue.name)}</b><span class="muted"> · ${e.fr ? 'FR, no engineering issue yet' : `${esc(e.issue.team || 'No team')} · ${e.frs.length} FR${e.frs.length === 1 ? '' : 's'}`}${e.issue.committed ? ` · commit ${fd(String(e.issue.committed).slice(0, 10))}` : ''}</span></span></label>`).join('')}
+        <span><b>${esc(e.issue.name)}</b><span class="muted"> · ${e.fr ? 'FR, no engineering issue yet' : `${esc(e.issue.team || 'No team')} · ${e.frs.length} FR${e.frs.length === 1 ? '' : 's'}`}${e.issue.committed ? ` · commit ${fd(String(e.issue.committed).slice(0, 10))}` : ''}</span>${postedTag(e.issue.id)}</span></label>`).join('')}
     </div>`).join('');
   const sheet = openSheet(`
     <h3>${ch.id.startsWith('U') ? 'Send' : 'Post'} to ${esc(ch.name)}</h3>

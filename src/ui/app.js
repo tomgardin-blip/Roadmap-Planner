@@ -248,7 +248,7 @@ function shell() {
     if (qt) {
       // One issue from a prep card: the same DM to Qai as At risk → No team, that issue ticked.
       const issue = shownIssue(qt.dataset.qaiteam) || state.run?.issues.find((i) => i.id === qt.dataset.qaiteam);
-      if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id], onPosted: estimatePosted });
+      if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
     const ep = e.target.closest('button[data-estpost]');
@@ -256,14 +256,14 @@ function shell() {
       // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.
       const frEntry = (fr) => ({ fr: true, issue: { id: fr.id, name: fr.title || 'FR', url: fr.url, team: null, committed: fr.committed }, frs: [fr] });
       if (ep.dataset.estpost === 'qaiTeam') {
-        startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam, onPosted: estimatePosted });
+        startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam, onPosted: estimatePosted, posted: estimatePostsOf });
         return;
       }
       const groups = GROUPS.flatMap((g) => [
         { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
         { label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) },
       ]);
-      startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost], onPosted: estimatePosted });
+      startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
     const fe = e.target.closest('button[data-fr-edit]');
@@ -309,7 +309,7 @@ function qualityFix(key, id) {
   };
   const status = (note) => () => startIssueStatus({ mcp, issue, note, onDone: afterIssueStatus });
   const unplan = (why) => () => startClearDates({ mcp, issue, why, onDone: ({ after }) => afterMoves([{ issue, r: { after } }]) });
-  const estimate = (target, entry) => () => startEstimatePost({ mcp, groups: [{ label: entry.fr ? 'No engineering issue' : 'No estimate', entries: [entry] }], target, preselect: [entry.issue.id], onPosted: estimatePosted });
+  const estimate = (target, entry) => () => startEstimatePost({ mcp, groups: [{ label: entry.fr ? 'No engineering issue' : 'No estimate', entries: [entry] }], target, preselect: [entry.issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
   const frAsEntry = fr && { fr: true, issue: { id: fr.id, name: fr.title || 'FR', url: fr.url, team: null, committed: fr.committed }, frs: [fr] };
   const dmOpt = (label, desc) => ({ label, desc, run: dm() });
   const opts = {
@@ -381,6 +381,13 @@ function estimatePosted({ item, link, channel }) {
   state.audit = [{ category: 'Estimate post', field: 'Slack', before: channel, after: link || '', ...(item.fr ? { frId: item.id } : { issueId: item.id }), itemName: item.name, at: new Date().toISOString() }, ...(state.audit || [])];
   if (state.tab !== 'capacity') draw();
   renderDrawer();
+}
+
+/** Skill-trigger / @Qai / Qai DM posts of an issue or FR from the audit log, newest first. */
+function estimatePostsOf(id) {
+  return (state.audit || []).filter((a) => a.category === 'Estimate post' && (a.issueId === id || a.frId === id))
+    .map((a) => ({ at: a.at, channel: a.before || 'Slack', link: /^https:/.test(a.after || '') ? a.after : null }))
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
 
 /** The team an issue routes to: its Team property, else its assignees' team. */
@@ -819,7 +826,7 @@ function show(rows) {
   setCommitSource(commitSourceOf);
   // #roadmap_product posts per issue, newest first, from the audit log (and the ones made this session).
   // Skill-trigger / @Qai / Qai DM posts per issue or FR (Tom, 2026-10-29), newest first.
-  setEstimatePosts((id) => (state.audit || []).filter((a) => a.category === 'Estimate post' && (a.issueId === id || a.frId === id)).map((a) => ({ at: a.at, channel: a.before || 'Slack', link: /^https:/.test(a.after || '') ? a.after : null })).sort((a, b) => String(b.at).localeCompare(String(a.at))));
+  setEstimatePosts(estimatePostsOf);
   setRoadmapPosts((id) => (state.audit || []).filter((a) => a.category === 'Roadmap post' && a.issueId === id).map((a) => ({ at: a.at, link: /^https:/.test(a.after || '') ? a.after : null })).sort((a, b) => String(b.at).localeCompare(String(a.at))));
   recompute();
   renderChrome();
