@@ -81,11 +81,14 @@ export function parseLdCapacity(rows, at = new Date().toISOString()) {
   if (!rows?.length) return null;
   const weeks = {};
   for (const t of LD_CAPACITY_TEAMS) { weeks[t] = {}; for (const s of SKILLS) weeks[t][s] = {}; }
+  let n = 0;
   for (const r of rows) {
     const t = r.engineering_team_allocations_team; const s = r.engineering_capacity_skill;
     const wk = String(r.engineering_capacity_week_start || '').slice(0, 10);
     if (!weeks[t]?.[s] || !/^\d{4}-\d{2}-\d{2}$/.test(wk)) continue;
     weeks[t][s][wk] = (weeks[t][s][wk] || 0) + (+r.engineering_capacity_sum_capacity_days || 0);
+    n++;
   }
+  if (!n) return null; // nothing usable: not a capacity of 0
   return { run: at, engine: 'Lightdash engineering_capacity', weeks };
 }

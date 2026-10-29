@@ -507,3 +507,5 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 /* Skill-trigger / @Qai post links on a card (Tom, 2026-10-29) */
 .estlinks { margin-top: 6px; font-size: 12px; color: var(--muted); }
 .estlinks a { color: var(--commit-ink); }
+
+.pill.bad { background: var(--red); color: #fff; font-weight: 700; }

@@ -9,7 +9,7 @@ import { horizon as buildHorizon, formatDate, formatDateTime, potQuarters } from
 import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams, issueTeams } from '../capacity.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
-import { applyFeed, feedAgeDays, FEED_MAX_AGE_DAYS, CAPACITY_DS } from '../data/capacityFeed.js';
+import { applyFeed } from '../data/capacityFeed.js';
 import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
 import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
@@ -50,7 +50,7 @@ const state = {
   scores: null, backlog: [], drawer: null, dealNames: new Map(), dealGolive: new Map(),
   baseline: null, baselineError: null,
   frComments: new Map(), frCommentsLoading: false, // Notion comments of No-engineering-issue FRs
-  feed: null, feedError: null, // Sander's capacity feed (latest run) or null
+  feed: null, feedError: null, // Lightdash engineering_capacity per team × skill × week, or null with the error
   mcp: null,
 };
 
@@ -693,8 +693,8 @@ function renderChrome() {
     const ld = /Lightdash/.test(src?.engine || '');
     if (src) pills.push(`<span class="pill" title="${ld ? 'Capacity from Lightdash engineering_capacity: the data app\'s own engine, rebuilt hourly, read when the planner opened.' : `Capacity from the data app's own engine (Sander's daily run${src.engine ? `, engine ${esc(src.engine)}` : ''}).`} Demand from the planner's engine copy.">Capacity ${ld ? 'Lightdash ' : ''}${esc(fmtTime(src.run))}</span>`);
     else {
-      const why = state.feedError ? `Lightdash capacity unreadable and no Notion feed: ${state.feedError}` : !CAPACITY_DS ? 'Sander\'s capacity feed is not set up yet' : state.feedError ? `Capacity feed unreadable: ${state.feedError}` : state.feed ? `Sander's capacity feed is stale (last run ${fmtTime(state.feed.run)})` : 'Sander\'s capacity feed has no runs yet';
-      pills.push(`<span class="pill warn" title="${esc(why)}. Capacity comes from the planner's own copy of the engine (9 Oct export) and can differ from the data app per skill.">Capacity: own engine copy</span>`);
+      const why = `Lightdash engineering_capacity not read${state.feedError ? `: ${state.feedError}` : ''}`;
+      pills.push(`<span class="pill bad" title="${esc(why)}. Capacity, Quarter plan and Pushback are blocked until it loads: no fallback, so no wrong numbers. Refresh to retry.">Capacity unavailable</span>`);
     }
   }
   document.getElementById('pills').innerHTML = pills.join(' ');
@@ -724,7 +724,7 @@ function recompute() {
     : null;
   // Pushback = make the plan fit (Tom, 2026-10-28). Only "Not a pushback" hides an FR here.
   const notPushback = new Set((state.audit || []).filter((a) => a.category === 'Pushback override' && a.frId).map((a) => a.frId));
-  state.fit = x.scores === 'ok' && state.grid ? planFit({
+  state.fit = x.scores === 'ok' && state.grid && capacityOk() ? planFit({
     run: state.run, grid: state.grid, horizon, scores: state.scores, allScores: state.allScores,
     dealSize: x.deals, dismissed: notPushback, team: state.teamFilter,
   }) : null;
@@ -742,11 +742,18 @@ function recompute() {
   document.getElementById('cntPrep').textContent = c.prep ?? '';
 }
 
+/** Live page: capacity read from Lightdash. No fallback (Tom, 2026-10-29); the local preview uses the engine copy. */
+const capacityOk = () => state.mode !== 'live' || !!state.run?.capacitySource;
+
 function draw() {
   document.querySelectorAll('nav.tabs button[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab));
   const onGrid = state.tab === 'capacity';
   document.querySelector('.note').hidden = !onGrid;
   const main = document.getElementById('grid');
+  if (['capacity', 'qplan', 'pushback'].includes(state.tab) && state.run && !capacityOk()) {
+    main.innerHTML = `<div class="lists"><div class="banner bad"><b>Capacity unavailable.</b> Lightdash engineering_capacity was not read${state.feedError ? `: ${esc(state.feedError.replace(/\.$/, ''))}` : ''}. Capacity, Quarter plan and Pushback stay blocked rather than show wrong numbers. Use ↻ Refresh to retry; Prep queues, At risk, Data quality and History still work.</div></div>`;
+    return;
+  }
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { fit: state.fit, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, readOnly: state.readOnly, team: state.teamFilter, asked: askedMap() }); return; }
@@ -762,7 +769,7 @@ function show(rows) {
   state.dealStage = new Map(rows.flatMap((r) => parseBlob(r.serve_engineering_capacity_deals)).filter((d) => d[0] && d[3]).map((d) => [String(d[0]).replace(/-/g, '').toLowerCase(), String(d[3]).trim()]));
   state.dealGolive = new Map(rows.flatMap((r) => parseBlob(r.serve_engineering_capacity_deals)).filter((d) => d[0] && d[5]).map((d) => [String(d[0]).replace(/-/g, '').toLowerCase(), String(d[5]).slice(0, 10)]));
   state.run = runCapacity(rows, { now: NOW });
-  if (state.feed && feedAgeDays(state.feed) <= FEED_MAX_AGE_DAYS) applyFeed(state.run, state.feed);
+  if (state.feed) applyFeed(state.run, state.feed);
   state.grid = buildGrid(state.run, horizon);
   state.noTeam = issuesWithoutTeam(state.run);
   setDealNames(state.dealNames);
@@ -791,7 +798,7 @@ async function loadAllLiveOnce(mcp) {
   state.feedError = null;
   const [{ rows, status }, feed] = await Promise.all([
     loadLive(mcp),
-    loadCapacityFeed(mcp).catch((err) => { state.feedError = explainError(NOTION, err); return null; }),
+    loadCapacityFeed(mcp).catch((err) => { state.feedError = explainError('Lightdash', err); return null; }),
   ]);
   state.feed = feed;
   state.status = status;
