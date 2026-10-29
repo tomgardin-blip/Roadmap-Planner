@@ -84,7 +84,8 @@ export function renderPrep(el, { queues, horizon, scores, loading, readOnly, sor
 
 export function tabCounts(risk, queues) {
   const r = risk ? RULES.reduce((a, x) => a + (risk[x.key]?.length || 0), 0) : null;
-  const p = queues ? GROUPS.reduce((a, g) => a + queues[g.key].noEstimate.length + queues[g.key].notPlanned.length, 0) : null;
+  // Tab count: Required for GO LIVE only (Tom, 2026-10-29), No estimate + Not planned; Top 3 still listed in the tab.
+  const p = queues ? queues.goLive.noEstimate.length + queues.goLive.notPlanned.length : null;
   return { risk: r, prep: p };
 }
 
