@@ -26,6 +26,16 @@ function selBox(issue) {
 }
 export const shownFr = (id) => shown.frs.get(id);
 
+// Bulk FR edit (Tom, 2026-10-29): ticked "No engineering issue" FRs, edited together. Survives redraws.
+const frSelected = new Set();
+export const selectedFrs = () => [...frSelected];
+export const toggleFrSelected = (id, on) => { if (on) frSelected.add(id); else frSelected.delete(id); };
+export const clearFrSelected = () => frSelected.clear();
+function frSelBox(fr) {
+  if (readOnly || !isAllowed('fr', fr.id)) return '';
+  return `<input type="checkbox" class="frsel" data-frsel="${fr.id}" ${frSelected.has(fr.id) ? 'checked' : ''} title="Select to edit several FRs at once" aria-label="Select ${esc(fr.title || 'FR')}"> `;
+}
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n) => (Math.round(n * 10) / 10).toString();
 const SKILL_KEY = { FE: 'frontend', BE: 'backend', MOB: 'mobile' };
@@ -99,14 +109,14 @@ function frBlock(s, committed = null, issueId = null) {
 }
 
 // issueId: the engineering issue the FR is shown under, so the edit sheet can also set its status.
-function frLine(f, cust, titleHtml, issueId = null) {
+function frLine(f, cust, titleHtml, issueId = null, pre = '') {
   shown.frs.set(f.id, f);
   const edit = !readOnly && isAllowed('fr', f.id)
     ? `<button class="fredit" data-fr-edit="${f.id}"${issueId ? ` data-issue="${issueId}"` : ''}>Edit</button>`
     : '';
   const commit = f.setsCommit ? ` <span class="tag commit" title="This FR's committed date is the issue's committed date">Sets the commit · ${formatDate(f.committed)}</span>`
     : f.committed ? ` <span class="muted">commit ${formatDate(f.committed)}</span>` : '';
-  return `<li><span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
+  return `<li>${pre}<span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
 }
 
 /** Compact row for a suggestion list. */
@@ -237,7 +247,7 @@ export function frCard(fr, comments) {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
   const meta = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team'].filter(Boolean).join(' · ');
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title)}</ul>${commentLine(comments)}${estimateLinks(fr.id)}</div>`;
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title, null, frSelBox(fr))}</ul>${commentLine(comments)}${estimateLinks(fr.id)}</div>`;
 }
 
 /** FR card for Data quality (Tom, 2026-10-28): the FR with Edit (opened from its issue, so the issue status is editable too), what is wrong, and its issue. */

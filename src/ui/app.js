@@ -15,7 +15,7 @@ import { userName, setIssuePriority } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
-import { openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
+import { selectedFrs, toggleFrSelected, clearFrSelected, openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderPushback, renderHistory, renderQuality, tabCounts } from './lists.js';
 import { dataQuality, qualityCount } from '../quality.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
@@ -23,7 +23,7 @@ import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates } from './actions.js';
+import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startDismiss, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates } from './actions.js';
 import { planFit } from '../fit.js';
 import { TEAM_LEADS, dependencyMessage, blockedMessage, qualityDm, staleBlockerMessage } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
@@ -127,6 +127,11 @@ function shell() {
   });
   document.getElementById('themeBtn').addEventListener('click', themeToggle);
   document.addEventListener('change', (e) => {
+    if (e.target.matches?.('input.frsel')) {
+      toggleFrSelected(e.target.dataset.frsel, e.target.checked);
+      document.querySelectorAll(`input.frsel[data-frsel="${e.target.dataset.frsel}"]`).forEach((x) => { x.checked = e.target.checked; });
+      renderBulkBar(); return;
+    }
     if (!e.target.matches?.('input.bsel')) return;
     toggleSelected(e.target.dataset.bsel, e.target.checked);
     // The same issue can show in several lists: keep every copy of its box in step.
@@ -183,6 +188,13 @@ function shell() {
     if (bm) {
       const items = selectedIssues().map((id) => shownIssue(id)).filter(Boolean).map((issue) => ({ issue, blockers: blockersOf(issue) }));
       startBulkMove({ mcp: state.mcp, items, date: bm.dataset.bulkmove, label: bm.dataset.label, onDone: (done) => { done.forEach(({ issue }) => toggleSelected(issue.id, false)); afterMoves(done); renderBulkBar(); } });
+      return;
+    }
+    if (e.target.closest('[data-frbulkclear]')) { clearFrSelected(); document.querySelectorAll('input.frsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); return; }
+    if (e.target.closest('[data-frbulkedit]')) {
+      startBulkFrEdit({ mcp: state.mcp, frs: selectedFrs().map((id) => shownFr(id)).filter(Boolean), horizon,
+        onDone: (fr, r) => afterFrEdit(fr, r),
+        onFinished: () => { clearFrSelected(); document.querySelectorAll('input.frsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); } });
       return;
     }
     if (e.target.closest('[data-bulkclear]')) { clearSelected(); document.querySelectorAll('input.bsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); return; }
@@ -509,14 +521,20 @@ function askedMap() {
 function renderBulkBar() {
   const bar = document.getElementById('bulkbar');
   const n = selectedIssues().length;
-  bar.hidden = !n || state.readOnly;
+  const nf = selectedFrs().length;
+  bar.hidden = (!n && !nf) || state.readOnly;
   if (bar.hidden) return;
+  // Ticked FRs (No engineering issue): one Edit for all of them (Tom, 2026-10-29).
+  if (!n) {
+    bar.innerHTML = `<span class="bcount"><b>${nf}</b> FR${nf === 1 ? '' : 's'} selected</span><button class="bedit" data-frbulkedit>Edit ${nf} FR${nf === 1 ? '' : 's'}</button><button class="bclear" data-frbulkclear>Clear</button>`;
+    return;
+  }
   const btn = (d, label) => `<button data-bulkmove="${d}" data-label="${label}" title="Set Start = End = ${d} on the ${n} selected">${label}</button>`;
   let h = `<span class="bcount"><b>${n}</b> selected</span><span class="datebtns">`;
   for (const q of horizon) for (const m of q.months) h += btn(m.lastFriday, m.label);
   h += '<span class="sep"></span>';
   for (const q of potQuarters(horizon)) h += btn(q.lastFriday, q.shortLabel);
-  bar.innerHTML = `${h}</span><button class="bclear" data-bulkclear>Clear</button>`;
+  bar.innerHTML = `${h}</span><button class="bclear" data-bulkclear>Clear</button>${nf ? `<button class="bedit" data-frbulkedit>Edit ${nf} FR${nf === 1 ? '' : 's'}</button>` : ''}`;
 }
 
 /** Patch an FR's priority in the loaded task rows and rescore. */

@@ -497,3 +497,70 @@ export function startClearDates({ mcp, issue, why, onDone }) {
     });
   });
 }
+
+/**
+ * Bulk FR edit (Tom, 2026-10-29): the same edit as the FR sheet, applied to every ticked FR. Each field
+ * starts on "Keep" so only what the viewer sets is written. One Notion write + audit rows per FR, and the
+ * comment (when given) on each FR, tagging that FR's own Responsible Success. Runs in the background and
+ * carries on past a failed FR, then says which failed.
+ * ctx: { mcp, frs: [fr], horizon, onDone(fr, result), onFinished() }
+ */
+export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished }) {
+  if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
+  const list = frs.filter((f) => f && isAllowed('fr', f.id));
+  if (!list.length) return toast('Nothing selected that can be edited.', 'bad');
+  const sheet = openSheet(`
+    <h3>Edit ${list.length} FR${list.length === 1 ? '' : 's'}</h3>
+    <div class="picklist">${list.map((f) => `<div class="pickrow"><span><b>${esc(f.title || 'FR')}</b><span class="muted"> · ${esc(f.priority || 'No priority')}${f.committed ? ` · commit ${fd(String(f.committed).slice(0, 10))}` : ''}</span></span></div>`).join('')}</div>
+    <div class="srow muted">Only the fields you change are written, the same on every FR. "Keep" leaves each FR as it is.</div>
+    <label class="sfld">Priority
+      <select id="bPr"><option value="" selected>Keep each FR's priority</option>${FR_PRIORITIES.map((p) => `<option>${esc(p)}</option>`).join('')}</select></label>
+    <label class="sfld">Committed date <span class="muted">(writes Success Committed)</span>
+      <select id="bScMode"><option value="keep" selected>Keep each FR's date</option><option value="set">Set to the date below</option><option value="clear">Clear it</option></select>
+      <input id="sSc" type="date"></label>
+    ${dateChips(horizon, null)}
+    <label class="sfld">Feature request status
+      <select id="bSt"><option value="" selected>Keep each FR's status</option>${FR_STATUS_WRITES.map((s) => `<option value="${esc(s)}">${esc(s)} (${s === FR_STATUS_DONE ? 'delivered' : 'close the FR'})</option>`).join('')}</select></label>
+    <label class="sfld">Comment <span class="muted">(posted on each FR in Notion, tagging that FR's Responsible Success)</span>
+      <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. Empty: no comment"></textarea></label>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save ${list.length}</button></div>`);
+  const mode = sheet.querySelector('#bScMode');
+  const date = sheet.querySelector('#sSc');
+  date.addEventListener('input', () => { if (date.value) mode.value = 'set'; });
+  sheet.addEventListener('click', (e) => {
+    if (e.target.closest('button[data-scclear]')) { date.value = ''; mode.value = 'clear'; return; }
+    const b = e.target.closest('button[data-scdate]');
+    if (!b) return;
+    date.value = b.dataset.scdate; mode.value = 'set';
+    sheet.querySelectorAll('button[data-scdate]').forEach((x) => x.classList.toggle('cur', x === b));
+  });
+  sheet.querySelector('#sSave').addEventListener('click', () => {
+    const want = {};
+    const pr = sheet.querySelector('#bPr').value; if (pr) want.priority = pr;
+    if (mode.value === 'set') { if (!date.value) return toast('Pick the committed date, or choose Keep.', 'bad'); want.successCommitted = date.value; }
+    if (mode.value === 'clear') want.successCommitted = null;
+    const st = sheet.querySelector('#bSt').value; if (st) want.status = st;
+    const comment = sheet.querySelector('#sCmt').value.trim();
+    if (!Object.keys(want).length && !comment) { closeSheet(); return toast('Nothing changed.'); }
+    closeSheet();
+    inBackground(`${list.length} FRs`, async () => {
+      const failed = []; let changed = 0; let commented = 0;
+      for (const fr of list) {
+        try {
+          const r = Object.keys(want).length ? await editFr(mcp, { fr, ...want, reason: comment }) : { changes: [] };
+          if (r.changes.length) { changed++; onDone?.(fr, { changes: r.changes, before: r.before }); }
+          if (comment) {
+            const owner = await findOwner(mcp, fr.id).catch(() => null);
+            await adviseOwner(mcp, { fr: { ...fr, title: r.name || fr.title }, owner, changes: r.changes || [], comment, updateId: r.updateId });
+            commented++;
+            onDone?.(fr, { changes: r.changes || [], commented: true, comment });
+          }
+        } catch (err) { failed.push(`${fr.title || 'FR'} (${errText(err)})`); }
+      }
+      onFinished?.();
+      const done = `${changed} of ${list.length} FRs changed${comment ? `, ${commented} commented` : ''}. Logged.`;
+      if (failed.length) throw fail(`${done} Failed: ${failed.join('; ')}. Refresh to see Notion's values.`);
+      return done;
+    });
+  });
+}

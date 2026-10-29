@@ -509,3 +509,7 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 .estlinks a { color: var(--commit-ink); }
 
 .pill.bad { background: var(--red); color: #fff; font-weight: 700; }
+
+/* Bulk FR edit (Tom, 2026-10-29) */
+.frsel { margin: 0 6px 0 0; vertical-align: middle; width: 16px; height: 16px; accent-color: var(--green-dark); }
+.bulkbar .bedit { background: var(--green-dark); border-color: var(--green-dark); color: #fff; font-weight: 700; }
