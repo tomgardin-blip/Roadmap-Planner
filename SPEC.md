@@ -375,3 +375,5 @@ v1 replaces the Notion views for weekly planning; v2 opens it to others; v3 sugg
 - **Edits outside the planner.** Others moving dates in Notion stay invisible until the next daily snapshot.
 - **Issues with no team.** They carry effort but don't count in any team's capacity (example: Rates JSONata rework, 50 days, no team, committed 26 Oct 2026, planned to end 25 Dec 2026).
 - **Single-person knowledge.** Pushback judgment is gut feel today; without logged reasons Product inherits a tool but not the judgment.
+
+- Skill-trigger / @Qai posts recorded on the issue (Tom, 2026-10-29, artifact comment): every post to #product-create-ei-skill-trigger, #dev_effort_estimate and every Qai "No team" DM writes an audit row "Estimate post" (Before = channel, After = Slack message link) on its issue, or on the FR for "No engineering issue" FRs. Issue cards, FR cards, Data quality cards and Quarter plan rows show "Posted: <channel> <date> · open in Slack", the latest per channel. Posts made before version 72 were not recorded.

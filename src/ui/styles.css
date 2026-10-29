@@ -503,3 +503,7 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 .fixopt .muted { font-size: 12px; font-weight: 400; }
 @media (hover: hover) { .fixopt:hover { border-color: var(--green-dark); background: var(--ok-bg); } }
 .sfix { background: var(--amb-bg); color: var(--amb-ink); border-radius: 8px; padding: 6px 10px; }
+
+/* Skill-trigger / @Qai post links on a card (Tom, 2026-10-29) */
+.estlinks { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.estlinks a { color: var(--commit-ink); }

@@ -3,7 +3,7 @@
 
 import { formatDate, potQuarters } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { postEstimate, postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
@@ -260,7 +260,7 @@ export function startDismiss({ mcp, fr, issue, onDone }) {
  * Pick which "No estimate" issues to post (none ticked by default, Tom 2026-10-10), preview and
  * edit the text, then post to Slack as the viewer. groups: [{ label, entries: [{ issue, frs }] }].
  */
-export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature, preselect = [] }) {
+export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature, preselect = [], onPosted }) {
   const ch = target.channel;
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
   const list = groups.filter((g) => g.entries.length).map((g) => `
@@ -296,16 +296,25 @@ export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.produ
   sheet.querySelector('#sSend').addEventListener('click', async (e) => {
     const posts = estimatePosts(sheet.querySelector('#sMsg').value, target);
     if (!posts.length) return;
+    // Each post is recorded on its issue or FR with the Slack link (Tom, 2026-10-29), found by the link in the line.
+    const all = groups.flatMap((g) => g.entries);
+    const itemOf = (msg) => { const en = all.find((x) => x.issue?.url && msg.includes(x.issue.url)); return en ? { id: en.issue.id, name: en.issue.name, fr: !!en.fr } : null; };
     // One message per issue, sent in order; stop at the first refusal and say how far it got.
+    let unlogged = 0;
     for (let i = 0; i < posts.length; i++) {
       busy(e.target, true, `Posting ${i + 1}/${posts.length}…`);
-      try { await postSlack(mcp, ch.id, posts[i]); } catch (err) {
+      const item = itemOf(posts[i]);
+      try {
+        if (item) { const link = await postEstimate(mcp, { channel: ch, item, message: posts[i] }); onPosted?.({ item, link, channel: ch.name }); }
+        else { await postSlack(mcp, ch.id, posts[i]); unlogged++; }
+      } catch (err) {
+        if (err?.code === 'audit_failed') { unlogged++; onPosted?.({ item, link: null, channel: ch.name }); continue; }
         busy(e.target, false, 'Post');
         const why = err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err);
         return toast(`${i} of ${posts.length} posted. ${why}`, 'bad');
       }
     }
-    closeSheet(); toast(`Posted ${posts.length} issue${posts.length === 1 ? '' : 's'} to ${ch.name}.`);
+    closeSheet(); toast(`Posted ${posts.length} issue${posts.length === 1 ? '' : 's'} to ${ch.name}.${unlogged ? ` ${unlogged} without a saved link.` : ' Links shown on the cards.'}`);
   });
 }
 

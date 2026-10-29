@@ -160,6 +160,21 @@ export async function postRoadmap(mcp, { issue, message }) {
   return link;
 }
 
+/**
+ * A product-feature skill / @Qai estimate / Qai team post for one issue or FR (Tom, 2026-10-29: record the
+ * Slack thread on the issue). Posts, then an audit row "Estimate post": Before = channel, After = link.
+ * item: { id, name, fr: bool }
+ */
+export async function postEstimate(mcp, { channel, item, message }) {
+  const res = await postSlack(mcp, channel.id, message);
+  const link = slackLink(res, channel.id);
+  await audit(mcp, {
+    category: 'Estimate post', field: 'Slack', before: channel.name, after: link || 'Posted (no link returned)',
+    reason: message.slice(0, 1900), ...(item.fr ? { frId: item.id } : { issueId: item.id }), itemName: item.name, updateId: updateId(),
+  });
+  return link;
+}
+
 /** The Slack account of a person by email (slack_search_users), or null. */
 export async function findSlackUser(mcp, email) {
   if (!email) return null;
