@@ -17,8 +17,8 @@ export const RULES = [
   { key: 'committedBlocked', label: 'Committed in the next 6 months, status Blocked/on hold' },
   { key: 'dependency', label: 'Dependency in the wrong order' },
   { key: 'noTeam', label: 'No team: invisible in capacity' },
-  { key: 'effortGrowth', label: 'Effort grew 50% or more on a committed issue this quarter' },
 ];
+// Effort growth moved to History (Tom, 2026-10-29: "not really at risk"); still computed here as out.effortGrowth.
 
 // "Low confidence" was dropped by Tom on 2026-10-10 (no confidence field exists).
 

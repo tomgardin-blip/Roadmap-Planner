@@ -47,7 +47,7 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
   for (const r of RULES) {
     const list = risk[r.key] && sortEntries(risk[r.key], scores, sort);
     if (!list) { h += section(`risk-${r.key}`, r.label, '…', baselineNote, `<div class="placeholder">${baselineNote}</div>`); continue; }
-    const sub = r.key === 'effortGrowth' ? 'vs. effort when first seen this quarter (baseline kept since 10/10/2026)' : list.length ? `${days(list)} d` : '';
+    const sub = list.length ? `${days(list)} d` : '';
     // No team: ask Qai to set the Team, one DM per ticked issue (Tom, 2026-10-27).
     const tools = r.key === 'noTeam' && list.length && !readOnly ? `<div class="lhead small"><button class="estbtn" data-estpost="qaiTeam" title="One DM to Qai per ticked issue, asking it to set the Team">${ESTIMATE_TARGETS.qaiTeam.button}</button></div>` : '';
     h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, '', r.key === 'dependency' ? { kind: 'dependency', blockerId: e.blocker?.id } : r.key === 'committedBlocked' ? { kind: 'blocked' } : null), r.key), r.key === 'afterCommit');
@@ -152,7 +152,7 @@ function planned(i) {
 }
 
 /** History: this week per quarter, planner changes, Notion edits since the last sync. */
-export function renderHistory(el, { audit, auditError, weekly, changes, users, syncedAt }) {
+export function renderHistory(el, { audit, auditError, weekly, changes, users, syncedAt, growth, growthError, horizon = [], scores = null }) {
   const qs = [...(weekly || new Map()).entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const weekRows = qs.map(([q, v]) => `<tr><td><b>${esc(q)}</b></td><td class="num">+${Math.round(v.in * 10) / 10}</td><td class="num">−${Math.round(v.out * 10) / 10}</td><td class="num"><b>${v.in - v.out >= 0 ? '+' : '−'}${Math.round(Math.abs(v.in - v.out) * 10) / 10}</b></td>
     <td>${v.items.map((i) => `<div class="hitem">${esc(i.name)}: ${esc(i.from || '–')} → ${esc(i.to || '–')} · ${Math.round(i.days * 10) / 10} d · <span class="${i.source === 'Notion' ? 'warnt' : ''}">${esc(i.source === 'Notion' ? 'Notion, no reason given' : i.reason || 'Planner, no reason')}</span></div>`).join('')}</td></tr>`).join('');
@@ -169,6 +169,8 @@ export function renderHistory(el, { audit, auditError, weekly, changes, users, s
     ${qs.length ? `<table class="htable"><thead><tr><th>Quarter</th><th>In</th><th>Out</th><th>Net</th><th>What moved</th></tr></thead><tbody>${weekRows}</tbody></table>` : '<div class="placeholder">No load moved between quarters this week.</div>'}
     ${section('hist-planner', 'Planner changes', audit ? audit.length : '…', 'newest first', auditHtml, true)}
     ${section('hist-notion', 'Edited in Notion since the last sync', (changes || []).length, 'no reason given', notionHtml)}
+    ${growth ? section('hist-growth', 'Effort grew 50% or more on a committed issue this quarter', growth.length, 'vs. effort when first seen this quarter (baseline kept since 10/10/2026)', capped(growth, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), 'hist-growth'))
+    : section('hist-growth', 'Effort grew 50% or more on a committed issue this quarter', '…', '', `<div class="placeholder">${growthError ? `Effort baseline unavailable: ${esc(growthError)}` : 'Reading the effort baseline from Notion…'}</div>`)}
   </div>`;
 }
 
