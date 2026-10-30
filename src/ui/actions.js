@@ -3,7 +3,7 @@
 
 import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postEstimate, postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, dismissPushback, postSlack } from '../data/writer.js';
+import { postEstimate, postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
@@ -233,25 +233,6 @@ export async function startFrEdit(ctx) {
         await adviseOwner(mcp, { fr: { ...fr, title: r.name || cur.name || fr.title }, owner, changes: shown, comment, updateId: r.updateId });
       } catch (err) { throw fail(`${all.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, err); }
       return `${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`;
-    });
-  });
-}
-
-/** "Not a pushback" with an optional reason, logged to the audit DB. */
-export function startDismiss({ mcp, fr, issue, onDone }) {
-  if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
-  const sheet = openSheet(`
-    <h3>Not a pushback</h3>
-    <div class="srow"><b>${esc(fr.title || 'FR')}</b> stays committed and leaves the pushback list. Logged in the audit log so Product can learn the call.</div>
-    <label class="sfld">Reason <span class="muted">(optional)</span><input id="sReason" type="text" maxlength="200" placeholder="e.g. real go-live blocker"></label>
-    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Log it</button></div>`);
-  sheet.querySelector('#sSave').addEventListener('click', () => {
-    const reason = sheet.querySelector('#sReason').value.trim();
-    closeSheet();
-    onDone?.({ reason }); // off the list at once
-    inBackground(`"${fr.title || 'FR'}"`, async () => {
-      try { await dismissPushback(mcp, { fr, issue, reason }); } catch (err) { throw fail(`Not logged: ${errText(err)}. It comes back on the next refresh.`, err); }
-      return 'Logged as not a pushback.';
     });
   });
 }

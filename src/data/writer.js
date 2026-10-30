@@ -140,15 +140,6 @@ export async function adviseOwner(mcp, { fr, owner, changes = [], comment, updat
   });
 }
 
-/** "Not a pushback": logged override so Product can learn the judgment (SPEC, decided 2026-10-10). */
-export async function dismissPushback(mcp, { fr, issue, reason }) {
-  assertAllowed('fr', fr.id);
-  await audit(mcp, {
-    category: 'Pushback override', field: 'Pushback', before: 'Pushback candidate', after: 'Not a pushback',
-    reason, frId: fr.id, issueId: issue?.id, itemName: fr.title, updateId: updateId(),
-  });
-}
-
 /** Keep an issue out of the push-out suggestions, or suggest it again (Tom, 2026-10-29). Audit row only. */
 export async function setPushOutKeep(mcp, { issue, keep, reason }) {
   assertAllowed('issue', issue.id);

@@ -98,7 +98,7 @@ Needed 1 month before is more urgent than Needed for go-live, but the committed 
 - High score + low effort = quick-win fillers. These fill the last few days of a quarter and are first to move out when a quarter overbooks.
 - Quick wins are shown as their own list, apart from the main ranking (decided 2026-10-10): a tiny issue with one go-live FR scores high by design, and whether it is worth doing needs Tom's judgment. Main ranking = scored issues above the effort cut-off, plus every score-0 issue at the bottom. Quick wins = score above 0 at or under the cut-off.
 
-**Pushback candidates**
+**Pushback candidates** (tab removed 2026-10-30; kept for the reasoning behind the push-out order)
 
 Committed FRs ranked by how easy they are to challenge with the COM/AM. Signals, strongest first:
 
@@ -203,7 +203,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
 - "No team" on a Prep queues card has a "DM Qai for the team" button next to it (Tom, 2026-10-27): it opens the same DM preview as At risk → No team, with that one issue ticked; one DM to Qai, as the viewer, on Send. Not shown to read-only viewers.
 - Quarter pot buttons go two quarters past the visible three (Tom, 2026-10-27): today Q4, Q1, Q2 plus Q3 '27 and Q4 '27 (the extra ones carry the year). On issue cards, the bulk bar and the FR committed-date chips. Capacity cards stay on the three visible quarters, so an issue moved there leaves the capacity view.
 - Saves run in the background (Tom, 2026-10-27): Save in any window (move, bulk move, FR edit, Not a pushback) closes it at once and the planner shows the change straight away; Notion writes, audit rows and the FR comment follow in the background behind a "Saving…" toast, which turns into the result. On a failure: a red toast; a move that failed is put back on screen, an FR edit that failed says to refresh for Notion's values. Slack posts keep their window open until sent (they report per post).
-- Tab order (Tom, 2026-10-27): Capacity, Quarter plan, Prep queues, At risk, Pushback, Data quality (added 2026-10-28), History.
+- Tab order (Tom, 2026-10-27): Capacity, Quarter plan, Prep queues, At risk, Data quality (added 2026-10-28), History. The Pushback tab was removed (Tom, 2026-10-30: "it doesn't really make sense, we do that from the Quarter plan views with the suggestions"): pushing back now happens from the cell suggestions and the FR edit sheet; the COM/AM DM stays on Data quality → Fix. Its "Not a pushback" override and the plan-fit list are gone; old "Pushback override" audit rows stay in History.
 - Data quality tab (Tom, 2026-10-28, "go for it" on checks #1–#10): one section per check, open FRs of signed customers and open issues of our 4 teams (Customer configuration issues are out, as everywhere). Team filter: an FR shows when one of its issues is in the picked teams; FRs with no issue only under All teams.
   - FR checks: (1) committed FR with no engineering issue linked; (2) engineering issue Done, FR still open (no open issue left); (3) "Needed for go-live" / "Needed 1 month before" with the go-live in the past; (4) FR committed date in the past while an issue is still open; (5) go-live FR whose deal stage is Live, Churn, Deal Lost or Dropped; (6) go-live FR whose deal has no go-live date (no committed date possible). Each FR card has Edit (priority, committed date, FR Status Done / Won't do, the issue's status, comment to the owner).
   - Issue checks: (7) Blocked/on hold with no open "Blocked by" (button: the blocked template post to the leads); (8) planned but still Product scoping TODO / in progress; (9) planned with dates but 0 FE/BE/MOB effort; (10) a "Blocked by" that is already Done / Won't do / Duplicate (fix in Notion: the planner never edits relations).
@@ -242,7 +242,7 @@ The main screen is the capacity puzzle; everything else feeds it or warns about 
   - Effort growth (decided 2026-10-10, the "alternative path"): the planner keeps its own baseline in the Notion database "Roadmap Planner Effort Baseline" (`collection://62afe97a-fdaf-4007-af81-5d1e1498661e`). On every live open it reads this quarter's rows and adds one row per committed issue of our 4 teams with effort that has none yet (its effort when first seen). Flag: effort now ≥ 1.5 × baseline. History starts 10 Oct 2026, so Q4 2026 growth is measured from then. Baseline rows are the record themselves; no audit row.
   - "Low confidence" dropped (Tom, 2026-10-10): no confidence field exists.
 
-**5. Pushback (Make the plan fit):** per overbooked team × quarter × skill, what to move out and which commits to challenge first, with an Ask COM/AM Slack DM (see Scoring).
+**5. Pushback (Make the plan fit), removed 2026-10-30 (see Tab order):**  per overbooked team × quarter × skill, what to move out and which commits to challenge first, with an Ask COM/AM Slack DM (see Scoring).
 
 **6. Change history**
 
