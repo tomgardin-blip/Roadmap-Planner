@@ -118,6 +118,13 @@ export function startBulkMove(ctx) {
 }
 
 /** Month and quarter buttons for a date field (same dates as the issue date buttons). */
+// Pot buttons for the engineering issue in the FR edit sheet (Tom, 2026-10-30): Start = End = that period's last Friday.
+function planChips(horizon) {
+  if (!horizon.length) return '';
+  const b = (d, label) => `<button type="button" data-mvdate="${d}" data-mvlabel="${esc(label)}" title="${fd(d)}">${esc(label)}</button>`;
+  return `<div class="datebtns">${potMonths(horizon).map((m) => b(m.lastFriday, m.label)).join('')}</div><div class="datebtns qbtns">${potQuarters(horizon).map((q) => b(q.lastFriday, q.shortLabel)).join('')}<span class="sep"></span><button type="button" data-mvdate="" title="Leave the issue's dates as they are">Keep</button></div>`;
+}
+
 function dateChips(horizon, current) {
   if (!horizon.length) return '';
   const b = (d, label) => `<button type="button" class="${d === current ? 'cur' : ''}" data-scdate="${d}" title="${fd(d)}">${esc(label)}</button>`;
@@ -135,7 +142,7 @@ function dateChips(horizon, current) {
  * opened from (Tom, 2026-10-27: every EI status). ctx: { mcp, fr, issue?, golive, onDone, onIssueStatus }
  */
 export async function startFrEdit(ctx) {
-  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, preset = null } = ctx;
+  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, onMove, blockers = [], preset = null } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
@@ -159,6 +166,8 @@ export async function startFrEdit(ctx) {
       <select id="sEi">${[ei.status && !EI_STATUSES.includes(ei.status) ? ei.status : null, ...EI_STATUSES].filter(Boolean)
         .map((st) => `<option ${st === ei.status ? 'selected' : ''}>${esc(st)}</option>`).join('')}</select></label>` : ''}
     <div class="srow muted" id="sEff"></div>
+    ${ei ? `<div class="sfld">Engineering issue planned <span class="muted">(now ${ei.start || ei.end ? (ei.start && ei.start !== ei.end ? `${fd(ei.start)} → ${fd(ei.end)}` : fd(ei.end || ei.start)) : 'not planned'}; pick a month or quarter pot to move it on Save)</span></div>
+      ${planChips(horizon)}<div class="srow" id="sMv"></div>` : ''}
     <label class="sfld">Comment <span class="muted" id="sOwner">(posted on the FR in Notion; looking up the Responsible Success…)</span>
       <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. Posted on the FR as you write it, tagging the owner. Empty: no comment"></textarea></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save</button></div>`);
@@ -186,7 +195,16 @@ export async function startFrEdit(ctx) {
   };
   sheet.addEventListener('input', effLine);
   // Month / quarter buttons fill the date with that period's last Friday, as the issue date buttons do.
+  let mvDate = null;
   sheet.addEventListener('click', (e) => {
+    const mv = e.target.closest('button[data-mvdate]');
+    if (mv) {
+      mvDate = mv.dataset.mvdate || null;
+      sheet.querySelectorAll('button[data-mvdate]').forEach((x) => x.classList.toggle('cur', x === mv && !!mvDate));
+      const w = mvDate ? moveWarnings({ ...issue, committed: issue.committed }, mvDate, blockers) : [];
+      sheet.querySelector('#sMv').innerHTML = mvDate ? `Moves to <b>${fd(mvDate)}</b> (${esc(mv.dataset.mvlabel)}) on Save.${w.map((x) => ` <span class="swarn">⚠ ${esc(x)}</span>`).join('')}` : '';
+      return;
+    }
     if (e.target.closest('button[data-scclear]')) {
       sheet.querySelector('#sSc').value = '';
       sheet.querySelectorAll('button[data-scdate]').forEach((x) => x.classList.remove('cur'));
@@ -210,15 +228,27 @@ export async function startFrEdit(ctx) {
     if (want.successCommitted !== cur.successCommitted) local.push({ field: 'Success Committed', category: 'FR committed changed', label: 'Committed', before: cur.successCommitted, after: want.successCommitted });
     if (want.priority !== cur.priority) local.push({ field: 'Priority', category: 'FR priority changed', label: 'Priority', before: cur.priority, after: want.priority });
     if (want.status !== undefined) local.push({ field: 'Status', category: 'FR status changed', label: 'Status', before: cur.status, after: want.status });
-    if (!local.length && !eiWant && !comment) { closeSheet(); return toast('Nothing changed.'); }
+    const move = mvDate && !(ei.start === mvDate && ei.end === mvDate) ? mvDate : null;
+    if (!local.length && !eiWant && !comment && !move) { closeSheet(); return toast('Nothing changed.'); }
     closeSheet();
     // Shown at once.
+    const was = { start: ei?.start || null, end: ei?.end || null };
+    if (move) onMove?.(issue, { before: was, after: { start: move, end: move } });
     if (local.length) onDone?.({ changes: local, before: cur });
     if (eiWant) onIssueStatus?.(issue, eiWant);
     if (comment) onDone?.({ changes: local, commented: true, comment });
     inBackground(`"${cur.name || fr.title}"`, async () => {
+      // The issue move first (its own write and audit row), so the FR save below still runs if it fails.
+      let moved = '';
+      if (move) {
+        try { await moveIssue(mcp, { issue, start: move, end: move, reason: comment, blockers }); moved = `Issue moved to ${fd(move)}. `; } catch (err) {
+          onMove?.(issue, { before: { start: move, end: move }, after: was }); // put it back
+          moved = `Issue NOT moved (${errText(err)}), put back. `;
+        }
+      }
+      if (!local.length && !eiWant && !comment) return `${moved}Logged.`;
       let r;
-      try { r = await editFr(mcp, { fr, ...want, reason: comment }); } catch (err) { throw fail(`FR not saved: ${errText(err)}. Refresh to see Notion's values.`, err); }
+      try { r = await editFr(mcp, { fr, ...want, reason: comment }); } catch (err) { throw fail(`${moved}FR not saved: ${errText(err)}. Refresh to see Notion's values.`, err); }
       let eiChange = null;
       if (eiWant) {
         try {
@@ -226,13 +256,13 @@ export async function startFrEdit(ctx) {
         } catch (err) { throw fail(`${r.changes.length ? 'FR saved, but the' : 'The'} engineering issue status was not saved: ${errText(err)}. Refresh to see Notion's values.`, err); }
       }
       const all = eiChange ? [...r.changes, eiChange] : r.changes;
-      if (!comment) return all.length ? 'Saved and logged. No comment posted (empty).' : 'Nothing changed in Notion.';
+      if (!comment) return `${moved}${all.length ? 'Saved and logged. No comment posted (empty).' : moved ? '' : 'Nothing changed in Notion.'}`;
       await ownerP;
       const shown = all.map((c) => ({ ...c, before: c.field === 'Success Committed' ? fd(c.before) : c.before, after: c.field === 'Success Committed' ? fd(c.after) : c.after }));
       try {
         await adviseOwner(mcp, { fr: { ...fr, title: r.name || cur.name || fr.title }, owner, changes: shown, comment, updateId: r.updateId });
       } catch (err) { throw fail(`${all.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, err); }
-      return `${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`;
+      return `${moved}${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`;
     });
   });
 }
