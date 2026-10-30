@@ -58,7 +58,10 @@ export function pushOut({ run, scores, team, skill, quarter, over, kept = new Se
   return { items, excluded, coverIdx, over };
 }
 
-export function pullForward({ run, scores, team, skill, quarter, free, backlog = [], quickWinMaxEffort = SCORING_DEFAULTS.quickWinMaxEffort }) {
+// otherFree: free days of the team's other skills in the same quarter ({BE: -2, MOB: 4}); an issue only fits
+// when its effort on every skill fits that skill's free days too (Tom, 2026-10-30: 11 d FE free but BE 2 d
+// over → FE-only issues). A skill missing from otherFree is not checked.
+export function pullForward({ run, scores, team, skill, quarter, free, backlog = [], otherFree = {}, quickWinMaxEffort = SCORING_DEFAULTS.quickWinMaxEffort }) {
   const sk = SK[skill];
   const end = quarterEnd(quarter);
   const seen = new Set();
@@ -66,14 +69,17 @@ export function pullForward({ run, scores, team, skill, quarter, free, backlog =
   const blocked = blockedIds(pool);
   const main = [];
   const quickWins = [];
+  let otherSkill = 0;
   for (const issue of pool) {
     const need = issue.skillEfforts?.[sk] || 0;
     if (!(need > 0) || need > free + 1e-9) continue;
+    const overOther = Object.entries(otherFree).some(([k, f]) => k !== skill && f != null && (issue.skillEfforts?.[SK[k]] || 0) > Math.max(0, f) + 1e-9);
     if (CLOSED.has(issue.status) || BLOCKED.has(issue.status) || blocked.has(issue.id) || issue.isParent || neverMove(issue)) continue;
     const planned = issue.start || issue.end;
     const later = planned ? planned > end : !issue.committed || issue.committed > end;
     if (!later) continue;
     if (!issueTeams(run, issue).has(team)) continue;
+    if (overOther) { otherSkill++; continue; }
     const s = scores?.get(issue.id) || null;
     const late = lateVsCommit(issue);
     const x = { issue, days: need, score: s, quickWin: isQuickWin(s, quickWinMaxEffort), late, tier: late ? 1 : issue.committed ? 2 : 3 };
@@ -84,5 +90,5 @@ export function pullForward({ run, scores, team, skill, quarter, free, backlog =
     || ((b.score?.score ?? -1) - (a.score?.score ?? -1))
     || a.days - b.days);
   quickWins.sort((a, b) => b.score.score - a.score.score || a.days - b.days);
-  return { items: main, quickWins, free };
+  return { items: main, quickWins, free, otherSkill };
 }

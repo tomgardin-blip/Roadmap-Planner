@@ -88,3 +88,10 @@ test('push out and pull forward never suggest dependency upgrades (Tom, 2026-10-
   assert.deepEqual(ids(p.items), ['x']);
   assert.equal(p.excluded.fixed, 1);
 });
+
+test('pull forward: effort on another skill must fit that skill too (Tom, 2026-10-30)', () => {
+  const r = run([F({ id: 'feonly', team: TP, fe: 2, ...pot('2027-03-26') }), F({ id: 'febe', team: TP, fe: 2, be: 1, ...pot('2027-03-26') }), F({ id: 'femob', team: TP, fe: 1, mob: 1, ...pot('2027-03-26') })]);
+  const p = pullForward({ run: r, scores: null, team: TP, skill: 'FE', quarter: Q4, free: 11, otherFree: { FE: 11, BE: -2, MOB: 3 } });
+  assert.deepEqual(ids(p.items).sort(), ['femob', 'feonly']);
+  assert.equal(p.otherSkill, 1);
+});

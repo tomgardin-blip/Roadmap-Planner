@@ -121,6 +121,9 @@ function frLine(f, cust, titleHtml, issueId = null, pre = '') {
   return `<li>${pre}<span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
 }
 
+// FE, BE and MOB effort, the cell's skill in bold (Tom, 2026-10-30: see what pulling forward does to the other skills).
+const effAll = (issue, skill) => ['FE', 'BE', 'MOB'].map((s) => { const v = issue.skillEfforts?.[SKILL_KEY[s]] || 0; return v ? (s === skill ? `<b>${s} ${fmt(v)} d</b>` : `${s} ${fmt(v)} d`) : null; }).filter(Boolean).join(' · ');
+
 /** Compact row for a suggestion list. */
 function suggestion(x, skill, label, keepBtn = false) {
   const { issue } = x;
@@ -134,7 +137,7 @@ function suggestion(x, skill, label, keepBtn = false) {
     issue.status ? `<span class="tag" title="Engineering issue status (Bugs & Features)">EI: ${esc(issue.status)}</span>` : '',
   ].join('');
   const keep = keepBtn && !readOnly && isAllowed('issue', issue.id) ? `<button type="button" class="fredit keepbtn" data-keep="${issue.id}" title="Take it out of the push-out suggestions (logged; Suggest again undoes it)">Keep, don't suggest</button>` : '';
-  return `<div class="sugg"><div class="t">${selBox(issue)}${title}${keep}</div><div class="meta">${tags}<span class="eff"><b>${skill} ${fmt(x.days)} d</b>${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed, x.issue?.id)}</div>`;
+  return `<div class="sugg"><div class="t">${selBox(issue)}${title}${keep}</div><div class="meta">${tags}<span class="eff">${effAll(issue, skill)}${label ? ` · ${label}` : ''}</span></div>${frBlock(x.score, x.issue?.committed, x.issue?.id)}</div>`;
 }
 
 // "Select all" on a suggestion list (Tom, 2026-10-29), plus "down to the line" when part of it covers the overbooking.
@@ -144,7 +147,7 @@ function selAll(items, toLine = null) {
   return `<div class="selall"><button type="button" class="fredit" data-selall="${ids(items)}">Select all ${items.length}</button>${toLine && toLine.length < items.length ? `<button type="button" class="fredit" data-selall="${ids(toLine)}">Select down to the line (${toLine.length})</button>` : ''}<button type="button" class="fredit" data-selnone="${ids(items)}">Select none</button><span class="muted">then pick a month or quarter in the bar at the bottom</span></div>`;
 }
 
-function suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kept }) {
+function suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kept, otherFree = {} }) {
   const diff = c.planned - c.capacity;
   if (extra.scores === 'loading') return '<h4>Suggestions</h4><div class="placeholder">Loading FR demand from Lightdash for the scores…</div>';
   if (extra.scores === 'error') return `<h4>Suggestions</h4><div class="placeholder">Scores unavailable: ${esc(extra.scoresError || '')}</div>`;
@@ -162,9 +165,11 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kep
     return h;
   }
   const free = -diff;
-  const p = pullForward({ run, scores, team, skill, quarter, free, backlog });
+  const p = pullForward({ run, scores, team, skill, quarter, free, backlog, otherFree });
   const note = extra.backlog === 'loading' ? ' Unplanned backlog still loading.' : extra.backlog === 'error' ? ' Unplanned backlog unavailable.' : '';
-  let h = `<h4>Suggested to pull forward · ${fmt(free)} d free</h4><div class="hint">Planned later or not planned, fits the free days, not blocked. Committed first (buys margin), then highest score.${note}</div>`;
+  const others = Object.entries(otherFree).filter(([k, f]) => k !== skill && f != null).map(([k, f]) => (f < -1e-9 ? `${k} ${fmt(-f)} d over` : `${k} ${fmt(f)} d free`)).join(', ');
+  const otherNote = others ? ` Other skills this quarter: ${others}; an issue only shows when its effort there fits too${p.otherSkill ? ` (${p.otherSkill} left out for that)` : ''}.` : '';
+  let h = `<h4>Suggested to pull forward · ${fmt(free)} d free</h4><div class="hint">Planned later or not planned, fits the free days, not blocked. Committed first (buys margin), then highest score.${otherNote}${note}</div>`;
   // Top 20, the rest behind "Show all" (decided 2026-10-10). Push out stays a full list.
   const top = p.items.slice(0, 20).map((x) => suggestion(x, skill)).join('');
   const rest = p.items.slice(20).map((x) => suggestion(x, skill)).join('');
@@ -302,7 +307,14 @@ export function openDrawer(el, { run, grid, horizon, changes = [], scores = null
   const over = diff > 0;
   // Cell list (Tom, 2026-10-29): suggestions first, then the other uncommitted issues (suggested ones not
   // repeated), committed issues at the bottom.
-  const sugg = quarter ? suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kept }) : hasCap ? '<div class="hint">Suggestions are on the quarter total: month cells are neutral.</div>' : '';
+  // Free days of the team's other skills in this quarter, so pull forward never overbooks them (Tom, 2026-10-30).
+  const otherFree = {};
+  if (quarter) for (const s of ['FE', 'BE', 'MOB']) {
+    const r = grid.rows.find((x) => x.team === team && x.skill === s);
+    const oc = r && cellInfo(r, horizon, period).c;
+    otherFree[s] = oc && oc.capacity != null ? oc.capacity - oc.planned : null;
+  }
+  const sugg = quarter ? suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kept, otherFree }) : hasCap ? '<div class="hint">Suggestions are on the quarter total: month cells are neutral.</div>' : '';
   const suggested = new Set(quarter && over && extra.scores === 'ok' ? pushOut({ run, scores, team, skill, quarter, over: diff, kept }).items.map((x) => x.issue.id) : []);
   // Kept ones show in the uncommitted list with "Suggest again".
   const card = (x) => issueCard(x, skill, horizon, byId.get(x.issue.id), scores?.get(x.issue.id), kept.has(x.issue.id));
