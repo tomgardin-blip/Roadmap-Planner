@@ -167,17 +167,18 @@ function suggestions({ run, scores, backlog, extra, team, skill, quarter, c, kep
   const free = -diff;
   const p = pullForward({ run, scores, team, skill, quarter, free, backlog, otherFree });
   const note = extra.backlog === 'loading' ? ' Unplanned backlog still loading.' : extra.backlog === 'error' ? ' Unplanned backlog unavailable.' : '';
-  const others = Object.entries(otherFree).filter(([k, f]) => k !== skill && f != null).map(([k, f]) => (f < -1e-9 ? `${k} ${fmt(-f)} d over` : `${k} ${fmt(f)} d free`)).join(', ');
-  const otherNote = others ? ` Other skills this quarter: ${others}; an issue only shows when its effort there fits too${p.otherSkill ? ` (${p.otherSkill} left out for that)` : ''}.` : '';
-  let h = `<h4>Suggested to pull forward · ${fmt(free)} d free</h4><div class="hint">Planned later or not planned, fits the free days, not blocked. Committed first (buys margin), then highest score.${otherNote}${note}</div>`;
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const others = Object.entries(otherFree).filter(([k, f]) => k !== skill && f != null);
+  const full = others.filter(([, f]) => r1(f) <= 0).map(([k]) => k);
+  // Other skills of this team and quarter, in plain sight (Tom, 2026-10-30: "I don't see this").
+  const otherLine = others.length ? `<div class="othersk">${others.map(([k, f]) => `<span class="tag ${r1(f) < 0 ? 'late' : r1(f) === 0 ? '' : 'commit'}">${k} ${r1(f) < 0 ? `${fmt(-r1(f))} d over` : `${fmt(r1(f))} d free`}</span>`).join('')}<span>${full.length ? `Only issues without ${full.join(' or ')} effort` : 'Effort on these must fit too'}${p.otherSkill ? ` · ${p.otherSkill} left out for that` : ''}</span></div>` : '';
+  let h = `<h4>Suggested to pull forward · ${fmt(free)} d free</h4><div class="hint">Planned later or not planned, fits the free days, not blocked. Committed first (buys margin), then highest score; quick wins are in the list, tagged.${note}</div>${otherLine}`;
   // Top 20, the rest behind "Show all" (decided 2026-10-10). Push out stays a full list.
   const top = p.items.slice(0, 20).map((x) => suggestion(x, skill)).join('');
   const rest = p.items.slice(20).map((x) => suggestion(x, skill)).join('');
   if (p.items.length) h += selAll(p.items);
   h += top || '<div class="placeholder">Nothing fits the free days.</div>';
   if (rest) h += `<details class="more"><summary>Show all ${p.items.length}</summary>${rest}</details>`;
-  h += `<h4>Quick wins that fit · ${p.quickWins.length}</h4><div class="hint">No commit, at most 2 d total effort, highest score first. Your call.</div>`;
-  h += p.quickWins.map((x) => suggestion(x, skill)).join('') || '<div class="placeholder">No quick wins fit.</div>';
   return h;
 }
 

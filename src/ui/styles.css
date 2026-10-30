@@ -532,3 +532,6 @@ button.primary { background: var(--green-dark); border-color: var(--green-dark);
 .tibar .tiunder { background: var(--green-dark); }
 .tibar .tiover { background: var(--orange); }
 b.tiunder { color: var(--ok-ink); } b.tiover { color: var(--orange); }
+
+/* Other skills' free/over days above the pull-forward list (Tom, 2026-10-30). */
+.othersk { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 8px; font-size: 12px; font-weight: 600; color: var(--ink); }

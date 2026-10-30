@@ -68,7 +68,6 @@ export function pullForward({ run, scores, team, skill, quarter, free, backlog =
   const pool = [...run.issues, ...backlog].filter((i) => i.id && !seen.has(i.id) && seen.add(i.id));
   const blocked = blockedIds(pool);
   const main = [];
-  const quickWins = [];
   let otherSkill = 0;
   for (const issue of pool) {
     const need = issue.skillEfforts?.[sk] || 0;
@@ -82,13 +81,12 @@ export function pullForward({ run, scores, team, skill, quarter, free, backlog =
     if (overOther) { otherSkill++; continue; }
     const s = scores?.get(issue.id) || null;
     const late = lateVsCommit(issue);
-    const x = { issue, days: need, score: s, quickWin: isQuickWin(s, quickWinMaxEffort), late, tier: late ? 1 : issue.committed ? 2 : 3 };
-    if (x.tier === 3 && x.quickWin) quickWins.push(x); else main.push(x);
+    // Quick wins stay in the one list, ranked by score like the rest and tagged (Tom, 2026-10-30).
+    main.push({ issue, days: need, score: s, quickWin: isQuickWin(s, quickWinMaxEffort), late, tier: late ? 1 : issue.committed ? 2 : 3 });
   }
   main.sort((a, b) => a.tier - b.tier
     || (a.tier < 3 ? String(a.issue.committed).localeCompare(String(b.issue.committed)) : 0)
     || ((b.score?.score ?? -1) - (a.score?.score ?? -1))
     || a.days - b.days);
-  quickWins.sort((a, b) => b.score.score - a.score.score || a.days - b.days);
-  return { items: main, quickWins, free, otherSkill };
+  return { items: main, free, otherSkill };
 }

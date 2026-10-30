@@ -54,9 +54,10 @@ test('pull forward: later or unplanned, same team and skill, fits, not blocked; 
   const backlog = toIssues([{ serve_engineering_capacity_features: JSON.stringify([F({ id: 'unpl', team: TP, be: 2 })]) }]);
   const s = sc([['best', 8, 4], ['ok', 2, 4], ['byme', 5, 3], ['unpl', 6, 2.5], ['qw', 30, 1], ['comm', 1, 2], ['late', 1, 3]]);
   const p = pullForward({ run: r, scores: s, team: TP, skill: 'BE', quarter: Q4, free: 5, backlog });
-  assert.deepEqual(ids(p.items), ['late', 'comm', 'best', 'unpl', 'byme', 'ok']);
+  // Quick wins sit in the one list by score, tagged (Tom, 2026-10-30).
+  assert.deepEqual(ids(p.items), ['late', 'comm', 'qw', 'best', 'unpl', 'byme', 'ok']);
   assert.equal(p.items[0].late, true);
-  assert.deepEqual(ids(p.quickWins), ['qw']);
+  assert.equal(p.items[2].quickWin, true);
 });
 
 test('pull forward for the next quarter only looks beyond it', () => {
