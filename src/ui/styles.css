@@ -540,3 +540,9 @@ b.tiunder { color: var(--ok-ink); } b.tiover { color: var(--orange); }
 .qpsort { all: unset; cursor: pointer; font: inherit; color: inherit; white-space: nowrap; }
 .qpsort:hover, .qpsort.on { color: var(--ink); text-decoration: underline; }
 .qpsort:focus-visible { outline: 2px solid var(--green-dark); outline-offset: 2px; }
+
+/* FR line under a Quarter plan issue (Tom, 2026-10-30). */
+.qpfr { margin-top: 3px; font-size: 11px; color: var(--muted); }
+.qpfr b { color: var(--ink); }
+.qpfr .gl { color: var(--red-ink); font-weight: 700; }
+.qpfr .setter { color: var(--ink); }
