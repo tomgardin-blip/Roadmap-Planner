@@ -6,7 +6,7 @@ import { formatDate, formatDateTime, formatDatesIn, lateVsCommit } from '../peri
 import { issueTeams, TEAMS, pickedTeams } from '../capacity.js';
 import { ISSUE_PRIORITIES } from '../notion/writes.js';
 import { GROUPS } from '../prep.js';
-import { listCard, frCard, planActions, qualityFrCard, frSummary } from './drawer.js';
+import { listCard, frCard, planActions, qualityFrCard, frBlock } from './drawer.js';
 import { CHECKS, qualityCount } from '../quality.js';
 import { teamCard } from './grid.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
@@ -239,8 +239,8 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
       const effCells = ef.map((v) => `<td class="num qpeff">${v ? v : '–'}</td>`).join('');
       const effLine = ['FE', 'BE', 'MOB'].map((s, k) => (ef[k] ? `${s} ${ef[k]}` : null)).filter(Boolean).join(' · ');
       const tiTag = /technical improvement/i.test(i.type || '') ? ' <span class="tag qtr" title="Technical improvement: counts against the team\'s tech improvement budget">Tech impr</span>' : '';
-      // FRs and who drives the commit, under the name (Tom, 2026-10-30); "Plan" opens the full FR list.
-      const frs = scores ? `<div class="qpfr">${frSummary(scores.get(i.id), i.committed, i.id)}</div>` : '';
+      // FRs and who drives the commit, under the name; click to open the FR list with Edit, as on the cards (Tom, 2026-10-30).
+      const frs = scores ? `<div class="qpfr">${frBlock(scores.get(i.id), i.committed, i.id)}</div>` : '';
       const row = `<tr class="${isOpen ? 'qpopen' : ''}"><td>${name}${tiTag}${effLine ? `<span class="qpeffm"> · ${effLine} d</span>` : ''}${frs}</td>${effCells}<td class="num">${planned(i)}</td><td class="num qpcom ${late ? 'warnt' : ''}" ${late ? 'title="Planned after the committed date: move it to a month pot"' : ''}>${i.committed ? formatDate(i.committed) : '–'}</td><td>${sel}</td><td class="qpacts">${plan}</td></tr>`;
       return isOpen ? `${row}<tr class="qpact"><td colspan="8">${planActions(i, horizon, scores?.get(i.id))}</td></tr>` : row;
     }).join('');

@@ -105,7 +105,7 @@ export function frSummary(s, committed = null, issueId = null) {
   return [`<b>${s.frs.length} FR${s.frs.length === 1 ? '' : 's'}</b>`, `${s.customers} customer${s.customers === 1 ? '' : 's'}`, gl && `<span class="gl">${gl} go-live</span>`, t3 && `${t3} Top 3`, by].filter(Boolean).join(' · ');
 }
 
-function frBlock(s, committed = null, issueId = null) {
+export function frBlock(s, committed = null, issueId = null) {
   if (!s) return '';
   const day = committed ? String(committed).slice(0, 10) : null;
   if (!s.frs.length) return `<div class="frs none">${frSummary(s, committed, issueId)}</div>`;
@@ -218,7 +218,8 @@ function issueCard({ issue, days }, skill, horizon, change, score, kept = false)
 
 /** Planning actions for one issue (Quarter plan row): its FRs with Edit, then the month and quarter pot buttons. */
 export function planActions(issue, horizon, score) {
-  return `${frBlock(score, issue.committed, issue.id)}${estimateLinks(issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue)}`;
+  // The FR toggle sits on the row itself (Tom, 2026-10-30), so not repeated here.
+  return `${estimateLinks(issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue)}`;
 }
 
 // Post in #roadmap_product about this issue (Tom, 2026-10-27).
