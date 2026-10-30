@@ -141,6 +141,16 @@ export function askOwnerMessage({ ownerName, issue, fr, customer, ctx }) {
   return `${hi}, ${why} because of ${customer}'s request ${linked(fr)} (${fr.priority || 'no priority'}). Would it be ok to lower the priority / move the date? Could u check with ${customer} and let me know? Thx!`;
 }
 
+/**
+ * At risk → "Pushback Req GL" (Tom, 2026-10-30): reminder to the COM/AM to tell the customer the FR can't
+ * make the go-live. "@Owner" becomes the person. d: { fr: {name,url}, issue?, customer, since? }
+ */
+export function pushbackReminder(d) {
+  const iss = d.issue ? ` ${linked(d.issue)} is planned ${shortPlan(d.issue)}.` : '';
+  const when = d.since ? ` on ${formatDate(String(d.since).slice(0, 10))}` : '';
+  return `Hi @Owner, reminder: we set ${linked(d.fr)} for ${d.customer} to "Pushback Req GL"${when}: we can't deliver it before the go-live.${iss} Could u let ${d.customer} know and then set the priority to "Needed after go-live"? If they don't accept, set it back to "Needed for go-live" and let me know. Thx!`;
+}
+
 /** slack_search_users result → { id, name } for the person with this email, or null. */
 export function slackUserFromSearch(result, email) {
   const text = typeof result === 'string' ? result : result?.results || JSON.stringify(result ?? '');

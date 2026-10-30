@@ -547,3 +547,6 @@ b.tiunder { color: var(--ok-ink); } b.tiover { color: var(--orange); }
 .qpfr b { color: var(--ink); }
 .qpfr .gl { color: var(--red-ink); font-weight: 700; }
 .qpfr .setter { color: var(--ink); }
+
+/* "Pushback Req GL" FR priority tag (Tom, 2026-10-30). */
+.tag.pbreq { background: var(--amb-bg); color: var(--amb-ink); font-weight: 700; }

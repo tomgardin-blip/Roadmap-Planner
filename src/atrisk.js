@@ -26,9 +26,10 @@ export const RULES = [
  * @param run      runCapacity() result (issue.committed is the effective committed date)
  * @param opts.team  'all' or one of TEAMS
  * @param opts.baseline Map(issue id → quarter-start total effort), or null while loading
+ * @param opts.held  Set of issue ids whose commit is set by a "Pushback Req GL" FR: not "Planned after the committed date" (Tom, 2026-10-30)
  * @returns { [ruleKey]: [{ issue, detail }] }
  */
-export function atRisk(run, { team = 'all', baseline = null } = {}) {
+export function atRisk(run, { team = 'all', baseline = null, held = null } = {}) {
   const open = run.issues.filter((i) => i.id && !CLOSED.has(i.status) && !(i.type || '').includes('Holiday'));
   const blockedBy = new Map();
   for (const b of open) for (const id of b.blocks || []) (blockedBy.get(id) || blockedBy.set(id, []).get(id)).push(b);
@@ -44,7 +45,7 @@ export function atRisk(run, { team = 'all', baseline = null } = {}) {
   for (const i of open) {
     const planned = i.start || i.end;
     if (inScope(i)) {
-      if (lateVsCommit(i)) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
+      if (lateVsCommit(i) && !held?.has(i.id)) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
       if (i.committed && !planned && estimated(i)) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
       if (i.committed && i.status === 'Blocked/on hold' && String(i.committed).slice(0, 10) <= sixMonths) out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
       // A blocker that ends after this issue starts (pot issues: Start = End).

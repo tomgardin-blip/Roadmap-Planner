@@ -14,6 +14,7 @@ export const PRIORITY_WEIGHTS = {
   Medium: 2,
   Low: 1,
   'Needed after go-live': 0,
+  'Pushback Req GL': 0, // as Needed after go-live: no go-live demand any more (Tom, 2026-10-30)
   'No longer needed': 0,
   "Won't do": 0,
 };

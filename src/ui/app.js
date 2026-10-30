@@ -21,10 +21,11 @@ import { dataQuality, qualityCount } from '../quality.js';
 import { weeklyLoadChanges, dismissedFrs } from '../history.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
+import { pushbackReqList, heldByPushback } from '../pushbackReq.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
 import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates } from './actions.js';
-import { TEAM_LEADS, dependencyMessage, blockedMessage, qualityDm, staleBlockerMessage } from '../roadmapPost.js';
+import { TEAM_LEADS, dependencyMessage, blockedMessage, qualityDm, staleBlockerMessage, pushbackReminder } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
@@ -243,6 +244,19 @@ function shell() {
       leads = [...new Map(leads.map((l) => [l.id, l])).values()];
       startRoadmapPost({ mcp: state.mcp, issue: { ...issue, team, commitSrc: commitSource(issue) }, lead: TEAM_LEADS[team] || null, template, leads,
         onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: issue.id, itemName: issue.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); renderDrawer(); } });
+      return;
+    }
+    const pr = e.target.closest('button[data-pbremind]');
+    if (pr && !pr.disabled) {
+      // Reminder DM to the COM/AM of a "Pushback Req GL" FR (Tom, 2026-10-30), logged as "COM/AM asked".
+      const en = (state.pbReq || []).find((x) => x.fr.id === pr.dataset.pbremind);
+      if (!en) return;
+      const { fr } = en; const issue = en.issues[0] || null;
+      const customer = String(state.dealNames.get(String(fr.dealId || '').replace(/-/g, '').toLowerCase()) || 'the customer').trim();
+      startAskOwner({ mcp: state.mcp, issue, fr, customer,
+        email: state.owners?.get(fr.id) || loadOwnerEmails(state.mcp, [fr.id]).then((m) => m.get(fr.id)),
+        ctx: { kind: 'text', text: pushbackReminder({ fr: { name: fr.title || 'FR', url: fr.url }, issue: issue && { name: issue.name, url: issue.url, start: issue.start, end: issue.end }, customer, since: en.since }) },
+        onDone: ({ link }) => { state.audit = [{ category: 'COM/AM asked', field: 'Slack', after: link || '', frId: fr.id, issueId: issue?.id, itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])]; recompute(); draw(); } });
       return;
     }
     const fx = e.target.closest('button[data-dqfix]');
@@ -742,11 +756,23 @@ function renderChrome() {
 }
 
 
+/** COM/AM emails of the "Pushback Req GL" FRs, loaded once when At risk opens (and again for new ones). */
+async function loadPbOwners() {
+  const ids = (state.pbReq || []).map((e) => e.fr.id).filter((id) => !state.owners?.has(id));
+  if (!ids.length || state.ownersLoading || !state.mcp) return;
+  state.ownersLoading = true;
+  try { const m = await loadOwnerEmails(state.mcp, ids); state.owners = new Map([...(state.owners || []), ...ids.map((id) => [id, m.get(id) || null])]); } catch { state.owners = new Map([...(state.owners || []), ...ids.map((id) => [id, null])]); }
+  state.ownersLoading = false;
+  if (state.tab === 'risk') draw();
+}
+
 /** At-risk flags (from the run) and prep queues (once all FRs and the backlog are in). */
 function recompute() {
   if (!state.run) return;
-  state.risk = atRisk(state.run, { team: state.teamFilter, baseline: state.baseline });
   const x = state.extra;
+  // "Pushback Req GL" FRs (Tom, 2026-10-30): their own list, and out of "Planned after the committed date".
+  state.pbReq = x.scores === 'ok' ? pushbackReqList({ run: state.run, backlog: state.backlog, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], signed: x.signed, nonFeature: x.nonFeature, audit: state.audit || [], team: state.teamFilter, today: TODAY }) : null;
+  state.risk = atRisk(state.run, { team: state.teamFilter, baseline: state.baseline, held: heldByPushback(state.pbReq) });
   state.queues = x.scores === 'ok' && x.backlog !== 'loading'
     ? prepQueues({ run: state.run, backlog: state.backlog, scores: state.scores, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows], team: state.teamFilter, signed: x.signed, featureFrs: x.featureFrs })
     : null;
@@ -758,7 +784,7 @@ function recompute() {
   document.getElementById('cntDq').textContent = qualityCount(state.quality) ?? '';
   state.weekly = state.audit ? weeklyLoadChanges({ audit: state.audit, changes: state.status?.changed || [], issues: state.run.issues, now: NOW }) : null;
   const c = tabCounts(state.risk, state.queues);
-  document.getElementById('cntRisk').textContent = c.risk ?? '';
+  document.getElementById('cntRisk').textContent = c.risk == null ? '' : c.risk + (state.pbReq?.length || 0);
   document.getElementById('cntPrep').textContent = c.prep ?? '';
 }
 
@@ -798,7 +824,7 @@ function drawTab() {
     main.innerHTML = `<div class="lists"><div class="banner bad"><b>Capacity unavailable.</b> Lightdash engineering_capacity was not read${state.feedError ? `: ${esc(state.feedError.replace(/\.$/, ''))}` : ''}. Capacity and Quarter plan stay blocked rather than show wrong numbers. Use ↻ Refresh to retry; Prep queues, At risk, Data quality and History still work.</div></div>`;
     return;
   }
-  if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
+  if (state.tab === 'risk' && state.risk) { loadPbOwners(); renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp, pbReq: state.pbReq, owners: state.mcp ? state.owners : new Map() }); return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp, sort: state.qpSort || { key: 'plan', dir: 1 } }); return; }
   if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }

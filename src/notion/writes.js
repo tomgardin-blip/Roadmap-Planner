@@ -11,7 +11,8 @@ export const AUDIT_DS = '9b4b26f2-ea33-4578-89c2-252389cd5564';
 // All issues and FRs are writable since Tom approved it on 2026-10-10 ("unlock all").
 // The guard still refuses anything that is not a Notion page id.
 
-export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'Top 3', 'High', 'Medium', 'Low', 'Needed after go-live', 'No longer needed', "Won't do"];
+// "Pushback Req GL" (Tom, 2026-10-30): go-live FR we can't make; the COM/AM tells the customer.
+export const FR_PRIORITIES = ['Needed 1 month before', 'Needed for go-live', 'Pushback Req GL', 'Top 3', 'High', 'Medium', 'Low', 'Needed after go-live', 'No longer needed', "Won't do"];
 // FR Status: the planner may only close an FR as "Won't do" (Tom, 2026-10-27) or "Done" (Tom, 2026-10-28,
 // for Data quality "Engineering issue Done, FR still open"); no other status writes.
 export const FR_STATUS_CLOSE = "Won't do";

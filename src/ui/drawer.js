@@ -127,7 +127,7 @@ function frLine(f, cust, titleHtml, issueId = null, pre = '') {
     : '';
   const commit = f.setsCommit ? ` <span class="tag commit" title="This FR's committed date is the issue's committed date">Sets the commit · ${formatDate(f.committed)}</span>`
     : f.committed ? ` <span class="muted">commit ${formatDate(f.committed)}</span>` : '';
-  return `<li>${pre}<span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
+  return `<li>${pre}<span class="tag ${GO_LIVE.has(f.priority) ? 'late' : f.priority === 'Pushback Req GL' ? 'pbreq' : f.priority === 'Top 3' ? 'qw' : ''}">${esc(f.priority || 'No priority')}</span> <b>${esc(cust)}</b>${commit}${f.multiplier > 1 ? ` <span class="mult">×${f.multiplier}</span>` : ''}${edit}<div class="frt">${titleHtml}${f.meta ? ` · ${esc(f.meta)}` : ''}${f.status ? ` · <span title="Feature request status (Customer Tasks)">FR status: ${esc(f.status)}</span>` : ''}</div></li>`;
 }
 
 // FE, BE and MOB effort, the cell's skill in bold (Tom, 2026-10-30: see what pulling forward does to the other skills).

@@ -40,7 +40,7 @@ function capped(items, render, key) {
   return head + (rest ? `<details class="more" data-more="${key}"><summary>Show all ${items.length}</summary>${rest}</details>` : '');
 }
 
-export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError, sort = 'value', readOnly = false }) {
+export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError, sort = 'value', readOnly = false, pbReq = null, owners = null }) {
   const baselineNote = baselineError ? `Effort baseline unavailable: ${baselineError}` : 'Reading the effort baseline from Notion…';
   const total = RULES.reduce((a, r) => a + (risk[r.key]?.length || 0), 0);
   let h = `<div class="lhead"><b>At risk</b><span class="lsub">${total} flags across ${RULES.length} rules${loading ? ' · scores loading' : ''}. Commit dates are effective commits (earliest of the issue, its FRs and what it blocks).</span>${sortSel(sort)}</div>`;
@@ -50,9 +50,26 @@ export function renderAtRisk(el, { risk, horizon, scores, loading, baselineError
     const sub = list.length ? `${days(list)} d` : '';
     // No team: ask Qai to set the Team, one DM per ticked issue (Tom, 2026-10-27).
     const tools = r.key === 'noTeam' && list.length && !readOnly ? `<div class="lhead small"><button class="estbtn" data-estpost="qaiTeam" title="One DM to Qai per ticked issue, asking it to set the Team">${ESTIMATE_TARGETS.qaiTeam.button}</button></div>` : '';
-    h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, '', r.key === 'dependency' ? { kind: 'dependency', blockerId: e.blocker?.id } : r.key === 'committedBlocked' ? { kind: 'blocked' } : null), r.key), r.key === 'afterCommit');
+    h += section(`risk-${r.key}`, r.label, list.length, sub, tools + capped(list, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, '', r.key === 'dependency' ? { kind: 'dependency', blockerId: e.blocker?.id } : r.key === 'committedBlocked' ? { kind: 'blocked' } : null), r.key), r.key === 'afterCommit');    if (r.key === 'afterCommit') h += pushbackSection(pbReq, owners, readOnly);
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
+}
+
+// FRs on "Pushback Req GL" (Tom, 2026-10-30): days waiting since it was set, the COM/AM, and a Slack reminder.
+function pushbackSection(list, owners, readOnly) {
+  const title = 'Pushback Req GL: customer still to be told';
+  if (!list) return section('risk-pbreq', title, '…', 'needs all FRs', '<div class="placeholder">Loading the FRs from Lightdash…</div>');
+  const card = (e) => {
+    const owner = owners?.get(e.fr.id);
+    const waited = e.days == null ? 'Set outside the planner, so the date is unknown' : `Set ${e.days} day${e.days === 1 ? '' : 's'} ago (${fd(String(e.since).slice(0, 10))})`;
+    const known = owners?.has(e.fr.id);
+    const who = owner ? `COM/AM ${owner}` : known ? 'No Responsible Success' : 'COM/AM loading…';
+    const rem = e.reminded ? (e.reminded.link ? `<a class="rmlinks" href="${esc(e.reminded.link)}" target="_blank" rel="noopener">Reminded ${fd(String(e.reminded.at).slice(0, 10))} · open in Slack</a>` : `<span class="rmlinks">Reminded ${fd(String(e.reminded.at).slice(0, 10))}</span>`) : '';
+    const btn = readOnly ? '' : `<button type="button" class="fredit" data-pbremind="${e.fr.id}" ${known && !owner ? 'disabled title="No Responsible Success on this FR"' : ''}>${e.reminded ? 'Remind again' : 'Remind COM/AM'}</button>`;
+    const age = e.days != null && e.days >= 5 ? `<span class="tag late">${e.days} d waiting</span>` : e.days != null ? `<span class="tag">${e.days} d waiting</span>` : '<span class="tag">? d waiting</span>';
+    return qualityFrCard(e.fr, `${waited} · ${who}`, e.issues[0] || null, `${age}${btn}${rem}`);
+  };
+  return section('risk-pbreq', title, list.length, list.length ? 'longest waiting first' : '', capped(list, card, 'pbreq'));
 }
 
 // "No team" on a prep card, with a button to DM Qai for that one issue (Tom, 2026-10-27), as on At risk.
