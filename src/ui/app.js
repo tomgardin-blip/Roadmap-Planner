@@ -171,7 +171,7 @@ function shell() {
   document.getElementById('drawer').addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) {
       closeDrawer(document.getElementById('drawer'));
-      state.drawer = null;
+      state.drawer = null; drawerKey = null;
       document.querySelectorAll('td.cell.sel').forEach((x) => x.classList.remove('sel'));
     }
   });
@@ -301,7 +301,7 @@ function shell() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (document.getElementById('rp-sheet')) { closeSheet(); return; }
-    closeDrawer(document.getElementById('drawer')); state.drawer = null;
+    closeDrawer(document.getElementById('drawer')); state.drawer = null; drawerKey = null;
   });
 }
 
@@ -635,13 +635,22 @@ function afterFrEdit(fr, { changes, before = {}, commented = false, comment = ''
   rescore();
 }
 
+// Re-rendering the same cell keeps its scroll position (Tom, 2026-10-30: after a move or edit the window
+// jumped back to the top). A different cell opens at the top.
+let drawerKey = null;
 function renderDrawer() {
   if (!state.drawer || !state.run) return;
-  openDrawer(document.getElementById('drawer'), {
+  const el = document.getElementById('drawer');
+  const key = `${state.drawer.team}|${state.drawer.skill}|${state.drawer.period}`;
+  const top = key === drawerKey ? el.querySelector('.dbody')?.scrollTop || 0 : 0;
+  openDrawer(el, {
     run: state.run, grid: state.grid, horizon, changes: state.status?.changed || [],
     scores: state.scores, backlog: state.backlog, extra: state.extra, names: state.dealNames, kept: keptSet(), ...state.drawer,
   });
-  restoreFolds(document.getElementById('drawer'));
+  restoreFolds(el);
+  drawerKey = key;
+  const body = el.querySelector('.dbody');
+  if (body && top) body.scrollTop = top;
 }
 
 /**
