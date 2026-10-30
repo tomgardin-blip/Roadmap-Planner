@@ -273,6 +273,13 @@ function shell() {
       if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
+    const qe = e.target.closest('button[data-qaiest]');
+    if (qe) {
+      // One No estimate issue: @Qai estimate in #dev_effort_estimate, that issue ticked (Tom, 2026-10-30).
+      const entry = GROUPS.flatMap((g) => state.queues?.[g.key].noEstimate || []).find((x) => x.issue.id === qe.dataset.qaiest);
+      if (entry) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No estimate', entries: [entry] }], target: ESTIMATE_TARGETS.qai, preselect: [entry.issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
+      return;
+    }
     const ep = e.target.closest('button[data-estpost]');
     if (ep) {
       // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.
