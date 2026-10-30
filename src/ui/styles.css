@@ -535,3 +535,8 @@ b.tiunder { color: var(--ok-ink); } b.tiover { color: var(--orange); }
 
 /* Other skills' free/over days above the pull-forward list (Tom, 2026-10-30). */
 .othersk { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
+
+/* Sortable Quarter plan headers (Tom, 2026-10-30). */
+.qpsort { all: unset; cursor: pointer; font: inherit; color: inherit; white-space: nowrap; }
+.qpsort:hover, .qpsort.on { color: var(--ink); text-decoration: underline; }
+.qpsort:focus-visible { outline: 2px solid var(--green-dark); outline-offset: 2px; }

@@ -143,6 +143,8 @@ function shell() {
   document.getElementById('grid').addEventListener('click', (e) => {
     const qp = e.target.closest('button[data-qp]');
     if (qp) { state.qpQuarter = qp.dataset.qp; draw(); return; }
+    const qs = e.target.closest('button[data-qpsort]');
+    if (qs) { const k = qs.dataset.qpsort; state.qpSort = { key: k, dir: state.qpSort?.key === k && k !== 'plan' ? -state.qpSort.dir : 1 }; draw(); return; }
     const qt = e.target.closest('button[data-qpteam]');
     if (qt) {
       // From All, a team button shows just that team; otherwise it toggles; none left = All.
@@ -843,7 +845,7 @@ function drawTab() {
   if (state.tab === 'risk' && state.risk) { renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'pushback') { loadOwners(); renderPushback(main, { fit: state.fit, loading: state.extra.scores === 'loading', owners: state.mcp ? state.owners : new Map(), names: state.dealNames, readOnly: state.readOnly, team: state.teamFilter, asked: askedMap() }); return; }
-  if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
+  if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp, sort: state.qpSort || { key: 'plan', dir: 1 } }); return; }
   if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter, readOnly: state.readOnly || !state.mcp }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt, growth: state.risk?.effortGrowth, growthError: state.baselineError, horizon, scores: state.scores }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);

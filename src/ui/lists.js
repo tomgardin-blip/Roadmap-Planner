@@ -182,7 +182,7 @@ export function renderHistory(el, { audit, auditError, weekly, changes, users, s
  * (its end date falls in the quarter), with where it is planned, its committed date and its Priority,
  * which can be set right here. Sorted month pots, quarter pot, dated work; then committed date (none last).
  */
-export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = 'all', readOnly, scores = null, open = new Set() }) {
+export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = 'all', readOnly, scores = null, open = new Set(), sort = { key: 'plan', dir: 1 } }) {
   const q = horizon.find((x) => x.key === quarterKey) || horizon[0];
   const qi = horizon.indexOf(q);
   const qOf = (d) => { const [y, m] = String(d).split('-').map(Number); return `${y}-Q${Math.floor((m - 1) / 3) + 1}`; };
@@ -206,6 +206,18 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
     const [ga, ka] = rank(a); const [gb, kb] = rank(b);
     return ga - gb || ka.localeCompare(kb) || (!a.committed) - (!b.committed) || String(a.committed || '').localeCompare(String(b.committed || ''));
   };
+  // Column sort (Tom, 2026-10-30): click a header; again flips it. Effort largest first, dates earliest first,
+  // priority Urgent first; empty values always last. "Planned" is the default order above.
+  const PRIO = ['Urgent', 'High', 'Medium', 'Low', 'Not assigned'];
+  const last = (v) => (v == null || v === '' ? null : v);
+  const cmp = (f, desc = false) => (a, b) => { const x = last(f(a)), y = last(f(b)); if (x == null || y == null) return (x == null) - (y == null); const r = x < y ? -1 : x > y ? 1 : 0; return (desc ? -r : r) * sort.dir; };
+  const sortBy = (k) => ({
+    name: cmp((i) => String(i.name || '').toLowerCase()),
+    fe: cmp((i) => i.skillEfforts?.frontend || null, true), be: cmp((i) => i.skillEfforts?.backend || null, true), mob: cmp((i) => i.skillEfforts?.mobile || null, true),
+    committed: cmp((i) => i.committed || null),
+    priority: cmp((i) => (PRIO.includes(i.priority) ? PRIO.indexOf(i.priority) : i.priority ? 5 : null)),
+  }[k] || (() => 0));
+  const th = (k, label, cls = '', title = '') => `<th class="${cls}"${title ? ` title="${title}"` : ''}><button type="button" class="qpsort ${sort.key === k ? 'on' : ''}" data-qpsort="${k}">${label}${sort.key === k ? (k === 'plan' ? ' ▾' : sort.dir === 1 ? ' ▾' : ' ▴') : ''}</button></th>`;
   const seg = `<span class="seg qpseg">${horizon.map((x) => `<button data-qp="${x.key}" class="${x.key === q.key ? 'on' : ''}">${esc(x.label)}</button>`).join('')}</span>`;
   const picked = pickedTeams(team);
   // One team filter only: the toolbar's (Tom, 2026-10-29: "2 ways to filter on team" was a bit much).
@@ -213,6 +225,7 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
   const teams = pickedTeams(team) || TEAMS;
   for (const tm of teams) {
     const list = run.issues.filter((i) => inQ(i) && issueTeams(run, i).has(tm)).sort(byPlan);
+    if (sort.key !== 'plan') list.sort((a, b) => sortBy(sort.key)(a, b) || byPlan(a, b));
     const rows = list.map((i) => {
       const late = lateVsCommit(i);
       const pr = i.priority;
@@ -240,7 +253,7 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
       }).join('');
       h += `<div class="qpcap">${card}<div class="chips qpsugg">${sugg}</div></div>`;
     }
-    h += list.length ? `<table class="htable qptable"><thead><tr><th>Issue</th><th class="num" title="Frontend effort, days">FE</th><th class="num" title="Backend effort, days">BE</th><th class="num" title="Mobile effort, days">MOB</th><th class="num">Planned</th><th class="num">Committed</th><th>Priority</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
+    h += list.length ? `<table class="htable qptable"><thead><tr>${th('name', 'Issue')}${th('fe', 'FE', 'num', 'Frontend effort, days')}${th('be', 'BE', 'num', 'Backend effort, days')}${th('mob', 'MOB', 'num', 'Mobile effort, days')}${th('plan', 'Planned', 'num')}${th('committed', 'Committed', 'num')}${th('priority', 'Priority')}<th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="placeholder">Nothing planned in this quarter.</div>';
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
