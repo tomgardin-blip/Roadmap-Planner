@@ -277,7 +277,8 @@ export async function startFrEdit(ctx) {
  * edit the text, then post to Slack as the viewer. groups: [{ label, entries: [{ issue, frs }] }].
  */
 export function startEstimatePost({ mcp, groups, target = ESTIMATE_TARGETS.productFeature, preselect = [], onPosted, posted = () => [] }) {
-  const ch = target.channel;
+  // A target sharing a channel logs under its own label, e.g. the duplicate check (Tom, 2026-10-31).
+  const ch = target.log ? { ...target.channel, name: target.log } : target.channel;
   if (!mcp) return toast('Posting needs the live page in claude.ai.', 'bad');
   // Already posted? (Tom, 2026-10-29: to see whether the skill has run.) The latest post per channel, this channel first.
   const postedTag = (id) => {

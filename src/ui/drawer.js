@@ -274,11 +274,11 @@ export function listCard(issue, horizon, score, detail, extraTags = '', rm = nul
 }
 
 /** FR card for the "no engineering issue" queue. */
-export function frCard(fr, comments) {
+export function frCard(fr, comments, actions = '') {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
   const meta = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team'].filter(Boolean).join(' · ');
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title, null, frSelBox(fr))}</ul>${commentLine(comments)}${estimateLinks(fr.id)}</div>`;
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title, null, frSelBox(fr))}</ul>${commentLine(comments)}${estimateLinks(fr.id)}${actions ? `<div class="cardacts">${actions}</div>` : ''}</div>`;
 }
 
 /** FR card for Data quality (Tom, 2026-10-28): the FR with Edit (opened from its issue, so the issue status is editable too), what is wrong, and its issue. */
