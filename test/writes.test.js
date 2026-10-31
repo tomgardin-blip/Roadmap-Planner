@@ -174,3 +174,14 @@ test('customer channel: parse the search, pick the word, build the message', asy
   assert.equal(channelKeyword('The Acme Logistics B.V.'), 'acme');
   assert.equal(customerChannelMessage({ comment: 'Moved to Q2', fr: { name: 'FR 1', url: 'https://example.invalid/f' }, customer: 'Acme' }), '@Owner Moved to Q2\nFR: [FR 1](https://example.invalid/f) (Acme)');
 });
+
+test('customer channel: picked from the name when one channel fits best, asked on a tie', async () => {
+  const { rankChannels } = await import('../src/roadmapPost.js');
+  const ch = (name) => ({ id: name, name });
+  const nab = [ch('customer_nabuurs_freightframe'), ch('onboarding_nabuurscitylogistics'), ch('customer_nabuurs_hedel'), ch('onboarding_nabuurslogisticconcepts')];
+  const a = rankChannels('Nabuurs City Logistics', 'Onboarding', nab);
+  assert.equal(a.sure, true); assert.equal(a.channels[0].name, 'onboarding_nabuurscitylogistics');
+  assert.equal(rankChannels('Nabuurs Transport', 'Live', nab).sure, false);
+  const d = rankChannels('Depot Connect International', 'Onboarding', [ch('onboarding_depot_connect_international')]);
+  assert.equal(d.sure, true);
+});

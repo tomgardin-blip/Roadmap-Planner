@@ -5,7 +5,7 @@ import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
-import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage, rankChannels } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -142,7 +142,7 @@ function dateChips(horizon, current) {
  * opened from (Tom, 2026-10-27: every EI status). ctx: { mcp, fr, issue?, golive, onDone, onIssueStatus }
  */
 export async function startFrEdit(ctx) {
-  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, onMove, onPosted, customer = '', blockers = [], preset = null } = ctx;
+  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, onMove, onPosted, customer = '', stage = null, blockers = [], preset = null } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
@@ -238,7 +238,7 @@ export async function startFrEdit(ctx) {
     if (eiWant) onIssueStatus?.(issue, eiWant);
     if (comment) onDone?.({ changes: local, commented: true, comment });
     // Then the COM/AM tag in the customer's Slack channel (Tom and Lee, 2026-10-30), after a preview.
-    if (comment) ownerP.then(() => startCustomerPost({ mcp, fr: { ...fr, title: cur.name || fr.title }, issue: ei ? { ...issue, name: ei.name || issue.name } : null, customer, comment, owner, onPosted }));
+    if (comment) ownerP.then(() => startCustomerPost({ mcp, fr: { ...fr, title: cur.name || fr.title }, issue: ei ? { ...issue, name: ei.name || issue.name } : null, customer, stage, comment, owner, onPosted }));
     inBackground(`"${cur.name || fr.title}"`, async () => {
       // The issue move first (its own write and audit row), so the FR save below still runs if it fails.
       let moved = '';
@@ -411,7 +411,7 @@ function startTemplatePost({ mcp, issue, onDone, template, leads }) {
  * The channel is picked by the viewer from the channels matching the customer's name (customer channels
  * have no fixed name). Editable preview, then Send or Skip. Audit row "COM/AM asked", Before = the channel.
  */
-export async function startCustomerPost({ mcp, fr, issue, customer, comment, owner, onPosted }) {
+export async function startCustomerPost({ mcp, fr, issue, customer, stage, comment, owner, onPosted }) {
   if (!owner?.email) return;
   let sheet = openSheet(`<h3>Tag ${esc(owner.name)} in the customer channel</h3><div class="srow muted">Finding ${esc(owner.name)} and the ${esc(customer || 'customer')} channel on Slack…</div>`);
   let user; let chans = [];
@@ -421,24 +421,32 @@ export async function startCustomerPost({ mcp, fr, issue, customer, comment, own
   if (!user) { closeSheet(); return toast(`No Slack account for ${owner.email}: nothing posted in Slack.`, 'bad'); }
   const frLink = { name: fr.title || 'FR', url: fr.url };
   const isLink = issue && { name: issue.name, url: issue.url };
-  const radios = (list) => list.length ? list.map((c, i) => `<label class="srow"><input type="radio" name="sCh" value="${esc(c.id)}" data-name="${esc(c.name)}" ${i === 0 ? 'checked' : ''}> #${esc(c.name)}</label>`).join('') : '<div class="srow muted">No channel found for that word.</div>';
+  const radios = (list, pre = true) => list.length ? list.map((c, i) => `<label class="srow"><input type="radio" name="sCh" value="${esc(c.id)}" data-name="${esc(c.name)}" ${pre && i === 0 ? 'checked' : ''}> #${esc(c.name)}</label>`).join('') : '<div class="srow muted">No channel found for that word.</div>';
+  // The channel is found from the customer's name (Tom, 2026-10-31); only a tie or no match asks.
+  const rk = rankChannels(customer, stage, chans);
+  const best = rk.channels[0];
+  const head = rk.sure
+    ? `<div class="srow">Channel: <b>#${esc(best.name)}</b> <button type="button" class="fredit" id="sChChange">Change</button></div>`
+    : `<div class="srow swarn">${rk.channels.length ? `${rk.channels.length} channels match ${esc(customer || 'this customer')}: pick one.` : `No channel found for ${esc(customer || 'this customer')}: search one.`}</div>`;
   sheet = openSheet(`
     <h3>Tag ${esc(user.name)} in the customer channel</h3>
-    <div class="srow muted">A Slack post as you, in the channel you pick. The comment is already on the FR in Notion (no tag there).</div>
-    <div class="sfld">Channel <span class="muted">(matches for "${esc(channelKeyword(customer))}"; search another word if it's not there)</span></div>
+    <div class="srow muted">A Slack post as you. The comment is already on the FR in Notion (no tag there).</div>
+    ${head}
+    <div id="sChPick" ${rk.sure ? 'hidden' : ''}>
     <div class="srow"><input id="sChQ" type="text" placeholder="Search channels, e.g. nabuurs" value="${esc(channelKeyword(customer))}"> <button type="button" id="sChGo">Search</button></div>
-    <div id="sChList">${radios(chans)}</div>
+    <div id="sChList">${rk.channels.length ? radios(rk.channels, rk.sure) : radios(chans, false)}</div></div>
     <label class="sfld">Message <textarea id="sCm" rows="5" class="smsg" maxlength="3000"></textarea></label>
     <div class="sact"><button data-sheet-close>Skip</button><button class="primary" id="sSend">Send</button></div>`);
   const txt = sheet.querySelector('#sCm');
   txt.value = customerChannelMessage({ comment, fr: frLink, issue: isLink, customer }).split('@Owner').join(`@${user.name}`);
   const sendOk = () => { sheet.querySelector('#sSend').disabled = !txt.value.trim() || !sheet.querySelector('input[name="sCh"]:checked'); };
   txt.addEventListener('input', sendOk); sheet.addEventListener('change', sendOk); sendOk();
+  sheet.querySelector('#sChChange')?.addEventListener('click', () => { sheet.querySelector('#sChPick').hidden = false; });
   sheet.querySelector('#sChGo').addEventListener('click', async () => {
     const q = sheet.querySelector('#sChQ').value.trim().toLowerCase();
     sheet.querySelector('#sChList').innerHTML = '<div class="srow muted">Searching…</div>';
     const found = await findChannels(mcp, q).catch(() => []);
-    sheet.querySelector('#sChList').innerHTML = radios(found); sendOk();
+    sheet.querySelector('#sChList').innerHTML = radios(found, false); sendOk();
   });
   sheet.querySelector('#sSend').addEventListener('click', () => {
     const pick = sheet.querySelector('input[name="sCh"]:checked');

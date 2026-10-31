@@ -163,6 +163,27 @@ export function channelsFromSearch(result) {
   return out;
 }
 
+const STOP = new Set(['the', 'and', 'ltd', 'limited', 'bv', 'nv', 'gmbh', 'srl', 'sas', 'inc', 'llc', 'plc', 'group', 'international']);
+const tokens = (s) => (String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/[a-z0-9]{3,}/g) || []).filter((w) => !STOP.has(w));
+
+/**
+ * Customer channels ranked for a customer (Tom, 2026-10-31: "the channel always has the customer name in it").
+ * Score: customer name words found in the channel name, plus 0.5 for the prefix that fits the deal stage
+ * (customer_ when Live, onboarding_ before). sure = the best scores higher than the next one, so it is
+ * picked without asking; a tie (one customer, several channels) is left to the viewer.
+ */
+export function rankChannels(customer, stage, channels) {
+  const want = tokens(customer);
+  const live = /^live$/i.test(String(stage || '').trim());
+  const ranked = channels.map((c) => {
+    const flat = c.name.toLowerCase().replace(/^(customer|onboarding)[_-]/, '').replace(/[_\-.]/g, '');
+    const hits = want.filter((w) => flat.includes(w)).length;
+    const pre = /^customer[_-]/.test(c.name) ? 'customer' : /^onboarding[_-]/.test(c.name) ? 'onboarding' : '';
+    return { ...c, score: hits ? hits + ((live ? pre === 'customer' : pre === 'onboarding') ? 0.5 : 0) : 0 };
+  }).filter((c) => c.score > 0).sort((a, b) => b.score - a.score);
+  return { channels: ranked, sure: ranked.length === 1 || (ranked.length > 1 && ranked[0].score > ranked[1].score) };
+}
+
 /** Search word for a customer's Slack channel: its first word of 3+ letters, lower case ("Depot Connect International" → "depot"). */
 export const channelKeyword = (customer) => (String(customer || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []).find((w) => !['the', 'and', 'ltd', 'limited'].includes(w)) || '';
 
