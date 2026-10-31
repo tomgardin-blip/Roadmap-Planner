@@ -196,6 +196,9 @@ export function customerChannelMessage({ comment, fr, issue, customer }) {
   return `@Owner ${comment}\n${links}`;
 }
 
+/** Default text when an FR goes to "Pushback Req GL" without a comment (Tom, 2026-10-31: a Slack post every time). */
+export const pushbackDefaultText = (customer) => `This one can't make the go-live, so it's now on "Pushback Req GL". Could u discuss with ${customer || 'the customer'} and set the priority to "Needed after go-live"? If they don't accept, set it back to "Needed for go-live" and let me know. Thx!`;
+
 /** slack_search_users result → { id, name } for the person with this email, or null. */
 export function slackUserFromSearch(result, email) {
   const text = typeof result === 'string' ? result : result?.results || JSON.stringify(result ?? '');

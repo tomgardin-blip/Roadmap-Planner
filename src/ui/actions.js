@@ -2,10 +2,11 @@
 // advise the FR's owner in Notion. All writes go through src/data/writer.js (test pages only).
 
 import { formatDate, potQuarters, potMonths } from '../periods.js';
+import { PUSHBACK_REQ } from '../pushbackReq.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
 import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
-import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage, rankChannels } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage, rankChannels, pushbackDefaultText } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -238,7 +239,9 @@ export async function startFrEdit(ctx) {
     if (eiWant) onIssueStatus?.(issue, eiWant);
     if (comment) onDone?.({ changes: local, commented: true, comment });
     // Then the COM/AM tag in the customer's Slack channel (Tom and Lee, 2026-10-30), after a preview.
-    if (comment) ownerP.then(() => startCustomerPost({ mcp, fr: { ...fr, title: cur.name || fr.title }, issue: ei ? { ...issue, name: ei.name || issue.name } : null, customer, stage, comment, owner, onPosted }));
+    // Also on every move to "Pushback Req GL", with a ready-made text when there is no comment (Tom, 2026-10-31).
+    const toPushback = want.priority === PUSHBACK_REQ && cur.priority !== PUSHBACK_REQ;
+    if (comment || toPushback) ownerP.then(() => startCustomerPost({ mcp, fr: { ...fr, title: cur.name || fr.title }, issue: ei ? { ...issue, name: ei.name || issue.name } : null, customer, stage, comment: comment || pushbackDefaultText(customer), owner, onPosted }));
     inBackground(`"${cur.name || fr.title}"`, async () => {
       // The issue move first (its own write and audit row), so the FR save below still runs if it fails.
       let moved = '';
@@ -467,6 +470,64 @@ export async function startCustomerPost({ mcp, fr, issue, customer, stage, comme
 }
 
 /**
+ * Bulk FR edit → one customer-channel post per FR (Tom, 2026-10-31): one window listing every post (COM/AM,
+ * channel found from the customer name, editable text), ticked when its channel is sure. Send posts the
+ * ticked ones in order, each as the viewer, each with its audit row.
+ */
+export async function startBulkCustomerPosts({ mcp, frs, comment, customerOf, stageOf, issueOf, onPosted }) {
+  let sheet = openSheet(`<h3>Slack posts for ${frs.length} FR${frs.length === 1 ? '' : 's'}</h3><div class="srow muted">Finding each COM/AM and customer channel on Slack…</div>`);
+  const chanCache = new Map();
+  const channelsFor = (w) => { if (!chanCache.has(w)) chanCache.set(w, findChannels(mcp, w).catch(() => [])); return chanCache.get(w); };
+  const rows = await Promise.all(frs.map(async (fr) => {
+    const customer = customerOf(fr);
+    const owner = await findOwner(mcp, fr.id).catch(() => null);
+    const user = owner?.email ? await findSlackUser(mcp, owner.email).catch(() => null) : null;
+    const rk = rankChannels(customer, stageOf(fr), await channelsFor(channelKeyword(customer)));
+    const issue = issueOf(fr);
+    const text = customerChannelMessage({ comment: comment || pushbackDefaultText(customer), fr: { name: fr.title || 'FR', url: fr.url }, issue: issue && { name: issue.name, url: issue.url }, customer });
+    return { fr, customer, user, issue, rk, text: user ? text.split('@Owner').join(`@${user.name}`) : text };
+  }));
+  const row = (r, i) => {
+    const why = !r.user ? 'No COM/AM on Slack for this FR' : !r.rk.channels.length ? `No channel found for ${r.customer || 'this customer'}` : '';
+    const opts = r.rk.channels.map((c, j) => `<option value="${esc(c.id)}" data-name="${esc(c.name)}" ${r.rk.sure && j === 0 ? 'selected' : ''}>#${esc(c.name)}</option>`).join('');
+    return `<div class="pickrow" style="display:block">
+      <label><input type="checkbox" data-bp="${i}" ${r.user && r.rk.sure ? 'checked' : ''} ${why ? 'disabled' : ''}> <b>${esc(r.fr.title || 'FR')}</b> <span class="muted">· ${esc(r.customer || 'No customer')}${r.user ? ` · ${esc(r.user.name)}` : ''}</span></label>
+      ${why ? `<div class="srow swarn">${esc(why)}: not posted.</div>` : `<div class="srow">Channel <select data-bpch="${i}">${r.rk.sure ? '' : '<option value="" selected>Pick a channel…</option>'}${opts}</select></div>
+      <textarea data-bpmsg="${i}" rows="3" class="smsg" maxlength="3000">${esc(r.text)}</textarea>`}</div>`;
+  };
+  sheet = openSheet(`
+    <h3>Slack posts for ${frs.length} FR${frs.length === 1 ? '' : 's'}</h3>
+    <div class="srow muted">One post per FR in its customer channel, as you, tagging its COM/AM. Ticked when the channel was found from the customer name; pick one where several match.</div>
+    <div class="picklist">${rows.map(row).join('')}</div>
+    <div class="sact"><button data-sheet-close>Skip all</button><button class="primary" id="sSend">Send ticked</button></div>`);
+  sheet.addEventListener('change', (e) => {
+    const ch = e.target.closest('select[data-bpch]');
+    if (ch && ch.value) { const cb = sheet.querySelector(`input[data-bp="${ch.dataset.bpch}"]`); if (cb) cb.checked = true; }
+  });
+  sheet.querySelector('#sSend').addEventListener('click', () => {
+    const todo = rows.map((r, i) => {
+      const cb = sheet.querySelector(`input[data-bp="${i}"]`);
+      const sel = sheet.querySelector(`select[data-bpch="${i}"]`);
+      const opt = sel?.selectedOptions[0];
+      return cb?.checked && opt?.value ? { ...r, channel: { id: opt.value, name: opt.dataset.name }, message: sheet.querySelector(`textarea[data-bpmsg="${i}"]`).value.trim() } : null;
+    }).filter((x) => x && x.message);
+    if (!todo.length) return toast('Nothing ticked with a channel.', 'bad');
+    closeSheet();
+    inBackground(`${todo.length} Slack post${todo.length === 1 ? '' : 's'}`, async () => {
+      const failed = []; let sent = 0;
+      for (const t of todo) {
+        try {
+          const link = await postCustomerChannel(mcp, { channel: t.channel, user: t.user, fr: t.fr, issue: t.issue, message: t.message });
+          sent++; onPosted?.({ fr: t.fr, issue: t.issue, channel: t.channel, link });
+        } catch (err) { failed.push(`${t.fr.title || 'FR'} in #${t.channel.name} (${err?.code === 'tool_error' ? err.message || 'Slack refused' : explainError('Slack', err)})`); }
+      }
+      if (failed.length) throw fail(`${sent} of ${todo.length} posted. Not posted: ${failed.join('; ')}`);
+      return `${sent} posted, COM/AMs tagged.`;
+    });
+  });
+}
+
+/**
  * Pushback → "Ask COM/AM" (Tom, 2026-10-28): finds the FR's Responsible Success on Slack by email, shows the
  * friendly DM in full (editable), and sends it as the viewer on Send. ctx: { kind: 'over', quarterLabel, team } | { kind: 'late' }.
  */
@@ -588,7 +649,7 @@ export function startClearDates({ mcp, issue, why, onDone }) {
  * carries on past a failed FR, then says which failed.
  * ctx: { mcp, frs: [fr], horizon, onDone(fr, result), onFinished() }
  */
-export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished }) {
+export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished, customerOf = () => '', stageOf = () => null, issueOf = () => null, onPosted }) {
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   const list = frs.filter((f) => f && isAllowed('fr', f.id));
   if (!list.length) return toast('Nothing selected that can be edited.', 'bad');
@@ -604,7 +665,7 @@ export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished }) 
     ${dateChips(horizon, null)}
     <label class="sfld">Feature request status
       <select id="bSt"><option value="" selected>Keep each FR's status</option>${FR_STATUS_WRITES.map((s) => `<option value="${esc(s)}">${esc(s)} (${s === FR_STATUS_DONE ? 'delivered' : 'close the FR'})</option>`).join('')}</select></label>
-    <label class="sfld">Comment <span class="muted">(posted on each FR in Notion, tagging that FR's Responsible Success)</span>
+    <label class="sfld">Comment <span class="muted">(posted on each FR in Notion, no tag; then one Slack post per FR in its customer channel, tagging its COM/AM)</span>
       <textarea id="sCmt" rows="3" class="smsg" maxlength="1500" placeholder="Optional. Empty: no comment"></textarea></label>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save ${list.length}</button></div>`);
   const mode = sheet.querySelector('#bScMode');
@@ -641,6 +702,10 @@ export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished }) 
         } catch (err) { failed.push(`${fr.title || 'FR'} (${errText(err)})`); }
       }
       onFinished?.();
+      // One Slack post per FR in its customer channel (Tom, 2026-10-31), as for a single edit; also for a
+      // move to "Pushback Req GL" without a comment.
+      const posts = list.filter((f) => !failed.some((x) => x.startsWith(`${f.title || 'FR'} (`)) && (comment || (want.priority === PUSHBACK_REQ && f.priority !== PUSHBACK_REQ)));
+      if (posts.length) startBulkCustomerPosts({ mcp, frs: posts, comment, customerOf, stageOf, issueOf, onPosted });
       const done = `${changed} of ${list.length} FRs changed${comment ? `, ${commented} commented` : ''}. Logged.`;
       if (failed.length) throw fail(`${done} Failed: ${failed.join('; ')}. Refresh to see Notion's values.`);
       return done;

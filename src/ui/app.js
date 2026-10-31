@@ -216,6 +216,9 @@ function shell() {
     if (e.target.closest('[data-frbulkclear]')) { clearFrSelected(); document.querySelectorAll('input.frsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); return; }
     if (e.target.closest('[data-frbulkedit]')) {
       startBulkFrEdit({ mcp: state.mcp, frs: selectedFrs().map((id) => shownFr(id)).filter(Boolean), horizon,
+        customerOf, stageOf: (fr) => (fr?.dealId ? state.dealStage.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null),
+        issueOf: (fr) => state.run?.issues.find((i) => (state.scores?.get(i.id)?.frs || []).some((f) => String(f.id).replace(/-/g, '').toLowerCase() === String(fr.id).replace(/-/g, '').toLowerCase())) || null,
+        onPosted: channelPosted,
         onDone: (fr, r) => afterFrEdit(fr, r),
         onFinished: () => { clearFrSelected(); document.querySelectorAll('input.frsel:checked').forEach((x) => { x.checked = false; }); renderBulkBar(); } });
       return;
