@@ -151,6 +151,30 @@ export function pushbackReminder(d) {
   return `Hi @Owner, reminder: we set ${linked(d.fr)} for ${d.customer} to "Pushback Req GL"${when}: we can't deliver it before the go-live.${iss} Could u let ${d.customer} know and then set the priority to "Needed after go-live"? If they don't accept, set it back to "Needed for go-live" and let me know. Thx!`;
 }
 
+/** slack_search_channels result → [{ id, name }] (Tom, 2026-10-30: customer channels for the COM/AM tag). */
+export function channelsFromSearch(result) {
+  const text = typeof result === 'string' ? result : result?.results || JSON.stringify(result ?? '');
+  const out = [];
+  for (const block of String(text).split(/### Result|\n\d+\. /)) {
+    const name = /(?:Name:\s*)?#([a-z0-9_\-.]+)/i.exec(block)?.[1];
+    const id = /archives\/(C[A-Z0-9]+)/.exec(block)?.[1] || /\((C[A-Z0-9]{6,})\)/.exec(block)?.[1];
+    if (name && id && !out.some((c) => c.id === id) && !/Is Archived:\s*true/i.test(block)) out.push({ id, name });
+  }
+  return out;
+}
+
+/** Search word for a customer's Slack channel: its first word of 3+ letters, lower case ("Depot Connect International" → "depot"). */
+export const channelKeyword = (customer) => (String(customer || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []).find((w) => !['the', 'and', 'ltd', 'limited'].includes(w)) || '';
+
+/**
+ * Customer channel post after an FR edit with a comment (Tom and Lee, 2026-10-30): the COM/AM tagged in
+ * Slack, the Notion comment without a tag. "@Owner" becomes the person.
+ */
+export function customerChannelMessage({ comment, fr, issue, customer }) {
+  const links = [`FR: ${linked(fr)}${customer ? ` (${customer})` : ''}`, issue ? `Issue: ${linked(issue)}` : null].filter(Boolean).join(' · ');
+  return `@Owner ${comment}\n${links}`;
+}
+
 /** slack_search_users result → { id, name } for the person with this email, or null. */
 export function slackUserFromSearch(result, email) {
   const text = typeof result === 'string' ? result : result?.results || JSON.stringify(result ?? '');

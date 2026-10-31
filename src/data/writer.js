@@ -3,7 +3,7 @@
 // Order per action: read the live "before" from Notion, write, then audit. A failed audit after a
 // successful write is reported, never silently dropped.
 
-import { ROADMAP_CHANNEL, slackLink, slackUserFromSearch } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, slackLink, slackUserFromSearch, channelsFromSearch } from '../roadmapPost.js';
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
   TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentText,
@@ -130,9 +130,10 @@ export function previewComment({ owner, changes, comment }) {
 }
 
 /** Post the comment on the FR (tagging the owner when there is one), then audit it. */
-export async function adviseOwner(mcp, { fr, owner, changes = [], comment, updateId: uid }) {
+export async function adviseOwner(mcp, { fr, owner, changes = [], comment, updateId: uid, tag = false }) {
   assertAllowed('fr', fr.id);
-  await call(mcp, NOTION, 'notion-create-comment', ownerCommentInput(fr.id, { ownerId: owner?.id, changes, comment }));
+  // No tag in Notion any more (Tom and Lee, 2026-10-30): the COM/AM is tagged in the customer's Slack channel.
+  await call(mcp, NOTION, 'notion-create-comment', ownerCommentInput(fr.id, { ownerId: tag ? owner?.id : null, changes, comment }));
   await audit(mcp, {
     category: 'Owner advised', field: 'Comment', before: '',
     after: [changes.map((c) => `${c.label}: ${c.before || '–'} → ${c.after || '–'}`).join('; '), comment].filter(Boolean).join(' · '),
@@ -190,6 +191,23 @@ export async function askOwner(mcp, { user, issue, fr, message }) {
   const link = slackLink(res, user.id);
   await audit(mcp, {
     category: 'COM/AM asked', field: 'Slack', before: '', after: link || 'Sent (no link returned)',
+    reason: message.slice(0, 1900), frId: fr.id, issueId: issue?.id, itemName: fr.title || fr.name, updateId: updateId(),
+  });
+  return link;
+}
+
+/** Customer Slack channels matching a word (public and private ones the viewer can see). */
+export async function findChannels(mcp, word) {
+  if (!word) return [];
+  return channelsFromSearch(await call(mcp, 'Slack', 'slack_search_channels', { keywords: [word], natural_language_query: `customer channel ${word}`, channel_types: 'public_channel,private_channel', response_format: 'detailed', limit: 20 }));
+}
+
+/** The COM/AM tag in the customer channel (Tom and Lee, 2026-10-30), audit row "COM/AM asked" with Before = the channel. */
+export async function postCustomerChannel(mcp, { channel, user, fr, issue, message }) {
+  const res = await postSlack(mcp, channel.id, user ? message.split(`@${user.name}`).join(`<@${user.id}>`) : message);
+  const link = slackLink(res, channel.id);
+  await audit(mcp, {
+    category: 'COM/AM asked', field: 'Slack', before: `#${channel.name}`, after: link || 'Posted (no link returned)',
     reason: message.slice(0, 1900), frId: fr.id, issueId: issue?.id, itemName: fr.title || fr.name, updateId: updateId(),
   });
   return link;

@@ -3,9 +3,9 @@
 
 import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postEstimate, postRoadmap, askOwner, findSlackUser, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack } from '../data/writer.js';
+import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack } from '../data/writer.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
-import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage } from '../roadmapPost.js';
+import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
 import { openSheet, closeSheet, toast } from './sheet.js';
 
@@ -142,7 +142,7 @@ function dateChips(horizon, current) {
  * opened from (Tom, 2026-10-27: every EI status). ctx: { mcp, fr, issue?, golive, onDone, onIssueStatus }
  */
 export async function startFrEdit(ctx) {
-  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, onMove, blockers = [], preset = null } = ctx;
+  const { mcp, fr, issue, golive, horizon = [], onDone, onIssueStatus, onMove, onPosted, customer = '', blockers = [], preset = null } = ctx;
   if (!mcp) return toast('Writes need the live page in claude.ai.', 'bad');
   if (!isAllowed('fr', fr.id)) return toast('This FR has no Notion id.', 'bad');
   let sheet = openSheet(`<h3>${esc(fr.title || 'FR')}</h3><div class="srow muted">Reading the live values from Notion…</div>`);
@@ -184,7 +184,7 @@ export async function startFrEdit(ctx) {
   const ownerP = findOwner(mcp, fr.id).then((o) => { owner = o; }, (err) => { owner = null; ownerErr = errText(err); })
     .then(() => {
       const el = sheet.querySelector('#sOwner');
-      if (el) el.textContent = owner ? `(posted on the FR in Notion, tags ${owner.name}${fr.id.replace(/-/g, '') === TEST_FR ? ', test FR: you' : ''})` : `(posted on the FR in Notion without a tag: ${ownerErr ? `owner lookup failed, ${ownerErr}` : 'no Responsible Success'})`;
+      if (el) el.textContent = owner ? `(posted on the FR in Notion, no tag; then ${owner.name} is tagged in the customer's Slack channel${fr.id.replace(/-/g, '') === TEST_FR ? ', test FR: you' : ''})` : `(posted on the FR in Notion; ${ownerErr ? `owner lookup failed, ${ownerErr}` : 'no Responsible Success'}, so no Slack tag)`;
     });
   const effLine = () => {
     const sc = sheet.querySelector('#sSc').value || null;
@@ -237,6 +237,8 @@ export async function startFrEdit(ctx) {
     if (local.length) onDone?.({ changes: local, before: cur });
     if (eiWant) onIssueStatus?.(issue, eiWant);
     if (comment) onDone?.({ changes: local, commented: true, comment });
+    // Then the COM/AM tag in the customer's Slack channel (Tom and Lee, 2026-10-30), after a preview.
+    if (comment) ownerP.then(() => startCustomerPost({ mcp, fr: { ...fr, title: cur.name || fr.title }, issue: ei ? { ...issue, name: ei.name || issue.name } : null, customer, comment, owner, onPosted }));
     inBackground(`"${cur.name || fr.title}"`, async () => {
       // The issue move first (its own write and audit row), so the FR save below still runs if it fails.
       let moved = '';
@@ -262,7 +264,7 @@ export async function startFrEdit(ctx) {
       try {
         await adviseOwner(mcp, { fr: { ...fr, title: r.name || cur.name || fr.title }, owner, changes: shown, comment, updateId: r.updateId });
       } catch (err) { throw fail(`${all.length ? 'Saved and logged, but the' : 'The'} comment was not posted: ${errText(err)}`, err); }
-      return `${moved}${all.length ? 'Saved. ' : ''}Comment posted${owner ? `, ${owner.name} tagged` : ' (no owner to tag)'}. Logged.`;
+      return `${moved}${all.length ? 'Saved. ' : ''}Comment posted on the FR. Logged.`;
     });
   });
 }
@@ -400,6 +402,58 @@ function startTemplatePost({ mcp, issue, onDone, template, leads }) {
       }
       onDone?.({ link, message });
       return `Posted in ${ROADMAP_CHANNEL.name}${who ? `, ${leads.map((l) => l.name).join(' and ')} tagged` : ''}. Link shown next to the button.`;
+    });
+  });
+}
+
+/**
+ * Tag the COM/AM in the customer's Slack channel (Tom and Lee, 2026-10-30), after an FR edit with a comment.
+ * The channel is picked by the viewer from the channels matching the customer's name (customer channels
+ * have no fixed name). Editable preview, then Send or Skip. Audit row "COM/AM asked", Before = the channel.
+ */
+export async function startCustomerPost({ mcp, fr, issue, customer, comment, owner, onPosted }) {
+  if (!owner?.email) return;
+  let sheet = openSheet(`<h3>Tag ${esc(owner.name)} in the customer channel</h3><div class="srow muted">Finding ${esc(owner.name)} and the ${esc(customer || 'customer')} channel on Slack…</div>`);
+  let user; let chans = [];
+  try { [user, chans] = await Promise.all([findSlackUser(mcp, owner.email), findChannels(mcp, channelKeyword(customer)).catch(() => [])]); } catch (err) {
+    closeSheet(); return toast(`Slack lookup failed, nothing posted in Slack: ${explainError('Slack', err)}`, 'bad');
+  }
+  if (!user) { closeSheet(); return toast(`No Slack account for ${owner.email}: nothing posted in Slack.`, 'bad'); }
+  const frLink = { name: fr.title || 'FR', url: fr.url };
+  const isLink = issue && { name: issue.name, url: issue.url };
+  const radios = (list) => list.length ? list.map((c, i) => `<label class="srow"><input type="radio" name="sCh" value="${esc(c.id)}" data-name="${esc(c.name)}" ${i === 0 ? 'checked' : ''}> #${esc(c.name)}</label>`).join('') : '<div class="srow muted">No channel found for that word.</div>';
+  sheet = openSheet(`
+    <h3>Tag ${esc(user.name)} in the customer channel</h3>
+    <div class="srow muted">A Slack post as you, in the channel you pick. The comment is already on the FR in Notion (no tag there).</div>
+    <div class="sfld">Channel <span class="muted">(matches for "${esc(channelKeyword(customer))}"; search another word if it's not there)</span></div>
+    <div class="srow"><input id="sChQ" type="text" placeholder="Search channels, e.g. nabuurs" value="${esc(channelKeyword(customer))}"> <button type="button" id="sChGo">Search</button></div>
+    <div id="sChList">${radios(chans)}</div>
+    <label class="sfld">Message <textarea id="sCm" rows="5" class="smsg" maxlength="3000"></textarea></label>
+    <div class="sact"><button data-sheet-close>Skip</button><button class="primary" id="sSend">Send</button></div>`);
+  const txt = sheet.querySelector('#sCm');
+  txt.value = customerChannelMessage({ comment, fr: frLink, issue: isLink, customer }).split('@Owner').join(`@${user.name}`);
+  const sendOk = () => { sheet.querySelector('#sSend').disabled = !txt.value.trim() || !sheet.querySelector('input[name="sCh"]:checked'); };
+  txt.addEventListener('input', sendOk); sheet.addEventListener('change', sendOk); sendOk();
+  sheet.querySelector('#sChGo').addEventListener('click', async () => {
+    const q = sheet.querySelector('#sChQ').value.trim().toLowerCase();
+    sheet.querySelector('#sChList').innerHTML = '<div class="srow muted">Searching…</div>';
+    const found = await findChannels(mcp, q).catch(() => []);
+    sheet.querySelector('#sChList').innerHTML = radios(found); sendOk();
+  });
+  sheet.querySelector('#sSend').addEventListener('click', () => {
+    const pick = sheet.querySelector('input[name="sCh"]:checked');
+    const message = txt.value.trim();
+    if (!pick || !message) return;
+    const channel = { id: pick.value, name: pick.dataset.name };
+    closeSheet();
+    inBackground(`Post in #${channel.name}`, async () => {
+      let link;
+      try { link = await postCustomerChannel(mcp, { channel, user, fr, issue, message }); } catch (err) {
+        if (err?.code === 'audit_failed') { onPosted?.({ fr, issue, channel, link: null }); throw fail(`Posted in #${channel.name}, but its link was not saved: ${errText(err)}`, err); }
+        throw fail(`Not posted in #${channel.name}: ${err?.code === 'tool_error' ? `Slack refused: ${err.message || 'no details'}` : explainError('Slack', err)}`, err);
+      }
+      onPosted?.({ fr, issue, channel, link });
+      return `Posted in #${channel.name}, ${user.name} tagged.`;
     });
   });
 }

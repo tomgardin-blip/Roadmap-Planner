@@ -135,8 +135,8 @@ test('adviseOwner: comment then audit, the comment text in both', async () => {
   const mcp = fakeMcp();
   await adviseOwner(mcp, { fr: { id: W.TEST_FR, title: 'F' }, owner: { id: 'own-1', name: 'Owner' }, changes: [{ label: 'Committed', before: '2026-12-18', after: '2027-01-29' }], comment: 'Capacity' });
   const c = mcp.calls.find((x) => x.tool === 'notion-create-comment').input;
-  assert.equal(c.rich_text[0].mention.user.id, 'own-1');
-  assert.equal(c.rich_text[1].text.content, ' Capacity');
+  // No tag in Notion (Tom and Lee, 2026-10-30): the COM/AM is tagged in the customer's Slack channel.
+  assert.equal(c.rich_text[0].text.content, 'Capacity');
   const row = mcp.calls.find((x) => x.tool === 'notion-create-pages').input.pages[0].properties;
   assert.equal(row.Category, 'Owner advised');
   assert.deepEqual(row.Owner, ['own-1']);
@@ -165,4 +165,12 @@ test('issue status: only the Status property, every Notion option, audited as EI
   assert.deepEqual(Object.keys(up.properties), ['Status']);
   const row = mcp.calls.find((x) => x.tool === 'notion-create-pages').input.pages[0].properties;
   assert.equal(row.Category, 'EI status changed');
+});
+
+test('customer channel: parse the search, pick the word, build the message', async () => {
+  const { channelsFromSearch, channelKeyword, customerChannelMessage } = await import('../src/roadmapPost.js');
+  const res = { results: '## Channels (2 results)\n### Result 1 of 2\nName: #customer_acme_north\nPermalink: [link](https://x.slack.com/archives/C0AAA111)\nIs Archived: false\n---\n### Result 2 of 2\nName: #onboarding_acme\nPermalink: [link](https://x.slack.com/archives/C0BBB222)\nIs Archived: true\n' };
+  assert.deepEqual(channelsFromSearch(res), [{ id: 'C0AAA111', name: 'customer_acme_north' }]);
+  assert.equal(channelKeyword('The Acme Logistics B.V.'), 'acme');
+  assert.equal(customerChannelMessage({ comment: 'Moved to Q2', fr: { name: 'FR 1', url: 'https://example.invalid/f' }, customer: 'Acme' }), '@Owner Moved to Q2\nFR: [FR 1](https://example.invalid/f) (Acme)');
 });

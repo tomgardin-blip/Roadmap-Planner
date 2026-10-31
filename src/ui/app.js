@@ -295,7 +295,7 @@ function shell() {
       const fr = shownFr(fe.dataset.frEdit);
       const iid = fe.dataset.issue;
       const issue = iid ? shownIssue(iid) || state.run?.issues.find((i) => i.id === iid) || { id: iid } : null;
-      startFrEdit({ mcp: state.mcp, fr, issue, horizon, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus, blockers: issue?.name ? blockersOf(issue) : [], onMove: afterMove });
+      startFrEdit({ mcp: state.mcp, fr, issue, horizon, golive: fr.dealId ? state.dealGolive.get(String(fr.dealId).replace(/-/g, '').toLowerCase()) : null, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus, blockers: issue?.name ? blockersOf(issue) : [], onMove: afterMove, customer: customerOf(fr), onPosted: channelPosted });
     }
   });
   document.addEventListener('keydown', (e) => {
@@ -319,7 +319,7 @@ function qualityFix(key, id) {
   const customer = fr ? String(state.dealNames.get(nidv(fr.dealId)) || 'the customer').trim() : '';
   const golive = fr?.dealId ? state.dealGolive.get(nidv(fr.dealId)) : null;
   const stage = fr?.dealId ? state.dealStage.get(nidv(fr.dealId)) : null;
-  const frEdit = (preset) => () => startFrEdit({ mcp, fr, issue, horizon, golive, preset, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus, blockers: issue?.name ? blockersOf(issue) : [], onMove: afterMove });
+  const frEdit = (preset) => () => startFrEdit({ mcp, fr, issue, horizon, golive, preset, onDone: (r) => afterFrEdit(fr, r), onIssueStatus: afterIssueStatus, blockers: issue?.name ? blockersOf(issue) : [], onMove: afterMove, customer: customerOf(fr), onPosted: channelPosted });
   const frLink = fr && { name: fr.title || 'FR', url: fr.url, priority: fr.priority };
   const issueLink = issue && { name: issue.name, url: issue.url, status: issue.status };
   const dm = () => () => startAskOwner({ mcp, issue, fr, customer,
@@ -764,6 +764,13 @@ function renderChrome() {
   document.getElementById('banners').innerHTML = banners.join('');
 }
 
+
+const customerOf = (fr) => String(state.dealNames.get(String(fr?.dealId || '').replace(/-/g, '').toLowerCase()) || '').trim();
+/** The COM/AM tag in the customer channel, recorded locally as the audit log will (it counts as a reminder). */
+function channelPosted({ fr, issue, channel, link }) {
+  state.audit = [{ category: 'COM/AM asked', field: 'Slack', before: `#${channel.name}`, after: link || '', frId: String(fr.id).replace(/-/g, '').toLowerCase(), issueId: issue?.id, itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])];
+  recompute(); if (state.tab !== 'capacity') draw();
+}
 
 /** COM/AM emails of the "Pushback Req GL" FRs, loaded once when At risk opens (and again for new ones). */
 async function loadPbOwners() {
