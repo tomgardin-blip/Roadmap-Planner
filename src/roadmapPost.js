@@ -106,6 +106,22 @@ export function dependencyMessage(issue, blocker, leads) {
 }
 
 /**
+ * Data quality → "Possible duplicate issues" (Tom, 2026-11-02): ask the product managers (the leads of both
+ * issues' teams) to review the pair and merge it if it is a duplicate.
+ */
+export function duplicateMessage(a, b, leads, why = '') {
+  return [
+    `${who(leads)} These 2 engineering issues look like duplicates.`.trim(),
+    '',
+    line('Issue 1', a),
+    line('Issue 2', b),
+    ...(why ? ['', `Why: ${why}`] : []),
+    '',
+    'Could u review them and merge if they are the same (mark one as duplicate and move its FRs)? Thx!',
+  ].join('\n');
+}
+
+/**
  * At risk → "Committed, status Blocked/on hold" (Tom, 2026-10-28): ask the leads whether it is still blocked.
  * Its "Blocked by" issues are listed; none linked is called out, since the blocker should be linked there.
  */

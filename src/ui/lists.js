@@ -229,12 +229,30 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
 
+// Possible duplicate issues (Tom, 2026-11-02): pairs Claude judged duplicates, with a post to the PMs.
+function dupSection(d, readOnly) {
+  const title = 'Possible duplicate issues';
+  if (d.candidates == null) return section('dq-dups', title, '…', 'needs the backlog', '<div class="placeholder">Loading the backlog from Lightdash…</div>');
+  const plan = (i) => (i.start || i.end ? (i.start && i.start !== i.end ? `${fd(i.start)} → ${fd(i.end)}` : `Pot · ${fd(i.end || i.start)}`) : 'Not planned');
+  const side = (i) => `<div class="t">${link(i.url, i.name)}</div><div class="meta"><span class="tag">${esc(i.team || 'No team')}</span><span class="tag">EI: ${esc(i.status || '–')}</span><span class="tag">${esc(plan(i))}</span>${i.committed ? `<span class="tag commit">Commit ${fd(String(i.committed).slice(0, 10))}</span>` : ''}</div>`;
+  const tools = readOnly || !d.live ? '' : !d.loaded ? '<div class="srow muted">Connecting to Claude…</div>'
+    : !d.can ? '<div class="srow muted">The duplicate check needs Claude, which this page cannot use in this view.</div>'
+    : d.running ? `<div class="lhead small">Checking ${d.done} / ${d.total} pairs with Claude… <button type="button" class="fredit" data-dupstop>Stop</button></div>`
+    : `<div class="lhead small"><button type="button" class="estbtn" data-dupscan ${d.unchecked ? '' : 'disabled'} title="Claude judges each pair of open issues with look-alike titles; checked pairs are remembered">${d.unchecked ? `Check ${d.unchecked} new pair${d.unchecked === 1 ? '' : 's'} with Claude` : 'All pairs checked'}</button><span class="lsub">${d.candidates} look-alike pairs among all open features, bugs and tech improvements</span></div>`;
+  const err = d.error ? `<div class="srow swarn">${esc(d.error)}</div>` : '';
+  const card = (p) => `<div class="issue dup">${side(p.a)}<div class="muted" style="margin:4px 0">and</div>${side(p.b)}
+    ${p.why ? `<div class="detail">Claude: ${esc(p.why)}</div>` : ''}
+    ${readOnly ? '' : `<div class="cardacts"><button type="button" class="fredit" data-duppost="${p.key}" title="Ready-made post in #roadmap_product tagging the leads of both teams, editable before Send">Ask PMs in #roadmap_product</button><button type="button" class="fredit" data-dupno="${p.key}" title="Logged; the pair never shows again">Not a duplicate</button></div>`}</div>`;
+  const list = d.list || [];
+  return section('dq-dups', title, list.length, 'Claude judged these the same change; PMs review and merge', tools + err + capped(list, card, 'dq-dups'));
+}
+
 /**
  * Data quality (Tom, 2026-10-28): one section per check, FR checks first. FR cards have Edit (priority,
  * committed date, Status Done / Won't do, the issue's status); issue cards the usual date buttons and
  * the #roadmap_product post (a template asking the lead for "Blocked/on hold, no open blocker").
  */
-export function renderQuality(el, { quality, horizon, scores, loading, team, readOnly = false }) {
+export function renderQuality(el, { quality, horizon, scores, loading, team, readOnly = false, dups = null }) {
   if (!quality) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Data quality needs all FRs and the backlog. Loading them from Lightdash…' : 'Data quality unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   const picked = pickedTeams(team);
   let h = `<div class="lhead"><b>Data quality</b><span class="lsub">${qualityCount(quality)} to fix across ${CHECKS.length} checks. Only FRs of signed customers count.${picked ? ' FRs show when one of their issues is in the picked teams; FRs with no issue only under All teams.' : ''}</span></div>`;
@@ -247,5 +265,6 @@ export function renderQuality(el, { quality, horizon, scores, loading, team, rea
     const card = (e) => (e.fr ? qualityFrCard(e.fr, e.detail, e.issue, fix(e)) : listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, fix(e), c.key === 'blockedNoBlocker' ? { kind: 'blocked' } : null));
     h += section(`dq-${c.key}`, c.label, list.length, c.fix, capped(list, card, `dq-${c.key}`));
   }
+  if (dups) h += dupSection(dups, readOnly);
   el.innerHTML = `<div class="lists">${h}</div>`;
 }

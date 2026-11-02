@@ -141,6 +141,12 @@ export async function adviseOwner(mcp, { fr, owner, changes = [], comment, updat
   });
 }
 
+/** Data quality → "Not a duplicate" on a suspected pair (Tom, 2026-11-02). Audit row only, Before = the pair key. */
+export async function dismissDuplicate(mcp, { a, b, key }) {
+  assertAllowed('issue', a.id);
+  await audit(mcp, { category: 'Duplicate check', field: 'Duplicate', before: key, after: 'Not a duplicate', issueId: a.id, itemName: `${a.name} / ${b.name}`.slice(0, 1900), updateId: updateId() });
+}
+
 /** Keep an issue out of the push-out suggestions, or suggest it again (Tom, 2026-10-29). Audit row only. */
 export async function setPushOutKeep(mcp, { issue, keep, reason }) {
   assertAllowed('issue', issue.id);
