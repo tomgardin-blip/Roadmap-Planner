@@ -246,3 +246,29 @@ export function recommitIssues(before, after, overlay) {
     return hit ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
   });
 }
+
+/**
+ * "Won't do" Features, Bugs and Technical improvements, for the duplicate check (Tom, 2026-11-02: a new issue
+ * that duplicates one Product already said no to goes back to the PO). Lightdash leaves them out.
+ */
+export function wontDoQueryInput(offset = 0) {
+  return {
+    data: {
+      data_source_urls: [ISSUES_DS],
+      query: `SELECT url, "Name", "Type", "Team" FROM "${ISSUES_DS}" WHERE "Status" = 'Won''t do' AND ("Type" LIKE '%Feature%' OR "Type" LIKE '%Bug%' OR "Type" LIKE '%Technical improvement%') ORDER BY url LIMIT ${PAGE} OFFSET ${offset}`,
+    },
+  };
+}
+export const parseWontDo = (rows) => (rows || []).map((r) => ({ id: (String(r.url || '').match(/[0-9a-f]{32}/i) || [])[0]?.toLowerCase(), name: r.Name || '', url: r.url, type: r.Type || '', team: r.Team || null, status: "Won't do" })).filter((i) => i.id);
+
+/** The "AI summary" of up to 100 issues (the issue text Claude reads on the duplicate check's second pass). */
+export function issueTextQueryInput(ids) {
+  return {
+    data: {
+      data_source_urls: [ISSUES_DS],
+      query: `SELECT url, "AI summary" FROM "${ISSUES_DS}" WHERE substr(url, -32) IN (${ids.map(() => '?').join(', ')})`,
+      params: ids,
+    },
+  };
+}
+export const parseIssueTexts = (rows) => new Map((rows || []).map((r) => [(String(r.url || '').match(/[0-9a-f]{32}/i) || [])[0]?.toLowerCase(), r['AI summary'] || '']).filter(([k, v]) => k && v));

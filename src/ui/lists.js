@@ -233,18 +233,22 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
 function dupSection(d, readOnly) {
   const title = 'Possible duplicate issues';
   if (d.candidates == null) return section('dq-dups', title, '…', 'needs the backlog', '<div class="placeholder">Loading the backlog from Lightdash…</div>');
-  const plan = (i) => (i.start || i.end ? (i.start && i.start !== i.end ? `${fd(i.start)} → ${fd(i.end)}` : `Pot · ${fd(i.end || i.start)}`) : 'Not planned');
-  const side = (i) => `<div class="t">${link(i.url, i.name)}</div><div class="meta"><span class="tag">${esc(i.team || 'No team')}</span><span class="tag">EI: ${esc(i.status || '–')}</span><span class="tag">${esc(plan(i))}</span>${i.committed ? `<span class="tag commit">Commit ${fd(String(i.committed).slice(0, 10))}</span>` : ''}</div>`;
+  const plan = (i) => (i.status === "Won't do" ? 'Won\'t do' : i.start || i.end ? (i.start && i.start !== i.end ? `${fd(i.start)} → ${fd(i.end)}` : `Pot · ${fd(i.end || i.start)}`) : 'Not planned');
+  const side = (i) => `<div class="t">${link(i.url, i.name)}</div><div class="meta"><span class="tag">${esc(i.team || 'No team')}</span><span class="tag ${i.status === "Won't do" ? 'late' : ''}">EI: ${esc(i.status || '–')}</span>${i.status === "Won't do" ? '' : `<span class="tag">${esc(plan(i))}</span>`}${i.committed ? `<span class="tag commit">Commit ${fd(String(i.committed).slice(0, 10))}</span>` : ''}</div>`;
   const tools = readOnly || !d.live ? '' : !d.loaded ? '<div class="srow muted">Connecting to Claude…</div>'
     : !d.can ? '<div class="srow muted">The duplicate check needs Claude, which this page cannot use in this view.</div>'
-    : d.running ? `<div class="lhead small">Checking ${d.done} / ${d.total} pairs with Claude… <button type="button" class="fredit" data-dupstop>Stop</button></div>`
-    : `<div class="lhead small"><button type="button" class="estbtn" data-dupscan ${d.unchecked ? '' : 'disabled'} title="Claude judges each pair of open issues with look-alike titles; checked pairs are remembered">${d.unchecked ? `Check ${d.unchecked} new pair${d.unchecked === 1 ? '' : 's'} with Claude` : 'All pairs checked'}</button><span class="lsub">${d.candidates} look-alike pairs among all open features, bugs and tech improvements</span></div>`;
+    : d.running ? `<div class="lhead small">${esc(d.phase || 'Checking…')}${d.total ? ` · ${d.done} / ${d.total}` : ''} <button type="button" class="fredit" data-dupstop>Stop</button></div>`
+    : `<div class="lhead small"><button type="button" class="estbtn" data-dupscan title="Claude scores each pair of look-alike titles, then reads the issue text of the ones scoring 40+; checked pairs are remembered">${d.unchecked ? `Check ${d.unchecked} new pair${d.unchecked === 1 ? '' : 's'} with Claude` : 'Check again for new pairs'}</button><span class="lsub">${d.candidates} look-alike pairs among open features, bugs and tech improvements${d.wontDoLoaded ? ' and Won\'t do issues' : ' (Won\'t do issues join on the first check)'}</span></div>`;
   const err = d.error ? `<div class="srow swarn">${esc(d.error)}</div>` : '';
-  const card = (p) => `<div class="issue dup">${side(p.a)}<div class="muted" style="margin:4px 0">and</div>${side(p.b)}
-    ${p.why ? `<div class="detail">Claude: ${esc(p.why)}</div>` : ''}
+  const card = (p) => `<div class="issue dup">${p.wontDo ? '<div class="meta"><span class="tag late">Duplicates a Won\'t do issue: PO to decide</span></div>' : ''}${side(p.a)}<div class="muted" style="margin:4px 0">and</div>${side(p.b)}
+    <div class="detail">Claude ${p.score}/100${p.why ? `: ${esc(p.why)}` : ''}</div>
     ${readOnly ? '' : `<div class="cardacts"><button type="button" class="fredit" data-duppost="${p.key}" title="Ready-made post in #roadmap_product tagging the leads of both teams, editable before Send">Ask PMs in #roadmap_product</button><button type="button" class="fredit" data-dupno="${p.key}" title="Logged; the pair never shows again">Not a duplicate</button></div>`}</div>`;
   const list = d.list || [];
-  return section('dq-dups', title, list.length, 'Claude judged these the same change; PMs review and merge', tools + err + capped(list, card, 'dq-dups'));
+  const likely = list.filter((p) => p.score >= 70);
+  const review = list.filter((p) => p.score < 70);
+  const sub = (label, n) => `<div class="lsubhead">${esc(label)} <span class="cnt">${n}</span></div>`;
+  const body = tools + err + (list.length ? sub('Likely duplicate (70+)', likely.length) + capped(likely, card, 'dq-dups-l') + sub('Worth a look (40-69)', review.length) + capped(review, card, 'dq-dups-r') : '<div class="placeholder">None found yet.</div>');
+  return section('dq-dups', title, list.length, 'Claude read both issues; PMs review and merge', body);
 }
 
 /**

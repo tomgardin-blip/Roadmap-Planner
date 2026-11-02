@@ -10,7 +10,7 @@ import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed } from '../data/capacityFeed.js';
-import { loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
+import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
 import { userName, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
@@ -22,7 +22,7 @@ import { weeklyLoadChanges, dismissedFrs } from '../history.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { pushbackReqList, heldByPushback } from '../pushbackReq.js';
-import { candidatePairs, judgePrompt, parseVerdicts, dismissedPairs } from '../duplicates.js';
+import { candidatePairs, judgePrompt, parseVerdicts, dismissedPairs, snapshot, REVIEW, WONT_DO } from '../duplicates.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
 import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates } from './actions.js';
@@ -270,7 +270,7 @@ function shell() {
     const dp = e.target.closest('button[data-duppost],button[data-dupno]');
     if (dp) {
       const key = dp.dataset.duppost || dp.dataset.dupno;
-      const pair = (state.dupCands || []).find((p) => p.key === key);
+      const pair = (suspectedDups() || []).find((p) => p.key === key);
       if (!pair) return;
       if (dp.dataset.dupno) {
         // Not a duplicate: an audit row, so the pair never shows again for anyone (Tom, 2026-11-02).
@@ -284,7 +284,7 @@ function shell() {
       const full = (i) => ({ ...i, team: teamOf(i), commitSrc: commitSource(i) });
       let leads = [TEAM_LEADS[teamOf(pair.a)], TEAM_LEADS[teamOf(pair.b)]].filter(Boolean);
       leads = [...new Map(leads.map((l) => [l.id, l])).values()];
-      startRoadmapPost({ mcp: state.mcp, issue: full(pair.a), lead: leads[0] || null, leads, template: duplicateMessage(full(pair.a), full(pair.b), leads, pair.why),
+      startRoadmapPost({ mcp: state.mcp, issue: full(pair.a), lead: leads[0] || null, leads, template: duplicateMessage(full(pair.a), full(pair.b), leads, pair.why, pair.wontDo),
         onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: pair.a.id, itemName: pair.a.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); } });
       return;
     }
@@ -810,7 +810,8 @@ function channelPosted({ fr, issue, channel, link }) {
   recompute(); if (state.tab !== 'capacity') draw();
 }
 
-const DUP_DOC = 'duplicates/verdicts';
+// v2 (Tom, 2026-11-02): score 0-100 with a second pass on the issue text; v1 yes/no verdicts are not reused.
+const DUP_DOC = 'duplicates/verdicts-v2';
 /** Claude (sample) and the shared store (db) for the duplicate check; both optional: without them the check is hidden. */
 async function loadDupStore() {
   const d = state.dups;
@@ -827,41 +828,80 @@ async function loadDupStore() {
   if (state.tab === 'quality') draw();
 }
 
-/** "Check for duplicates": the unchecked candidate pairs, 30 per Claude call, one call at a time; verdicts saved after each. */
+const DUP_ERR = (e) => (e?.code === 'not_granted' || e?.code === 'sampling_disabled' ? 'Claude is not allowed for this page: allow it in the page permissions to run the check.'
+  : e?.code === 'rate_limited' ? 'Claude usage limit reached: try again later.'
+  : `The check could not finish (${e?.code || e?.message || 'error'}). Checked pairs are kept; run it again for the rest.`);
+
+/**
+ * "Check for duplicates" (Tom, 2026-11-02, rules from the duplicate-check skill):
+ *   1. loads the "Won't do" issues once (Notion), so a new issue that repeats one Product said no to shows;
+ *   2. Claude scores each unchecked pair from titles and FR titles, 30 per call;
+ *   3. pairs scoring 40+ are scored again with both issues' text ("AI summary" from Notion), 15 per call.
+ * One call at a time; verdicts saved in the page's store after each batch.
+ */
 async function runDupCheck() {
   const d = state.dups;
   if (!d.sample || d.running || !state.dupCands) return;
-  const todo = state.dupCands.filter((p) => !d.verdicts.has(p.key));
-  if (!todo.length) return toast('Every candidate pair is already checked.');
-  const frTitles = (id) => (state.scores?.get(id)?.frs || []).map((f) => f.title).filter(Boolean);
   const ctl = new AbortController();
-  Object.assign(d, { running: true, done: 0, total: todo.length, error: null, stop: () => ctl.abort() });
+  Object.assign(d, { running: true, phase: 'Loading the "Won\'t do" issues from Notion…', done: 0, total: 0, error: null, stop: () => ctl.abort() });
   draw();
+  const frTitles = (id) => (state.scores?.get(id)?.frs || []).map((f) => f.title).filter(Boolean);
+  const save = () => (d.db ? d.db.doc(DUP_DOC).set({ pairs: Object.fromEntries(d.verdicts) }).catch(() => {}) : null);
+  const at = () => new Date().toISOString().slice(0, 10);
   try {
+    if (!state.wontDo) { state.wontDo = await loadWontDoIssues(state.mcp); recompute(); }
+    const live = new Map(state.dupCands.map((p) => [p.key, p]));
+    const todo = state.dupCands.filter((p) => !d.verdicts.has(p.key));
+    Object.assign(d, { phase: 'Scoring pairs by title', done: 0, total: todo.length });
+    draw();
     for (let i = 0; i < todo.length && !ctl.signal.aborted; i += 30) {
       const batch = todo.slice(i, i + 30);
       const reply = await d.sample.json(judgePrompt(batch, frTitles), { signal: ctl.signal });
-      const at = new Date().toISOString().slice(0, 10);
-      for (const [k, v] of parseVerdicts(reply, batch)) d.verdicts.set(k, { ...v, at });
+      for (const [k, v] of parseVerdicts(reply, batch)) { const p = live.get(k); d.verdicts.set(k, { ...v, pass: 1, at: at(), a: snapshot(p.a), b: snapshot(p.b), wontDo: !!p.wontDo }); }
       d.done = Math.min(todo.length, i + batch.length);
-      if (d.db) await d.db.doc(DUP_DOC).set({ pairs: Object.fromEntries(d.verdicts) }).catch(() => {});
-      if (state.tab === 'quality') draw();
+      await save(); draw();
+    }
+    // Second pass: every pair still in the shortlist that scored 40+ on titles only.
+    const again = state.dupCands.filter((p) => { const v = d.verdicts.get(p.key); return v && v.pass === 1 && v.score >= REVIEW; });
+    if (again.length && !ctl.signal.aborted) {
+      Object.assign(d, { phase: 'Reading the issue text of the pairs that scored 40+', done: 0, total: again.length });
+      draw();
+      const texts = await loadIssueTexts(state.mcp, [...new Set(again.flatMap((p) => [p.a.id, p.b.id]))]);
+      Object.assign(d, { phase: 'Scoring those pairs again on their text' });
+      for (let i = 0; i < again.length && !ctl.signal.aborted; i += 15) {
+        const batch = again.slice(i, i + 15);
+        const reply = await d.sample.json(judgePrompt(batch, frTitles, texts), { signal: ctl.signal });
+        for (const [k, v] of parseVerdicts(reply, batch)) d.verdicts.set(k, { ...d.verdicts.get(k), ...v, pass: 2, at: at() });
+        d.done = Math.min(again.length, i + batch.length);
+        await save(); draw();
+      }
     }
   } catch (e) {
-    if (e?.code !== 'cancelled') d.error = e?.code === 'not_granted' || e?.code === 'sampling_disabled' ? 'Claude is not allowed for this page: allow it in the page permissions to run the check.' : e?.code === 'rate_limited' ? 'Claude usage limit reached: try again later.' : `Claude could not finish (${e?.code || 'error'}). Checked pairs are kept; run it again for the rest.`;
+    if (e?.code !== 'cancelled') d.error = DUP_ERR(e);
   }
-  Object.assign(d, { running: false, stop: null });
+  Object.assign(d, { running: false, stop: null, phase: '' });
   draw();
 }
 
-/** Suspected duplicate pairs for the Data quality list: Claude said yes, nobody said "Not a duplicate", team filter. */
+/**
+ * Suspected duplicate pairs for the Data quality list: scored 40+ on the issue text (70+ likely), nobody said
+ * "Not a duplicate", the open side(s) still open, team filter. A "Won't do" side shows as it was when checked.
+ */
 function suspectedDups() {
-  if (!state.dupCands) return null;
+  if (!state.dupCands || !state.run) return null;
   const no = dismissedPairs(state.audit);
   const picked = pickedTeams(state.teamFilter);
   const ours = (i) => !picked || [...issueTeams(state.run, i)].some((t) => picked.includes(t));
-  return state.dupCands.filter((p) => state.dups.verdicts.get(p.key)?.dup && !no.has(p.key) && (ours(p.a) || ours(p.b)))
-    .map((p) => ({ ...p, why: state.dups.verdicts.get(p.key).why }));
+  const openById = new Map([...state.run.issues, ...(state.backlog || [])].filter((i) => i.id && !['Done', "Won't do", 'Duplicate'].includes(i.status)).map((i) => [i.id, i]));
+  const side = (x) => (x?.status === WONT_DO ? x : openById.get(x?.id));
+  const out = [];
+  for (const [key, v] of state.dups.verdicts) {
+    if (v.pass !== 2 || v.score < REVIEW || no.has(key)) continue;
+    const a = side(v.a); const b = side(v.b);
+    if (!a || !b || !(ours(a) || ours(b))) continue;
+    out.push({ key, a, b, score: v.score, why: v.why, wontDo: a.status === WONT_DO || b.status === WONT_DO });
+  }
+  return out.sort((x, y) => y.score - x.score);
 }
 
 /** COM/AM emails of the "Pushback Req GL" FRs, loaded once when At risk opens (and again for new ones). */
@@ -887,7 +927,7 @@ function recompute() {
   // Duplicate candidates over every loaded open issue (planned + backlog), once the backlog is in.
   // Worked out once per load of the issues (about 4,000; a moved date does not change a title).
   if (x.backlog !== 'ok') state.dupCands = null;
-  else if (state.dupFor !== state.backlog) { state.dupFor = state.backlog; state.dupCands = candidatePairs([...state.run.issues, ...(state.backlog || [])]); }
+  else if (state.dupFor !== state.backlog || state.dupWd !== state.wontDo) { state.dupFor = state.backlog; state.dupWd = state.wontDo; state.dupCands = candidatePairs([...state.run.issues, ...(state.backlog || [])], { wontDo: state.wontDo || [] }); }
   // Data quality (Tom, 2026-10-28): once all FRs and the backlog are in.
   state.quality = x.scores === 'ok' && x.backlog !== 'loading' ? dataQuality({
     run: state.run, backlog: state.backlog, taskRows: [...state.rows, ...x.taskRows], featureRows: [...state.rows, ...x.featureRows],
@@ -940,7 +980,7 @@ function drawTab() {
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp, sort: state.qpSort || { key: 'plan', dir: 1 } }); return; }
   if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter, readOnly: state.readOnly || !state.mcp,
-    dups: { list: suspectedDups(), unchecked: state.dupCands ? state.dupCands.filter((p) => !state.dups.verdicts.has(p.key)).length : null, candidates: state.dupCands?.length ?? null, can: !!state.dups.sample && !state.readOnly, loaded: state.dups.loaded, running: state.dups.running, done: state.dups.done, total: state.dups.total, error: state.dups.error, live: !!state.mcp } }); return; }
+    dups: { list: suspectedDups(), unchecked: state.dupCands ? state.dupCands.filter((p) => !state.dups.verdicts.has(p.key)).length : null, candidates: state.dupCands?.length ?? null, wontDoLoaded: !!state.wontDo, can: !!state.dups.sample && !state.readOnly, loaded: state.dups.loaded, running: state.dups.running, phase: state.dups.phase, done: state.dups.done, total: state.dups.total, error: state.dups.error, live: !!state.mcp } }); return; }
   if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt, growth: state.risk?.effortGrowth, growthError: state.baselineError, horizon, scores: state.scores }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }

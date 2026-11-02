@@ -19,11 +19,12 @@ test('look-alike titles pair up; parents, siblings, blocks, dependency upgrades 
   assert.deepEqual(p.map((x) => x.key), [pairKey('a1', 'a2')]);
 });
 
-test('Claude verdicts parse by pair number; "Not a duplicate" rows hide a pair', () => {
+test('Claude scores parse by pair number; the second pass carries the issue text; "Not a duplicate" rows hide a pair', () => {
   const pairs = [{ key: 'x|y', a: iss('x', 'A one'), b: iss('y', 'A two') }, { key: 'u|v', a: iss('u', 'B'), b: iss('v', 'C') }];
   assert.match(judgePrompt(pairs), /1\. A: "A one"/);
-  const v = parseVerdicts([{ k: 1, dup: true, why: 'same' }, { k: 2, dup: 'maybe' }, { k: 9, dup: true }], pairs);
-  assert.deepEqual([...v], [['x|y', { dup: true, why: 'same' }]]);
+  assert.match(judgePrompt(pairs, () => [], new Map([['x', 'Lets users archive stops']])), /Text: Lets users archive stops/);
+  const v = parseVerdicts([{ k: 1, score: 82, why: 'same' }, { k: 2, score: 'high' }, { k: 9, score: 90 }], pairs);
+  assert.deepEqual([...v], [['x|y', { score: 82, why: 'same' }]]);
   assert.deepEqual([...dismissedPairs([{ category: 'Duplicate check', after: 'Not a duplicate', before: 'x|y' }])], ['x|y']);
 });
 
@@ -32,4 +33,19 @@ test('the #roadmap_product post names both issues and asks to merge', () => {
   assert.match(m, /^@Lead These 2 engineering issues look like duplicates\./);
   assert.match(m, /\*\*Issue 1:\*\* \[Issue X\]/);
   assert.match(m, /Why: same change/);
+});
+
+test('synonyms fold, and a "Won\'t do" issue pairs only with an open one', () => {
+  const p = candidatePairs([
+    iss('o1', 'Archive inactive trailers in the resource list'),
+    iss('o2', 'Something about pallet labels and printing'),
+  ], { wontDo: [iss('w1', 'Deactivate inactive trailers in the resource list'), iss('w2', 'Hide inactive trailers in the resource list')] });
+  assert.deepEqual(p.map((x) => [x.a.id, x.b.id, x.wontDo]).sort(), [['o1', 'w1', true], ['o1', 'w2', true]]);
+});
+
+test('a pair with a Won\'t do issue asks whether that decision still stands', () => {
+  const m = duplicateMessage(iss('x', 'New X'), { ...iss('y', 'Old X'), status: "Won't do" }, [], 'same change', true);
+  assert.match(m, /looks like one we set to Won't do/);
+  assert.match(m, /\*\*Won't do:\*\* \[Old X\]/);
+  assert.match(m, /reopen it/);
 });

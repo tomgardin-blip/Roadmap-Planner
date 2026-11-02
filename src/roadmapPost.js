@@ -109,15 +109,19 @@ export function dependencyMessage(issue, blocker, leads) {
  * Data quality → "Possible duplicate issues" (Tom, 2026-11-02): ask the product managers (the leads of both
  * issues' teams) to review the pair and merge it if it is a duplicate.
  */
-export function duplicateMessage(a, b, leads, why = '') {
+export function duplicateMessage(a, b, leads, why = '', wontDo = false) {
+  // A pair with a "Won't do" issue (Tom, 2026-11-02, from the duplicate-check skill): Product said no before,
+  // so the PO decides whether that still stands, instead of quietly building the new one.
   return [
-    `${who(leads)} These 2 engineering issues look like duplicates.`.trim(),
+    `${who(leads)} ${wontDo ? 'This engineering issue looks like one we set to Won\'t do.' : 'These 2 engineering issues look like duplicates.'}`.trim(),
     '',
     line('Issue 1', a),
-    line('Issue 2', b),
+    line(wontDo ? "Won't do" : 'Issue 2', b),
     ...(why ? ['', `Why: ${why}`] : []),
     '',
-    'Could u review them and merge if they are the same (mark one as duplicate and move its FRs)? Thx!',
+    wontDo
+      ? 'Does the Won\'t do decision still stand (then close the new one as duplicate and move its FRs), or do we reopen it? Thx!'
+      : 'Could u review them and merge if they are the same (mark one as duplicate and move its FRs)? Thx!',
   ].join('\n');
 }
 

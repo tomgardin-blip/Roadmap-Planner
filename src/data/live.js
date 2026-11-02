@@ -5,7 +5,7 @@
 
 import { ldCapacityQuery, parseLdCapacity } from './capacityFeed.js';
 import { parseComments } from '../notion/comments.js';
-import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues } from './notion.js';
+import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues, wontDoQueryInput, parseWontDo, issueTextQueryInput, parseIssueTexts } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
@@ -312,6 +312,28 @@ export async function loadOwnerEmails(mcp, frIds) {
       filters: { type: 'and', dimensions: [{ fieldId: 'customer_tasks_customer_task_notion_page_id', fieldType: 'string', fieldFilterType: 'string', operator: 'equals', values: frIds.slice(k, k + 400).map(dashed) }] },
     });
     for (const r of rows || []) if (r.customer_tasks_responsible_success_email) out.set(String(r.customer_tasks_customer_task_notion_page_id).replace(/-/g, ''), r.customer_tasks_responsible_success_email);
+  }
+  return out;
+}
+
+/** "Won't do" issues for the duplicate check, 100 per Notion query (about 1,300 on 2026-11-02). */
+export async function loadWontDoIssues(mcp) {
+  const all = [];
+  for (let offset = 0; offset < 5000; offset += OVERLAY_PAGE_SIZE) {
+    const page = await call(mcp, NOTION, 'notion-query-data-sources', wontDoQueryInput(offset));
+    const results = page?.results || [];
+    all.push(...results);
+    if (results.length < OVERLAY_PAGE_SIZE) break;
+  }
+  return parseWontDo(all);
+}
+
+/** Issue id → "AI summary", 100 ids per Notion query. */
+export async function loadIssueTexts(mcp, ids) {
+  const out = new Map();
+  for (let i = 0; i < ids.length; i += 100) {
+    const page = await call(mcp, NOTION, 'notion-query-data-sources', issueTextQueryInput(ids.slice(i, i + 100)));
+    for (const [k, v] of parseIssueTexts(page?.results)) out.set(k, v);
   }
   return out;
 }
