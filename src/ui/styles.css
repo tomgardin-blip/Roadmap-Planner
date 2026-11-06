@@ -223,6 +223,12 @@ details.more[open] > summary { display: none; }
 .hitem { margin: 1px 0; }
 .hrow { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
 .hwhen { font-variant-numeric: tabular-nums; }
+.hq { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.hqhead { font-size: 13px; margin-bottom: 4px; }
+.hqsk { margin-bottom: 6px; }
+.hsub { font-size: 12px; margin: 8px 0 0; }
+.hq details summary { cursor: pointer; font-size: 12px; padding: 6px 0; }
+.hsdate { font: inherit; font-size: 12px; }
 .warnt { color: var(--amb-ink); }
 .estbtn { margin-left: auto; }
 .pill.ro { background: var(--amb-bg); color: var(--amb-ink); }

@@ -123,24 +123,43 @@ function planned(i) {
   return `Pot · ${fd(day(i.end || i.start))}`;
 }
 
-/** History: this week per quarter, planner changes, Notion edits since the last sync. */
-export function renderHistory(el, { audit, auditError, weekly, changes, users, syncedAt, growth, growthError, horizon = [], scores = null }) {
-  const qs = [...(weekly || new Map()).entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const weekRows = qs.map(([q, v]) => `<tr><td><b>${esc(q)}</b></td><td class="num">+${Math.round(v.in * 10) / 10}</td><td class="num">−${Math.round(v.out * 10) / 10}</td><td class="num"><b>${v.in - v.out >= 0 ? '+' : '−'}${Math.round(Math.abs(v.in - v.out) * 10) / 10}</b></td>
-    <td>${v.items.map((i) => `<div class="hitem">${esc(i.name)}: ${esc(i.from || '–')} → ${esc(i.to || '–')} · ${Math.round(i.days * 10) / 10} d · <span class="${i.source === 'Notion' ? 'warnt' : ''}">${esc(i.source === 'Notion' ? 'Notion, no reason given' : i.reason || 'Planner, no reason')}</span></div>`).join('')}</td></tr>`).join('');
-  const who = (a) => esc((a.by && users?.get(a.by)) || a.byText || 'Someone');
-  const auditHtml = auditError ? `<div class="placeholder">Audit log unavailable: ${esc(auditError)}</div>` : !audit ? '<div class="placeholder">Reading the audit log from Notion…</div>'
-    : audit.length ? audit.map((a) => `<div class="hrow"><div class="hwhen">${esc(formatDateTime(a.at))}<br><span class="muted">${who(a)}</span></div>
-      <div><span class="tag">${esc(a.category)}</span> <b>${esc(a.itemName)}</b>${a.field === 'Comment' || a.field === 'Pushback' ? '' : `<div class="muted">${esc(a.field)}: ${esc(formatDatesIn(a.before) || '–')} → ${esc(formatDatesIn(a.after) || '–')}</div>`}
-      ${a.reason ? `<div>Reason: ${esc(a.reason)}</div>` : ''}${a.warning ? `<div class="warnt">⚠ ${esc(formatDatesIn(a.warning))}</div>` : ''}</div></div>`).join('') : '<div class="placeholder">No planner changes yet.</div>';
-  const notionHtml = (changes || []).length ? changes.map((c) => `<div class="hrow"><div class="hwhen muted">Notion</div><div><b>${esc(c.name)}</b><div class="muted">${c.fields.map((k) => `${esc(k)}: ${esc(formatDatesIn(c.before[k]) || '–')} → ${esc(formatDatesIn(c.after[k]) || '–')}`).join(' · ')}</div><div class="warnt">No reason given</div></div></div>`).join('')
-    : '<div class="placeholder">No issues edited in Notion since the last sync.</div>';
+/**
+ * History (Tom, 2026-11-06): why a team is overbooked again in the current or next quarter while it was
+ * fine when it was last planned. Per team and quarter, planned days then and now and the issues behind
+ * the difference, changed by other people (planner moves left out). Effort growth stays below.
+ */
+const sgn = (x) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 10) / 10}`;
+export function renderHistory(el, { chg, users, growth, growthError, horizon = [], scores = null, team = 'all' }) {
+  const c = chg || {};
+  const presets = (c.presets || []).map((p) => `<button data-hsince="${esc(p.iso)}" class="${p.iso === c.since ? 'on' : ''}">${esc(p.label)}</button>`).join('');
+  const picker = `<span class="seg">${presets}</span> <label class="muted">or from <input type="date" class="hsdate" min="2026-10-06" max="${esc(c.today || '')}" value="${esc(String(c.since || '').slice(0, 10))}"></label>`;
+  let body;
+  if (!c.live) body = '<div class="placeholder">Needs the live page (Lightdash snapshots).</div>';
+  else if (c.error) body = `<div class="placeholder">Changes unavailable: ${esc(c.error)}</div>`;
+  else if (c.loading || !c.result) body = '<div class="placeholder">Reading the issue snapshots from Lightdash and comparing…</div>';
+  else {
+    const who = (id) => { const e = c.lastEdited?.get(id); if (!e) return ''; const n = (e.by && users?.get(e.by)) || ''; return `<span class="muted">last edit ${n ? `${esc(n)}, ` : ''}${esc(formatDate(String(e.at).slice(0, 10)))}</span>`; };
+    const item = (i) => {
+      const per = ['FE', 'BE', 'MOB'].filter((k) => i.delta[k]).map((k) => `${k} ${sgn(i.delta[k])}`).join(' · ');
+      const name = i.issue.url ? `<a href="${esc(i.issue.url)}" target="_blank" rel="noopener">${esc(i.issue.name)}</a>` : esc(i.issue.name);
+      return `<div class="hrow"><div class="hwhen"><b class="${i.total > 0 ? 'warnt' : ''}">${sgn(i.total)} d</b><br><span class="muted">${esc(per)}</span></div>
+        <div>${name}<div>${i.causes.map((x) => `<span class="tag">${esc(x)}</span>`).join(' ')}</div><div>${[i.changedAt ? `<span class="muted">first changed ${esc(formatDate(String(i.changedAt).slice(0, 10)))}</span>` : '', who(i.issue.id)].filter(Boolean).join(' · ')}</div></div></div>`;
+    };
+    body = c.result.map((t) => t.quarters.map((q) => {
+      const d = q.now - q.then;
+      const over = q.now - q.capacity;
+      const skills = q.skills.filter((s) => s.then || s.now).map((s) => `<span class="tag">${s.skill} ${Math.round(s.then)} → ${Math.round(s.now)}${s.capacity ? ` / ${Math.round(s.capacity)}` : ''}</span>`).join(' ');
+      const add = q.items.filter((i) => i.total > 0); const freed = q.items.filter((i) => i.total < 0);
+      const head = `<b>${esc(t.team)}</b> · ${esc(q.label)}: ${Math.round(q.then)} → ${Math.round(q.now)} d planned (<b class="${d > 0.5 ? 'warnt' : ''}">${sgn(d)}</b>)${q.capacity ? ` · capacity ${Math.round(q.capacity)} · <span class="${over > 0 ? 'warnt' : ''}">${over > 0 ? `over by ${Math.round(over * 10) / 10}` : `${Math.round(-over * 10) / 10} free`}</span>` : ''}`;
+      return `<div class="hq"><div class="hqhead">${head}</div><div class="hqsk">${skills}</div>
+        ${add.length ? `<h4 class="hsub">Added ${sgn(add.reduce((s, i) => s + i.total, 0))} d</h4>${add.map(item).join('')}` : '<div class="placeholder">Nothing added by others.</div>'}
+        ${freed.length ? `<details data-fold="hfreed-${esc(t.team)}-${esc(q.key)}"><summary>Freed ${sgn(freed.reduce((s, i) => s + i.total, 0))} d · ${freed.length} issue${freed.length === 1 ? '' : 's'}</summary>${freed.map(item).join('')}</details>` : ''}</div>`;
+    }).join('')).join('');
+    if (c.keptCount) body += `<div class="muted">${c.keptCount} planner change${c.keptCount === 1 ? '' : 's'} left out (moves and status set in the planner).</div>`;
+  }
   el.innerHTML = `<div class="lists">
-    <div class="lhead"><b>History</b><span class="lsub">Planner changes from the audit log; Notion edits since the last Lightdash sync${syncedAt ? ` (${esc(formatDateTime(syncedAt))})` : ''}. Older Notion edits arrive once the snapshots are in Lightdash.</span></div>
-    <h3 class="lgroup">This week, load per quarter</h3>
-    ${qs.length ? `<table class="htable"><thead><tr><th>Quarter</th><th>In</th><th>Out</th><th>Net</th><th>What moved</th></tr></thead><tbody>${weekRows}</tbody></table>` : '<div class="placeholder">No load moved between quarters this week.</div>'}
-    ${section('hist-planner', 'Planner changes', audit ? audit.length : '…', 'newest first', auditHtml, true)}
-    ${section('hist-notion', 'Edited in Notion since the last sync', (changes || []).length, 'no reason given', notionHtml)}
+    <div class="lhead"><b>What changed since</b> ${picker}<span class="lsub">Planned days per team for this and next quarter, then (Lightdash issue snapshot) and now (live), and the issues behind the difference: moved, effort changed, new, team or status changed. Changes made in the planner are left out. Not included: capacity changes and FR commit changes.</span></div>
+    ${body}
     ${growth ? section('hist-growth', 'Effort grew 50% or more on a committed issue this quarter', growth.length, 'vs. effort when first seen this quarter (baseline kept since 10/10/2026)', capped(growth, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail), 'hist-growth'))
     : section('hist-growth', 'Effort grew 50% or more on a committed issue this quarter', '…', '', `<div class="placeholder">${growthError ? `Effort baseline unavailable: ${esc(growthError)}` : 'Reading the effort baseline from Notion…'}</div>`)}
   </div>`;

@@ -10,15 +10,16 @@ import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed } from '../data/capacityFeed.js';
-import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
-import { userName, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
+import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, loadChangesSince, loadLastEdited, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
+import { userName, whoAmI, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
 import { selectedFrs, toggleFrSelected, clearFrSelected, openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderHistory, renderQuality, tabCounts } from './lists.js';
 import { dataQuality, qualityCount } from '../quality.js';
-import { weeklyLoadChanges, dismissedFrs } from '../history.js';
+import { dismissedFrs } from '../history.js';
+import { thenRows, plannerKept, currentFields, loadChanges, defaultSince, clampSince } from '../changes.js';
 import { GROUPS } from '../prep.js';
 import { atRisk } from '../atrisk.js';
 import { pushbackReqList, heldByPushback } from '../pushbackReq.js';
@@ -55,6 +56,7 @@ const state = {
   frComments: new Map(), frCommentsLoading: false, // Notion comments of No-engineering-issue FRs
   feed: null, feedError: null, // Lightdash engineering_capacity per team × skill × week, or null with the error
   mcp: null,
+  chg: { since: null, loading: false, error: null, result: null, key: null }, // History: what changed since (Tom, 2026-11-06)
 };
 
 function themeToggle() {
@@ -934,11 +936,67 @@ function recompute() {
     dealRows: state.rows, signed: x.signed, nonFeature: x.nonFeature, mixed: x.mixed, team: state.teamFilter, today: TODAY,
   }) : null;
   document.getElementById('cntDq').textContent = qualityCount(state.quality) ?? '';
-  state.weekly = state.audit ? weeklyLoadChanges({ audit: state.audit, changes: state.status?.changed || [], issues: state.run.issues, now: NOW }) : null;
   const c = tabCounts(state.risk, state.queues);
   document.getElementById('cntRisk').textContent = c.risk == null ? '' : c.risk + (state.pbReq?.length || 0);
   document.getElementById('cntPrep').textContent = c.prep ?? '';
 }
+
+/**
+ * History → What changed since (Tom, 2026-11-06). Compare time: the viewer's last planner session before
+ * today (else 14 days), or a preset / date picked. The issue versions at that time come from the Lightdash
+ * snapshot; "then" and "now" both run through the engine with today's capacity feed.
+ */
+const isoDaysAgo = (n) => new Date(Date.parse(`${TODAY}T00:00:00Z`) - n * 864e5).toISOString();
+function sincePresets() {
+  const out = [];
+  if (state.chg.session) out.push({ label: `My last session (${formatDate(state.chg.session.slice(0, 10))})`, iso: state.chg.session });
+  for (const [l, n] of [['1 week', 7], ['2 weeks', 14], ['4 weeks', 28]]) out.push({ label: l, iso: clampSince(isoDaysAgo(n)) });
+  return out;
+}
+async function ensureChanges() {
+  if (!state.mcp || !state.rows || state.chg.loading) return;
+  if (!state.chg.since) {
+    if (!state.audit && !state.auditError) return; // wait for the audit log (it decides the default)
+    const me = await whoAmI(state.mcp).catch(() => ({}));
+    const d = defaultSince(state.audit || [], me.id, TODAY);
+    const mine = (state.audit || []).some((a) => me.id && a.by && String(a.by).replace(/-/g, '') === String(me.id).replace(/-/g, '') && String(a.at).slice(0, 10) < TODAY);
+    state.chg.session = mine ? d : null;
+    state.chg.since = d;
+  }
+  const key = `${state.chg.since}|${state.teamFilter}`;
+  if (state.chg.key === key && state.chg.rowsFor === state.rows && (state.chg.result || state.chg.error)) return;
+  state.chg.loading = true; state.chg.error = null; state.chg.key = key;
+  const since = state.chg.since;
+  try {
+    if (state.chg.dataFor !== since) { state.chg.data = await loadChangesSince(state.mcp, since); state.chg.dataFor = since; }
+    const { versions, touched } = state.chg.data;
+    const created = new Set([...touched].filter((x) => !versions.has(x)));
+    const rows = state.rows; state.chg.rowsFor = rows;
+    const current = currentFields([...rows, ...(state.extra.featureRows || [])]);
+    const kept = plannerKept(state.audit || [], versions, current);
+    const nowRun = runCapacity(rows, { now: NOW }); applyFeed(nowRun, state.feed);
+    const thenRun = runCapacity(thenRows(rows, versions, { created, kept }), { now: NOW }); applyFeed(thenRun, state.feed);
+    const teams = pickedTeams(state.teamFilter) || TEAMS;
+    state.chg.result = loadChanges({ thenRun, nowRun, quarters: [horizon[0], horizon[1]], horizon, teams, versions, created, kept, current });
+    state.chg.keptCount = kept.size;
+    // Who last edited each issue shown (Notion), names cached with the audit log's.
+    const ids = new Set(state.chg.result.flatMap((t) => t.quarters.flatMap((q) => q.items.map((i) => i.issue.id))));
+    state.chg.lastEdited = await loadLastEdited(state.mcp, ids).catch(() => new Map());
+    for (const e of state.chg.lastEdited.values()) if (e.by && !state.users.has(e.by)) state.users.set(e.by, await userName(state.mcp, e.by).catch(() => ''));
+  } catch (err) {
+    state.chg.error = explainError('Lightdash', err); state.chg.result = null;
+  } finally {
+    state.chg.loading = false;
+    if (state.tab === 'history' && state.chg.key === key) draw();
+  }
+}
+function setSince(iso) {
+  if (!iso || iso === state.chg.since) return;
+  state.chg.since = clampSince(iso); state.chg.result = null; state.chg.key = null;
+  draw();
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-hsince]'); if (b) setSince(b.dataset.hsince); });
+document.addEventListener('change', (e) => { if (e.target.classList?.contains('hsdate') && e.target.value) setSince(`${e.target.value}T23:59:59.000Z`); });
 
 /** Live page: capacity read from Lightdash. No fallback (Tom, 2026-10-29); the local preview uses the engine copy. */
 const capacityOk = () => state.mode !== 'live' || !!state.run?.capacitySource;
@@ -981,7 +1039,7 @@ function drawTab() {
   if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp, sort: state.qpSort || { key: 'plan', dir: 1 } }); return; }
   if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter, readOnly: state.readOnly || !state.mcp,
     dups: { list: suspectedDups(), unchecked: state.dupCands ? state.dupCands.filter((p) => !state.dups.verdicts.has(p.key)).length : null, candidates: state.dupCands?.length ?? null, wontDoLoaded: !!state.wontDo, can: !!state.dups.sample && !state.readOnly, loaded: state.dups.loaded, running: state.dups.running, phase: state.dups.phase, done: state.dups.done, total: state.dups.total, error: state.dups.error, live: !!state.mcp } }); return; }
-  if (state.tab === 'history') { renderHistory(main, { audit: state.audit, auditError: state.auditError, weekly: state.weekly, changes: state.status?.changed || [], users: state.users, syncedAt: state.status?.syncedAt, growth: state.risk?.effortGrowth, growthError: state.baselineError, horizon, scores: state.scores }); return; }
+  if (state.tab === 'history') { ensureChanges(); renderHistory(main, { chg: { ...state.chg, live: !!state.mcp, today: TODAY, presets: sincePresets() }, users: state.users, growth: state.risk?.effortGrowth, growthError: state.baselineError, horizon, scores: state.scores }); return; }
   if (state.grid) renderGrid(document.getElementById('grid'), state.grid, horizon, state);
 }
 

@@ -5,8 +5,9 @@
 
 import { ldCapacityQuery, parseLdCapacity } from './capacityFeed.js';
 import { parseComments } from '../notion/comments.js';
-import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues, wontDoQueryInput, parseWontDo, issueTextQueryInput, parseIssueTexts } from './notion.js';
+import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues, ISSUES_DS, wontDoQueryInput, parseWontDo, issueTextQueryInput, parseIssueTexts } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
+import { versionsAtQuery, touchedSinceQuery, parseVersions, touchedIds } from '../changes.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
 export const LIGHTDASH = 'Lightdash';
@@ -334,6 +335,38 @@ export async function loadIssueTexts(mcp, ids) {
   for (let i = 0; i < ids.length; i += 100) {
     const page = await call(mcp, NOTION, 'notion-query-data-sources', issueTextQueryInput(ids.slice(i, i + 100)));
     for (const [k, v] of parseIssueTexts(page?.results)) out.set(k, v);
+  }
+  return out;
+}
+
+/**
+ * "What changed since" (History, Tom 2026-11-06): the issue versions valid at T that changed since, the
+ * ids touched after T (to find issues created since), and who last edited each changed issue in Notion.
+ */
+export async function loadChangesSince(mcp, T) {
+  const [vr, tr] = await Promise.all([
+    runQuery(mcp, 'Roadmap Planner: issue versions at compare time', versionsAtQuery(T)),
+    runQuery(mcp, 'Roadmap Planner: issues touched since compare time', touchedSinceQuery(T)),
+  ]);
+  return { versions: parseVersions(vr), touched: touchedIds(tr) };
+}
+
+/** Notion "Last edited by" / time for the given issue ids (100 per query). Map(id → { by, at }). */
+export async function loadLastEdited(mcp, ids) {
+  const out = new Map();
+  const list = [...ids];
+  for (let i = 0; i < list.length; i += 100) {
+    const chunk = list.slice(i, i + 100).filter((x) => /^[0-9a-f]{32}$/.test(x));
+    if (!chunk.length) continue;
+    const page = await call(mcp, NOTION, 'notion-query-data-sources', { data: {
+      data_source_urls: [ISSUES_DS],
+      query: `SELECT url, "Last edited by", "Last edited time" FROM "${ISSUES_DS}" WHERE substr(url,-32) IN (${chunk.map(() => '?').join(',')})`,
+      params: chunk,
+    } });
+    for (const r of page?.results || []) {
+      const id = String(r.url || '').slice(-32).toLowerCase();
+      out.set(id, { by: String(r['Last edited by'] || '').replace(/^notion_user-/, '') || null, at: String(r['Last edited time'] || '').replace(' ', 'T') || null });
+    }
   }
   return out;
 }
