@@ -10,12 +10,12 @@ import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed } from '../data/capacityFeed.js';
-import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, loadChangesSince, loadLastEdited, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
+import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, loadChangesSince, loadLastEdited, loadEiRequests, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
 import { userName, whoAmI, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
-import { selectedFrs, toggleFrSelected, clearFrSelected, openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
+import { selectedFrs, toggleFrSelected, clearFrSelected, openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setEiRequests, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderHistory, renderQuality, tabCounts } from './lists.js';
 import { dataQuality, qualityCount } from '../quality.js';
 import { dismissedFrs } from '../history.js';
@@ -26,7 +26,7 @@ import { pushbackReqList, heldByPushback } from '../pushbackReq.js';
 import { candidatePairs, judgePrompt, parseVerdicts, dismissedPairs, snapshot, REVIEW, WONT_DO } from '../duplicates.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates } from './actions.js';
+import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates, startEiRequests } from './actions.js';
 import { TEAM_LEADS, dependencyMessage, blockedMessage, duplicateMessage, qualityDm, staleBlockerMessage, pushbackReminder } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
@@ -315,6 +315,15 @@ function shell() {
       if (entry) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No estimate', entries: [entry] }], target: ESTIMATE_TARGETS.qai, preselect: [entry.issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
+    const er = e.target.closest('button[data-eireq]');
+    if (er) {
+      // Create EIs through the Engineering Issues app (Tom, 2026-11-07): bulk from Prep, or one FR card.
+      const groups = GROUPS.map((g) => ({ label: `${g.label} · No engineering issue`, frs: (state.queues?.[g.key].noIssue || []).filter((x) => x.fr.assignedTeam === 'Engineering').map((x) => x.fr) }));
+      const one = er.dataset.eireq !== 'bulk' ? er.dataset.eireq : null;
+      if (one && !groups.some((g) => g.frs.some((f) => f.id === one))) { const fr = shownFr(one); if (fr) groups.unshift({ label: 'This FR', frs: [fr] }); }
+      openEiRequests(groups, one ? [one] : []);
+      return;
+    }
     const ep = e.target.closest('button[data-estpost]');
     if (ep) {
       // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.
@@ -323,9 +332,11 @@ function shell() {
         startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam, onPosted: estimatePosted, posted: estimatePostsOf });
         return;
       }
+      // FRs with no engineering issue go through the Engineering Issues app now (Tom, 2026-11-07), not the
+      // product-feature Slack post; No estimate issues keep it.
       const groups = GROUPS.flatMap((g) => [
         { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
-        { label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) },
+        ...(ep.dataset.estpost === 'productFeature' ? [] : [{ label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) }]),
       ]);
       startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
@@ -378,7 +389,7 @@ function qualityFix(key, id) {
   const dmOpt = (label, desc) => ({ label, desc, run: dm() });
   const opts = {
     frNoIssue: [
-      { label: 'Ask Claude to create or link the issue', desc: 'Post in #product-create-ei-skill-trigger: @claude_code runs the product-feature skill on this FR', run: estimate(ESTIMATE_TARGETS.productFeature, frAsEntry) },
+      { label: 'Create the EI in the Engineering Issues app', desc: 'Claude writes the engineering issue from this FR (product-feature), as you; follow it on the FR card or in the app', run: () => openEiRequests([{ label: 'No engineering issue', frs: [fr] }], [fr.id]) },
       { label: 'Not needed any more', desc: 'FR edit with Priority "No longer needed" and a comment to the COM/AM', run: frEdit({ priority: 'No longer needed', note: 'Not needed any more: priority set to No longer needed. Check and Save.', comment: 'Closing this: no longer needed. Shout if that\'s wrong.' }) },
       { label: 'Edit the FR', desc: 'Priority, committed date or status, by hand', run: frEdit(null) },
     ],
@@ -445,6 +456,18 @@ function estimatePosted({ item, link, channel }) {
   state.audit = [{ category: 'Estimate post', field: 'Slack', before: channel, after: link || '', ...(item.fr ? { frId: item.id } : { issueId: item.id }), itemName: item.name, at: new Date().toISOString() }, ...(state.audit || [])];
   if (state.tab !== 'capacity') draw();
   renderDrawer();
+}
+
+/** Engineering Issues app requests (Tom, 2026-11-07): the sheet, and what was requested this session. */
+function openEiRequests(groups, preselect) {
+  startEiRequests({ mcp: state.mcp, groups, preselect, requests: (id) => state.eiReq?.get(id) || null,
+    onDone: ({ fr, row }) => {
+      state.eiReq = new Map(state.eiReq || []);
+      state.eiReq.set(fr.id, { state: 'Requested', ei: null, message: '', at: new Date().toISOString(), url: row });
+      state.audit = [{ category: 'EI requested', field: 'Engineering Issues app', after: row || '', frId: fr.id, itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])];
+      if (state.tab !== 'capacity') draw();
+      renderDrawer();
+    } });
 }
 
 /** Skill-trigger / @Qai / Qai DM posts of an issue or FR from the audit log, newest first. */
@@ -1057,6 +1080,7 @@ function show(rows) {
   // #roadmap_product posts per issue, newest first, from the audit log (and the ones made this session).
   // Skill-trigger / @Qai / Qai DM posts per issue or FR (Tom, 2026-10-29), newest first.
   setEstimatePosts(estimatePostsOf);
+  setEiRequests((id) => state.eiReq?.get(id) || null);
   setRoadmapPosts((id) => (state.audit || []).filter((a) => a.category === 'Roadmap post' && a.issueId === id).map((a) => ({ at: a.at, link: /^https:/.test(a.after || '') ? a.after : null })).sort((a, b) => String(b.at).localeCompare(String(a.at))));
   recompute();
   renderChrome();
@@ -1088,6 +1112,9 @@ async function loadAllLiveOnce(mcp) {
   renderDrawer();
   const background = [
     loadExtras(mcp, status.overlay, onExtra, { frOverlay: status.frOverlay, golive: status.golive }),
+    // Engineering Issues app requests per FR, for the status on FR cards (Tom, 2026-11-07); none on failure.
+    loadEiRequests(mcp).then((m) => { state.eiReq = m; }).catch(() => { state.eiReq = state.eiReq || new Map(); })
+      .finally(() => { if (['prep', 'quality'].includes(state.tab)) draw(); }),
     loadAudit(mcp)
       .then(async (audit) => {
         state.audit = audit; state.auditError = null;

@@ -3,6 +3,7 @@
 // push-out / pull-forward / quick-win suggestions (src/suggestions.js).
 
 import { cellIssues } from '../capacity.js';
+import { eiRequestLabel } from '../eiRequest.js';
 import { formatDate, lateVsCommit, potQuarters, potMonths } from '../periods.js';
 import { pushOut, pullForward } from '../suggestions.js';
 import { isAllowed } from '../notion/writes.js';
@@ -247,6 +248,18 @@ function estimateLinks(id) {
   return `<div class="estlinks">Posted: ${[...latest.values()].map(one).join(' · ')}</div>`;
 }
 
+// Engineering Issues app requests per FR (Tom, 2026-11-07): (frId) → { state, ei, at, url } or null.
+let eiRequests = () => null;
+export const setEiRequests = (fn) => { eiRequests = fn; };
+function eiRequestLine(id) {
+  const r = eiRequests(id);
+  if (!r) return '';
+  const label = eiRequestLabel(r);
+  const ei = r.ei ? ` · <a href="${esc(r.ei)}" target="_blank" rel="noopener">open EI</a>` : '';
+  const row = r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener" title="The request in the Engineering Issues queue">request</a>` : '';
+  return `<div class="estlinks"><span class="tag ${r.state === 'Failed' ? 'late' : r.ei ? 'commit' : ''}"${r.message ? ` title="${esc(r.message)}"` : ''}>${esc(label)}</span>${r.state === 'Failed' && r.message ? ` <span class="muted">${esc(String(r.message).slice(0, 140))}</span>` : ''} ${r.at ? formatDate(String(r.at).slice(0, 10)) : ''}${ei}${row}</div>`;
+}
+
 export const setDealNames = (m) => { dealNames = m; };
 // (issueId, day) → html naming what sets an issue's committed date when no listed FR does (Tom, 2026-10-27).
 let commitSource = () => null;
@@ -278,7 +291,7 @@ export function frCard(fr, comments, actions = '') {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
   const meta = [fr.committed ? `Committed ${formatDate(String(fr.committed).slice(0, 10))}` : '', fr.assignedTeam ? `Team ${fr.assignedTeam}` : 'No assigned team'].filter(Boolean).join(' · ');
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title, null, frSelBox(fr))}</ul>${commentLine(comments)}${estimateLinks(fr.id)}${actions ? `<div class="cardacts">${actions}</div>` : ''}</div>`;
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, meta }, cust, title, null, frSelBox(fr))}</ul>${commentLine(comments)}${eiRequestLine(fr.id)}${estimateLinks(fr.id)}${actions ? `<div class="cardacts">${actions}</div>` : ''}</div>`;
 }
 
 /** FR card for Data quality (Tom, 2026-10-28): the FR with Edit (opened from its issue, so the issue status is editable too), what is wrong, and its issue. */
@@ -286,7 +299,7 @@ export function qualityFrCard(fr, detail, issue = null, fix = '') {
   const cust = dealNames.get(nidOf(fr.dealId)) || 'No customer';
   const title = fr.url ? `<a href="${esc(fr.url)}" target="_blank" rel="noopener">${esc(fr.title || 'FR')}</a>` : esc(fr.title || 'FR');
   const iss = issue ? `<div class="detail muted">Issue: ${issue.url ? `<a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.name)}</a>` : esc(issue.name)}${issue.status ? ` · EI: ${esc(issue.status)}` : ''}${issue.team ? ` · ${esc(issue.team)}` : ''}</div>` : '';
-  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, setsCommit: false }, cust, title, issue?.id || null)}</ul>${detail ? `<div class="detail">${esc(detail)}</div>` : ''}${iss}${estimateLinks(fr.id)}${fix ? `<div class="cardacts">${fix}</div>` : ''}</div>`;
+  return `<div class="issue"><ul class="frlist">${frLine({ ...fr, setsCommit: false }, cust, title, issue?.id || null)}</ul>${detail ? `<div class="detail">${esc(detail)}</div>` : ''}${iss}${eiRequestLine(fr.id)}${estimateLinks(fr.id)}${fix ? `<div class="cardacts">${fix}</div>` : ''}</div>`;
 }
 
 // Comments on the FR in Notion: count, and the latest one (who, when, first words).

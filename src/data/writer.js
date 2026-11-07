@@ -3,6 +3,7 @@
 // Order per action: read the live "before" from Notion, write, then audit. A failed audit after a
 // successful write is reported, never silently dropped.
 
+import { eiRequestInput, createdRowUrl, EI_APP } from '../eiRequest.js';
 import { ROADMAP_CHANNEL, slackLink, slackUserFromSearch, channelsFromSearch } from '../roadmapPost.js';
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
@@ -233,4 +234,19 @@ export async function userName(mcp, id) {
     userNames.set(id, u?.name || '');
   }
   return userNames.get(id);
+}
+
+/**
+ * Create an engineering issue for an FR through the Engineering Issues app (Tom, 2026-11-07): the same queue
+ * row the app writes (the Mac mini runner then writes the EI with product-feature), as the viewer, then an
+ * audit row "EI requested" (Field "Engineering Issues app", After = the queue row). Returns the row URL.
+ */
+export async function requestEi(mcp, fr) {
+  const res = await call(mcp, NOTION, 'notion-create-pages', eiRequestInput(fr));
+  const row = createdRowUrl(res);
+  await audit(mcp, {
+    category: 'EI requested', field: EI_APP, before: '', after: row || 'Requested (no link returned)',
+    frId: fr.id, itemName: fr.title || 'FR', updateId: updateId(),
+  });
+  return row;
 }

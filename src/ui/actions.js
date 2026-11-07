@@ -4,7 +4,8 @@
 import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { PUSHBACK_REQ } from '../pushbackReq.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack } from '../data/writer.js';
+import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack, requestEi } from '../data/writer.js';
+import { eiRequestLabel } from '../eiRequest.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage, rankChannels, pushbackDefaultText } from '../roadmapPost.js';
 import { explainError, NOTION } from '../data/live.js';
@@ -711,5 +712,56 @@ export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished, cu
       if (failed.length) throw fail(`${done} Failed: ${failed.join('; ')}. Refresh to see Notion's values.`);
       return done;
     });
+  });
+}
+
+/**
+ * Create EIs through the Engineering Issues app (Tom, 2026-11-07, replaces the Slack post to @claude_code for
+ * FRs with no engineering issue). Tick FRs, Create: one queue row per FR, as the viewer, each with its audit
+ * row. requests(frId) → the latest request, shown so an FR is not requested twice by accident.
+ * groups: [{ label, frs }]
+ */
+export function startEiRequests({ mcp, groups, preselect = [], requests = () => null, onDone }) {
+  if (!mcp) return toast('Creating EIs needs the live page in claude.ai.', 'bad');
+  const tag = (id) => { const r = requests(id); return r ? ` <span class="tag ${r.ei ? 'commit' : ''}">${esc(eiRequestLabel(r))} ${fd(String(r.at).slice(0, 10))}</span>` : ''; };
+  const list = groups.filter((g) => g.frs.length).map((g) => `
+    <div class="pickgrp"><div class="pickhead"><b>${esc(g.label)}</b> <span class="muted">(${g.frs.length})</span>
+      <button type="button" class="chip" data-pickall="${esc(g.label)}">All</button><button type="button" class="chip" data-picknone="${esc(g.label)}">None</button></div>
+      ${g.frs.map((fr) => `<label class="pickrow" data-grp="${esc(g.label)}"><input type="checkbox" data-pick="${fr.id}"${preselect.includes(fr.id) ? ' checked' : ''}>
+        <span><b>${esc(fr.title || 'FR')}</b><span class="muted">${fr.committed ? ` · commit ${fd(String(fr.committed).slice(0, 10))}` : ''}</span>${tag(fr.id)}</span></label>`).join('')}
+    </div>`).join('');
+  const sheet = openSheet(`
+    <h3>Create engineering issues</h3>
+    <div class="srow muted">One request per ticked FR in the Engineering Issues app, as you: Claude writes the EI from the FR with the product-feature skill (no coding). Follow it in the app or on the FR card here.</div>
+    <div class="picklist">${list || '<div class="placeholder">No FRs without an engineering issue.</div>'}</div>
+    <div class="srow"><b id="pickCount">0</b> selected</div>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend" disabled>Create</button></div>`);
+  const picked = () => [...sheet.querySelectorAll('input[data-pick]:checked')].map((x) => x.dataset.pick);
+  const count = () => { const n = picked().length; sheet.querySelector('#pickCount').textContent = n; sheet.querySelector('#sSend').disabled = !n; };
+  sheet.addEventListener('change', (e) => { if (e.target.matches('input[data-pick]')) count(); });
+  count();
+  sheet.addEventListener('click', (e) => {
+    const all = e.target.closest('[data-pickall]'); const none = e.target.closest('[data-picknone]');
+    const grp = (all || none)?.dataset.pickall || (all || none)?.dataset.picknone;
+    if (!grp) return;
+    sheet.querySelectorAll(`.pickrow[data-grp="${CSS.escape(grp)}"] input`).forEach((x) => { x.checked = !!all; });
+    count();
+  });
+  sheet.querySelector('#sSend').addEventListener('click', async (e) => {
+    const seen = new Set();
+    const frs = groups.flatMap((g) => g.frs).filter((fr) => picked().includes(fr.id) && !seen.has(fr.id) && seen.add(fr.id));
+    for (let i = 0; i < frs.length; i++) {
+      busy(e.target, true, `Creating ${i + 1}/${frs.length}…`);
+      try {
+        const row = await requestEi(mcp, frs[i]);
+        onDone?.({ fr: frs[i], row });
+      } catch (err) {
+        if (err?.code === 'audit_failed') { onDone?.({ fr: frs[i], row: null }); continue; }
+        busy(e.target, false, 'Create');
+        return toast(`${i ? `${i} of ${frs.length} requested. ` : ''}Stopped at "${frs[i].title || 'FR'}": ${err?.message && !err.code ? err.message : explainError(NOTION, err)}`, 'bad');
+      }
+    }
+    closeSheet();
+    toast(`${frs.length} EI request${frs.length === 1 ? '' : 's'} sent to the Engineering Issues app. Logged.`);
   });
 }
