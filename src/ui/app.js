@@ -299,47 +299,11 @@ function shell() {
       if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
-    const qe = e.target.closest('button[data-qaiest]');
-    if (qe) {
-      // One No estimate issue: @Qai estimate in #dev_effort_estimate, that issue ticked (Tom, 2026-10-30).
-      const entry = GROUPS.flatMap((g) => state.queues?.[g.key].noEstimate || []).find((x) => x.issue.id === qe.dataset.qaiest);
-      if (entry) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No estimate', entries: [entry] }], target: ESTIMATE_TARGETS.qai, preselect: [entry.issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
-      return;
-    }
-    const eu = e.target.closest('button[data-eiupd]');
-    if (eu) {
-      // No estimate issues: an "Update issue" request in the Engineering Issues app (Tom, 2026-11-07).
-      const asItem = (i) => ({ id: i.id, title: i.name, url: i.url, committed: i.committed });
-      const groups = GROUPS.map((g) => ({ label: `${g.label} · No estimate`, frs: (state.queues?.[g.key].noEstimate || []).map((x) => asItem(x.issue)) }));
-      const one = eu.dataset.eiupd !== 'bulk' ? eu.dataset.eiupd : null;
-      if (one && !groups.some((g) => g.frs.some((f) => f.id === one))) { const i = shownIssue(one) || state.run?.issues.find((x) => x.id === one); if (i) groups.unshift({ label: 'This issue', frs: [asItem(i)] }); }
-      openEiRequests(groups, one ? [one] : [], 'update');
-      return;
-    }
-    const er = e.target.closest('button[data-eireq]');
-    if (er) {
-      // Create EIs through the Engineering Issues app (Tom, 2026-11-07): bulk from Prep, or one FR card.
-      const groups = GROUPS.map((g) => ({ label: `${g.label} · No engineering issue`, frs: (state.queues?.[g.key].noIssue || []).filter((x) => x.fr.assignedTeam === 'Engineering').map((x) => x.fr) }));
-      const one = er.dataset.eireq !== 'bulk' ? er.dataset.eireq : null;
-      if (one && !groups.some((g) => g.frs.some((f) => f.id === one))) { const fr = shownFr(one); if (fr) groups.unshift({ label: 'This FR', frs: [fr] }); }
-      openEiRequests(groups, one ? [one] : []);
-      return;
-    }
-    const ep = e.target.closest('button[data-estpost]');
+    const ep = e.target.closest('button[data-estpost="qaiTeam"]');
     if (ep) {
-      // No estimate issues, and the FRs with no engineering issue yet (Tom, 2026-10-27): the FR link is posted.
-      const frEntry = (fr) => ({ fr: true, issue: { id: fr.id, name: fr.title || 'FR', url: fr.url, team: null, committed: fr.committed }, frs: [fr] });
-      if (ep.dataset.estpost === 'qaiTeam') {
-        startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam, onPosted: estimatePosted, posted: estimatePostsOf });
-        return;
-      }
-      // FRs with no engineering issue and No estimate issues go through the Engineering Issues app now (Tom,
-      // 2026-11-07); this is the @Qai post (#dev_effort_estimate) and the No team DM.
-      const groups = GROUPS.flatMap((g) => [
-        { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
-        ...([{ label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) }]),
-      ]);
-      startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost], onPosted: estimatePosted, posted: estimatePostsOf });
+      // At risk → No team: a DM to Qai per ticked issue. The @Qai estimate and product-feature posts are gone:
+      // FRs and No estimate issues go through the Engineering Issues app (Tom, 2026-11-07).
+      startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam, onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
     const fe = e.target.closest('button[data-fr-edit]');
@@ -435,7 +399,6 @@ function qualityFix(key, id) {
     ],
     plannedNoEffort: [
       { label: 'Request an estimate in the Engineering Issues app', desc: 'Update issue request: Claude adds the FE/BE/MOB estimate (product-feature), as you', run: issue && (() => openEiRequests([{ label: 'Planned without effort', frs: [{ id: issue.id, title: issue.name, url: issue.url, committed: issue.committed }] }], [issue.id], 'update')) },
-      { label: 'Ask @Qai to estimate', desc: 'Post in #dev_effort_estimate (the old flow)', run: issue && estimate(ESTIMATE_TARGETS.qai, { issue, frs: state.scores?.get(issue.id)?.frs || [] }) },
       { label: 'Take it out of the plan', desc: 'Clear Start and End until it has an estimate', run: unplan('No estimate yet') },
     ],
     staleBlocker: [
