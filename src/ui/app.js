@@ -299,6 +299,25 @@ function shell() {
       if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
+    const eu = e.target.closest('button[data-eiupd]');
+    if (eu) {
+      // No estimate issues: an "Update issue" request in the Engineering Issues app (Tom, 2026-11-07).
+      const asItem = (i) => ({ id: i.id, title: i.name, url: i.url, committed: i.committed });
+      const groups = GROUPS.map((g) => ({ label: `${g.label} · No estimate`, frs: (state.queues?.[g.key].noEstimate || []).map((x) => asItem(x.issue)) }));
+      const one = eu.dataset.eiupd !== 'bulk' ? eu.dataset.eiupd : null;
+      if (one && !groups.some((g) => g.frs.some((f) => f.id === one))) { const i = shownIssue(one) || state.run?.issues.find((x) => x.id === one); if (i) groups.unshift({ label: 'This issue', frs: [asItem(i)] }); }
+      openEiRequests(groups, one ? [one] : [], 'update');
+      return;
+    }
+    const er = e.target.closest('button[data-eireq]');
+    if (er) {
+      // Create EIs through the Engineering Issues app (Tom, 2026-11-07): bulk from Prep, or one FR card.
+      const groups = GROUPS.map((g) => ({ label: `${g.label} · No engineering issue`, frs: (state.queues?.[g.key].noIssue || []).filter((x) => x.fr.assignedTeam === 'Engineering').map((x) => x.fr) }));
+      const one = er.dataset.eireq !== 'bulk' ? er.dataset.eireq : null;
+      if (one && !groups.some((g) => g.frs.some((f) => f.id === one))) { const fr = shownFr(one); if (fr) groups.unshift({ label: 'This FR', frs: [fr] }); }
+      openEiRequests(groups, one ? [one] : []);
+      return;
+    }
     const ep = e.target.closest('button[data-estpost="qaiTeam"]');
     if (ep) {
       // At risk → No team: a DM to Qai per ticked issue. The @Qai estimate and product-feature posts are gone:

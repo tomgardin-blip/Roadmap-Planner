@@ -181,7 +181,7 @@ details.more[open] > summary { display: none; }
 /* Write flows: sheet, toast, FR edit */
 #rp-sheet { position: fixed; inset: 0; z-index: 60; }
 #rp-sheet .sheet-bg { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
-#rp-sheet .sheet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: min(520px, 100%); max-height: 90vh; overflow: auto; background: var(--card); color: var(--ink); border-radius: 14px 14px 0 0; padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
+#rp-sheet .sheet { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: min(520px, 100%); max-height: 90vh; max-height: 90dvh; overflow: auto; -webkit-overflow-scrolling: touch; background: var(--card); color: var(--ink); border-radius: 14px 14px 0 0; padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
 @media (min-width: 701px) { #rp-sheet .sheet { bottom: auto; top: 12vh; border-radius: 14px; } }
 #rp-sheet h3 { margin: 0 0 10px; font-size: 15px; }
 .srow { font-size: 13px; margin: 6px 0; }
