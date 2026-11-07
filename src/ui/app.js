@@ -299,15 +299,6 @@ function shell() {
       if (issue) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team', entries: [{ issue, frs: [] }] }], target: ESTIMATE_TARGETS.qaiTeam, preselect: [issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
-    const dc = e.target.closest('button[data-dupcheck]');
-    if (dc) {
-      // One issue (No estimate) or FR (No engineering issue): duplicate check by Qai (Tom, 2026-10-31).
-      const id = dc.dataset.dupcheck;
-      const all = GROUPS.flatMap((g) => [...(state.queues?.[g.key].noEstimate || []), ...(state.queues?.[g.key].noIssue || []).map((x) => ({ fr: true, issue: { id: x.fr.id, name: x.fr.title || 'FR', url: x.fr.url, team: null, committed: x.fr.committed }, frs: [x.fr] }))]);
-      const entry = all.find((x) => x.issue.id === id);
-      if (entry) startEstimatePost({ mcp: state.mcp, groups: [{ label: entry.fr ? 'No engineering issue' : 'No estimate', entries: [entry] }], target: ESTIMATE_TARGETS.dupCheck, preselect: [id], onPosted: estimatePosted, posted: estimatePostsOf });
-      return;
-    }
     const qe = e.target.closest('button[data-qaiest]');
     if (qe) {
       // One No estimate issue: @Qai estimate in #dev_effort_estimate, that issue ticked (Tom, 2026-10-30).

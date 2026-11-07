@@ -21,15 +21,6 @@ export const ESTIMATE_TARGETS = {
     button: 'DM Qai to add the team',
     how: 'each asking Qai to decide and set the Team',
   },
-  // Duplicate check (Tom, 2026-10-31): Qai runs the duplicate-check skill, posted in the product-feature channel.
-  dupCheck: {
-    channel: { id: 'C0CC87L21GW', name: '#product-create-ei-skill-trigger' },
-    bot: { name: 'Qai', id: 'U0C0Y7E5SQ4' },
-    log: '#product-create-ei-skill-trigger (duplicate check)',
-    line: (url) => `@Qai run the duplicate-check skill on ${url}`,
-    button: 'Ask @Qai for a duplicate check',
-    how: 'each asking @Qai to run the duplicate-check skill',
-  },
   qai: {
     channel: { id: 'C0C1CPJKZKK', name: '#dev_effort_estimate' },
     bot: { name: 'Qai', id: 'U0C0Y7E5SQ4' },

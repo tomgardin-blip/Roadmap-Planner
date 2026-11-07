@@ -78,15 +78,13 @@ const noTeamTag = (e, readOnly) => (!e.noTeam ? '' : `<span class="tag late">No 
 // Ask @Qai in #dev_effort_estimate for this one issue (Tom, 2026-10-30), same preview as the bulk button.
 const qaiEstBtn = (e, readOnly) => (readOnly ? '' : `<button type="button" class="fredit qaiest" data-qaiest="${e.issue.id}" title="Post @Qai estimate for this issue in #dev_effort_estimate (preview first)">Ask @Qai in #dev_effort_estimate</button>`);
 
-// Duplicate check for one issue or FR (Tom, 2026-10-31), same preview as the bulk button.
 // Create the EI for one FR through the Engineering Issues app (Tom, 2026-11-07), same sheet as the bulk button.
 const eiBtn = (id, readOnly) => (readOnly ? '' : `<button type="button" class="fredit" data-eireq="${id}" title="Request the EI in the Engineering Issues app: Claude writes it from this FR">Create EI</button>`);
-const dupBtn = (id, readOnly) => (readOnly ? '' : `<button type="button" class="fredit" data-dupcheck="${id}" title="Post in #product-create-ei-skill-trigger: @Qai runs the duplicate-check skill (preview first)">Ask @Qai for a duplicate check</button>`);
 
 export function renderPrep(el, { queues, horizon, scores, loading, readOnly, sort = 'value', comments = new Map() }) {
   if (!queues) { el.innerHTML = `<div class="lists"><div class="placeholder">${loading ? 'Prep queues need all FRs and the unplanned backlog. Loading them from Lightdash…' : 'Prep queues unavailable: the FR or backlog load failed.'}</div></div>`; return; }
   let h = `<div class="lhead"><b>Prep queues</b><span class="lsub">What blocks planning, per FR priority. Only FRs of signed customers (deal Closed-Won) count. An issue sits under its highest-priority FR.</span>
-    ${readOnly ? '' : `<span class="estbtns"><button class="estbtn primary" data-eireq="bulk" title="One request per ticked FR with no engineering issue: the Engineering Issues app writes the EI (product-feature)">Create EIs in the Engineering Issues app</button><button class="estbtn" data-estpost="productFeature" title="No estimate issues only: one post per ticked issue, @claude_code runs the product-feature skill">Post No estimate to #product-create-ei-skill-trigger</button><button class="estbtn" data-estpost="qai" title="One post per ticked issue: @Qai estimate (the old flow)">Ask @Qai in #dev_effort_estimate</button><button class="estbtn" data-estpost="dupCheck" title="One post per ticked issue or FR in #product-create-ei-skill-trigger: @Qai runs the duplicate-check skill">Ask @Qai for a duplicate check</button></span>`}
+    ${readOnly ? '' : `<span class="estbtns"><button class="estbtn primary" data-eireq="bulk" title="One request per ticked FR with no engineering issue: the Engineering Issues app writes the EI (product-feature)">Create EIs in the Engineering Issues app</button><button class="estbtn" data-estpost="productFeature" title="No estimate issues only: one post per ticked issue, @claude_code runs the product-feature skill">Post No estimate to #product-create-ei-skill-trigger</button><button class="estbtn" data-estpost="qai" title="One post per ticked issue: @Qai estimate (the old flow)">Ask @Qai in #dev_effort_estimate</button></span>`}
     ${sortSel(sort, ' No estimate')}</div>`;
   for (const g of GROUPS) {
     const q = { ...queues[g.key], noEstimate: sortEntries(queues[g.key].noEstimate, scores, sort), notPlanned: sortEntries(queues[g.key].notPlanned, scores, 'commit') }; // Not planned: always by committed date (Tom, 2026-10-26)
@@ -98,10 +96,10 @@ export function renderPrep(el, { queues, horizon, scores, loading, readOnly, sor
     const withC = noIssue.filter((e) => cm(e)?.count > 0);
     const rest = noIssue.filter((e) => !(cm(e)?.count > 0));
     const sub = (label, n) => `<div class="lsubhead">${esc(label)} <span class="cnt">${n}</span></div>`;
-    const body = (withC.length ? sub('Has comments: check manually', withC.length) + capped(withC, (e) => frCard(e.fr, cm(e), eiBtn(e.fr.id, readOnly) + dupBtn(e.fr.id, readOnly)), `${g.key}-noIssueC`) : '')
-      + (withC.length && rest.length ? sub('No comments yet', rest.length) : '') + capped(rest, (e) => frCard(e.fr, cm(e), eiBtn(e.fr.id, readOnly) + dupBtn(e.fr.id, readOnly)), `${g.key}-noIssue`);
+    const body = (withC.length ? sub('Has comments: check manually', withC.length) + capped(withC, (e) => frCard(e.fr, cm(e), eiBtn(e.fr.id, readOnly)), `${g.key}-noIssueC`) : '')
+      + (withC.length && rest.length ? sub('No comments yet', rest.length) : '') + capped(rest, (e) => frCard(e.fr, cm(e), eiBtn(e.fr.id, readOnly)), `${g.key}-noIssue`);
     h += section(`prep-${g.key}-noIssue`, 'No engineering issue', noIssue.length, withC.length ? `Product to create or link one · ${withC.length} with comments` : 'Product to create or link one', noIssue.length ? body : '<div class="placeholder">None.</div>');
-    h += section(`prep-${g.key}-noEstimate`, 'No estimate', q.noEstimate.length, 'Issue without FE/BE/MOB effort', capped(q.noEstimate, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', noTeamTag(e, readOnly) + qaiEstBtn(e, readOnly) + dupBtn(e.issue.id, readOnly)), `${g.key}-noEstimate`));
+    h += section(`prep-${g.key}-noEstimate`, 'No estimate', q.noEstimate.length, 'Issue without FE/BE/MOB effort', capped(q.noEstimate, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', noTeamTag(e, readOnly) + qaiEstBtn(e, readOnly)), `${g.key}-noEstimate`));
     h += section(`prep-${g.key}-notPlanned`, 'Not planned', q.notPlanned.length, q.notPlanned.length ? `${days(q.notPlanned)} d · the to-do list, by committed date` : 'the to-do list', capped(q.notPlanned, (e) => listCard(e.issue, horizon, scores?.get(e.issue.id), '', noTeamTag(e, readOnly)), `${g.key}-notPlanned`), true);
   }
   el.innerHTML = `<div class="lists">${h}</div>`;
