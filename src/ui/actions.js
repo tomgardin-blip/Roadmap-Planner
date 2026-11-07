@@ -4,7 +4,7 @@
 import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { PUSHBACK_REQ } from '../pushbackReq.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack, requestEi } from '../data/writer.js';
+import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack, requestEi, requestEiUpdate } from '../data/writer.js';
 import { eiRequestLabel } from '../eiRequest.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage, rankChannels, pushbackDefaultText } from '../roadmapPost.js';
@@ -721,7 +721,10 @@ export function startBulkFrEdit({ mcp, frs, horizon = [], onDone, onFinished, cu
  * row. requests(frId) → the latest request, shown so an FR is not requested twice by accident.
  * groups: [{ label, frs }]
  */
-export function startEiRequests({ mcp, groups, preselect = [], requests = () => null, onDone }) {
+// kind "update" (Tom, 2026-11-07): No estimate issues, one "Update issue" request each (items are issues
+// mapped to { id, title, url, committed }).
+export function startEiRequests({ mcp, groups, preselect = [], requests = () => null, onDone, kind = 'create' }) {
+  const upd = kind === 'update';
   if (!mcp) return toast('Creating EIs needs the live page in claude.ai.', 'bad');
   const tag = (id) => { const r = requests(id); return r ? ` <span class="tag ${r.ei ? 'commit' : ''}">${esc(eiRequestLabel(r))} ${fd(String(r.at).slice(0, 10))}</span>` : ''; };
   const list = groups.filter((g) => g.frs.length).map((g) => `
@@ -731,9 +734,9 @@ export function startEiRequests({ mcp, groups, preselect = [], requests = () => 
         <span><b>${esc(fr.title || 'FR')}</b><span class="muted">${fr.committed ? ` · commit ${fd(String(fr.committed).slice(0, 10))}` : ''}</span>${tag(fr.id)}</span></label>`).join('')}
     </div>`).join('');
   const sheet = openSheet(`
-    <h3>Create engineering issues</h3>
-    <div class="srow muted">One request per ticked FR in the Engineering Issues app, as you: Claude writes the EI from the FR with the product-feature skill (no coding). Follow it in the app or on the FR card here.</div>
-    <div class="picklist">${list || '<div class="placeholder">No FRs without an engineering issue.</div>'}</div>
+    <h3>${upd ? 'Request estimates' : 'Create engineering issues'}</h3>
+    <div class="srow muted">${upd ? 'One "Update issue" request per ticked issue in the Engineering Issues app, as you: Claude adds the FE / BE / MOB estimate with the product-feature skill (no coding). Follow it in the app or on the issue card here.' : 'One request per ticked FR in the Engineering Issues app, as you: Claude writes the EI from the FR with the product-feature skill (no coding). Follow it in the app or on the FR card here.'}</div>
+    <div class="picklist">${list || `<div class="placeholder">${upd ? 'No issues without an estimate.' : 'No FRs without an engineering issue.'}</div>`}</div>
     <div class="srow"><b id="pickCount">0</b> selected</div>
     <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSend" disabled>Create</button></div>`);
   const picked = () => [...sheet.querySelectorAll('input[data-pick]:checked')].map((x) => x.dataset.pick);
@@ -753,7 +756,7 @@ export function startEiRequests({ mcp, groups, preselect = [], requests = () => 
     for (let i = 0; i < frs.length; i++) {
       busy(e.target, true, `Creating ${i + 1}/${frs.length}…`);
       try {
-        const row = await requestEi(mcp, frs[i]);
+        const row = upd ? await requestEiUpdate(mcp, { id: frs[i].id, name: frs[i].title, url: frs[i].url }) : await requestEi(mcp, frs[i]);
         onDone?.({ fr: frs[i], row });
       } catch (err) {
         if (err?.code === 'audit_failed') { onDone?.({ fr: frs[i], row: null }); continue; }
@@ -762,6 +765,6 @@ export function startEiRequests({ mcp, groups, preselect = [], requests = () => 
       }
     }
     closeSheet();
-    toast(`${frs.length} EI request${frs.length === 1 ? '' : 's'} sent to the Engineering Issues app. Logged.`);
+    toast(`${frs.length} ${upd ? 'estimate' : 'EI'} request${frs.length === 1 ? '' : 's'} sent to the Engineering Issues app. Logged.`);
   });
 }

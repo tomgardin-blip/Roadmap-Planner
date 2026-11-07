@@ -220,7 +220,7 @@ function issueCard({ issue, days }, skill, horizon, change, score, kept = false)
 /** Planning actions for one issue (Quarter plan row): its FRs with Edit, then the month and quarter pot buttons. */
 export function planActions(issue, horizon, score) {
   // The FR toggle sits on the row itself (Tom, 2026-10-30), so not repeated here.
-  return `${estimateLinks(issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue)}`;
+  return `${eiRequestLine(issue.id)}${estimateLinks(issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue)}`;
 }
 
 // Post in #roadmap_product about this issue (Tom, 2026-10-27).
@@ -283,7 +283,7 @@ export function listCard(issue, horizon, score, detail, extraTags = '', rm = nul
     <div class="meta">${tags}<span class="eff">${eff === 'No effort' ? eff : `${eff} d`}</span></div>
     ${detail ? `<div class="detail">${esc(detail)}</div>` : ''}
     ${frBlock(score, issue.committed, issue.id)}
-    ${estimateLinks(issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue, rm)}</div>`;
+    ${eiRequestLine(issue.id)}${estimateLinks(issue.id)}${dateButtons(issue, horizon)}${roadmapBtn(issue, rm)}</div>`;
 }
 
 /** FR card for the "no engineering issue" queue. */

@@ -3,7 +3,7 @@
 // Order per action: read the live "before" from Notion, write, then audit. A failed audit after a
 // successful write is reported, never silently dropped.
 
-import { eiRequestInput, createdRowUrl, EI_APP } from '../eiRequest.js';
+import { eiRequestInput, eiUpdateInput, createdRowUrl, EI_APP, ESTIMATE_CHANGE } from '../eiRequest.js';
 import { ROADMAP_CHANNEL, slackLink, slackUserFromSearch, channelsFromSearch } from '../roadmapPost.js';
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
@@ -247,6 +247,20 @@ export async function requestEi(mcp, fr) {
   await audit(mcp, {
     category: 'EI requested', field: EI_APP, before: '', after: row || 'Requested (no link returned)',
     frId: fr.id, itemName: fr.title || 'FR', updateId: updateId(),
+  });
+  return row;
+}
+
+/**
+ * Get a No estimate issue estimated through the Engineering Issues app (Tom, 2026-11-07): the app's "Update issue"
+ * row for the EI, as the viewer, then an audit row "EI requested" on the issue (Before "Update issue").
+ */
+export async function requestEiUpdate(mcp, issue, change = ESTIMATE_CHANGE) {
+  const res = await call(mcp, NOTION, 'notion-create-pages', eiUpdateInput(issue, change));
+  const row = createdRowUrl(res);
+  await audit(mcp, {
+    category: 'EI requested', field: EI_APP, before: 'Update issue', after: row || 'Requested (no link returned)',
+    reason: change, issueId: issue.id, itemName: issue.name || 'Issue', updateId: updateId(),
   });
   return row;
 }

@@ -306,6 +306,16 @@ function shell() {
       if (entry) startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No estimate', entries: [entry] }], target: ESTIMATE_TARGETS.qai, preselect: [entry.issue.id], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
     }
+    const eu = e.target.closest('button[data-eiupd]');
+    if (eu) {
+      // No estimate issues: an "Update issue" request in the Engineering Issues app (Tom, 2026-11-07).
+      const asItem = (i) => ({ id: i.id, title: i.name, url: i.url, committed: i.committed });
+      const groups = GROUPS.map((g) => ({ label: `${g.label} · No estimate`, frs: (state.queues?.[g.key].noEstimate || []).map((x) => asItem(x.issue)) }));
+      const one = eu.dataset.eiupd !== 'bulk' ? eu.dataset.eiupd : null;
+      if (one && !groups.some((g) => g.frs.some((f) => f.id === one))) { const i = shownIssue(one) || state.run?.issues.find((x) => x.id === one); if (i) groups.unshift({ label: 'This issue', frs: [asItem(i)] }); }
+      openEiRequests(groups, one ? [one] : [], 'update');
+      return;
+    }
     const er = e.target.closest('button[data-eireq]');
     if (er) {
       // Create EIs through the Engineering Issues app (Tom, 2026-11-07): bulk from Prep, or one FR card.
@@ -323,11 +333,11 @@ function shell() {
         startEstimatePost({ mcp: state.mcp, groups: [{ label: 'No team: invisible in capacity', entries: (state.risk?.noTeam || []).map((e) => ({ ...e, frs: [] })) }], target: ESTIMATE_TARGETS.qaiTeam, onPosted: estimatePosted, posted: estimatePostsOf });
         return;
       }
-      // FRs with no engineering issue go through the Engineering Issues app now (Tom, 2026-11-07), not the
-      // product-feature Slack post; No estimate issues keep it.
+      // FRs with no engineering issue and No estimate issues go through the Engineering Issues app now (Tom,
+      // 2026-11-07); this is the @Qai post (#dev_effort_estimate) and the No team DM.
       const groups = GROUPS.flatMap((g) => [
         { label: `${g.label} · No estimate`, entries: state.queues?.[g.key].noEstimate || [] },
-        ...(ep.dataset.estpost === 'productFeature' ? [] : [{ label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) }]),
+        ...([{ label: `${g.label} · No engineering issue`, entries: (state.queues?.[g.key].noIssue || []).filter((e) => e.fr.assignedTeam === 'Engineering').map((e) => frEntry(e.fr)) }]),
       ]);
       startEstimatePost({ mcp: state.mcp, groups, target: ESTIMATE_TARGETS[ep.dataset.estpost], onPosted: estimatePosted, posted: estimatePostsOf });
       return;
@@ -424,7 +434,7 @@ function qualityFix(key, id) {
       { label: 'Ask the team lead in #roadmap_product', desc: 'Your message, tagging the lead', run: post() },
     ],
     plannedNoEffort: [
-      { label: 'Ask Claude for an estimate', desc: 'Post in #product-create-ei-skill-trigger: @claude_code runs the product-feature skill', run: issue && estimate(ESTIMATE_TARGETS.productFeature, { issue, frs: state.scores?.get(issue.id)?.frs || [] }) },
+      { label: 'Request an estimate in the Engineering Issues app', desc: 'Update issue request: Claude adds the FE/BE/MOB estimate (product-feature), as you', run: issue && (() => openEiRequests([{ label: 'Planned without effort', frs: [{ id: issue.id, title: issue.name, url: issue.url, committed: issue.committed }] }], [issue.id], 'update')) },
       { label: 'Ask @Qai to estimate', desc: 'Post in #dev_effort_estimate (the old flow)', run: issue && estimate(ESTIMATE_TARGETS.qai, { issue, frs: state.scores?.get(issue.id)?.frs || [] }) },
       { label: 'Take it out of the plan', desc: 'Clear Start and End until it has an estimate', run: unplan('No estimate yet') },
     ],
@@ -450,12 +460,12 @@ function estimatePosted({ item, link, channel }) {
 }
 
 /** Engineering Issues app requests (Tom, 2026-11-07): the sheet, and what was requested this session. */
-function openEiRequests(groups, preselect) {
-  startEiRequests({ mcp: state.mcp, groups, preselect, requests: (id) => state.eiReq?.get(id) || null,
+function openEiRequests(groups, preselect, kind = 'create') {
+  startEiRequests({ mcp: state.mcp, groups, preselect, kind, requests: (id) => state.eiReq?.get(id) || null,
     onDone: ({ fr, row }) => {
       state.eiReq = new Map(state.eiReq || []);
-      state.eiReq.set(fr.id, { state: 'Requested', ei: null, message: '', at: new Date().toISOString(), url: row });
-      state.audit = [{ category: 'EI requested', field: 'Engineering Issues app', after: row || '', frId: fr.id, itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])];
+      state.eiReq.set(fr.id, { kind, state: 'Requested', ei: null, message: '', at: new Date().toISOString(), url: row });
+      state.audit = [{ category: 'EI requested', field: 'Engineering Issues app', before: kind === 'update' ? 'Update issue' : '', after: row || '', ...(kind === 'update' ? { issueId: fr.id } : { frId: fr.id }), itemName: fr.title, at: new Date().toISOString() }, ...(state.audit || [])];
       if (state.tab !== 'capacity') draw();
       renderDrawer();
     } });

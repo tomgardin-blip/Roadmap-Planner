@@ -7,7 +7,7 @@ import { ldCapacityQuery, parseLdCapacity } from './capacityFeed.js';
 import { parseComments } from '../notion/comments.js';
 import { lastSync, overlayQueryInput, parseOverlay, applyOverlay, OVERLAY_PAGE_SIZE, frOverlayQueryInput, parseFrOverlay, applyFrOverlay, goliveMap, recommitIssues, ISSUES_DS, wontDoQueryInput, parseWontDo, issueTextQueryInput, parseIssueTexts } from './notion.js';
 import { auditQueryInput, parseAudit, AUDIT_PAGE_SIZE } from '../history.js';
-import { eiQueueQueryInput, eiRequestsByFr } from '../eiRequest.js';
+import { eiQueueQueryInput, eiRequestsByItem } from '../eiRequest.js';
 import { versionsAtQuery, touchedSinceQuery, parseVersions, touchedIds } from '../changes.js';
 import { baselineQueryInput, parseBaseline, BASELINE_PAGE_SIZE, missingBaselines, baselineRowsInputs, totalEffort } from '../notion/baseline.js';
 
@@ -372,7 +372,7 @@ export async function loadLastEdited(mcp, ids) {
   return out;
 }
 
-/** Engineering Issues app queue: the latest create request per FR, last 60 days. Map(FR id → request). */
+/** Engineering Issues app queue: the latest request per FR (create) or EI (update), last 60 days. */
 export async function loadEiRequests(mcp, now = Date.now()) {
   const since = new Date(now - 60 * 864e5).toISOString();
   const all = [];
@@ -382,5 +382,5 @@ export async function loadEiRequests(mcp, now = Date.now()) {
     all.push(...results);
     if (!page?.has_more && results.length < 100) break;
   }
-  return eiRequestsByFr(all);
+  return eiRequestsByItem(all);
 }
