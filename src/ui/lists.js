@@ -248,11 +248,20 @@ export function renderQuarterPlan(el, { run, grid, horizon, quarterKey, team = '
 }
 
 // Possible duplicate issues (Tom, 2026-11-02): pairs Claude judged duplicates, with a post to the PMs.
-function dupSection(d, readOnly) {
+function dupSection(d, readOnly, scores = null) {
   const title = 'Possible duplicate issues';
   if (d.candidates == null) return section('dq-dups', title, '…', 'needs the backlog', '<div class="placeholder">Loading the backlog from Lightdash…</div>');
   const plan = (i) => (i.status === "Won't do" ? 'Won\'t do' : i.start || i.end ? (i.start && i.start !== i.end ? `${fd(i.start)} → ${fd(i.end)}` : `Pot · ${fd(i.end || i.start)}`) : 'Not planned');
-  const side = (i) => `<div class="t">${link(i.url, i.name)}</div><div class="meta"><span class="tag">${esc(i.team || 'No team')}</span><span class="tag ${i.status === "Won't do" ? 'late' : ''}">EI: ${esc(i.status || '–')}</span>${i.status === "Won't do" ? '' : `<span class="tag">${esc(plan(i))}</span>`}${i.committed ? `<span class="tag commit">Commit ${fd(String(i.committed).slice(0, 10))}</span>` : ''}</div>`;
+  // Linked FRs per issue (Tom, 2026-11-08): open FRs of signed customers, as everywhere in the planner; the
+  // titles and customers in the tooltip. Won't do issues are not scored, so they show none.
+  const frTag = (i) => {
+    const sc = scores?.get(i.id);
+    if (!sc) return '';
+    const n = sc.frs?.length || 0;
+    const tip = (sc.frs || []).map((f) => `${f.title || 'FR'}${f.priority ? ` (${f.priority})` : ''}`).join('\n');
+    return `<span class="tag ${n ? 'qw' : ''}"${tip ? ` title="${esc(tip)}"` : ''}>${n} FR${n === 1 ? '' : 's'}${sc.customers ? ` · ${sc.customers} customer${sc.customers === 1 ? '' : 's'}` : ''}</span>`;
+  };
+  const side = (i) => `<div class="t">${link(i.url, i.name)}</div><div class="meta"><span class="tag">${esc(i.team || 'No team')}</span><span class="tag ${i.status === "Won't do" ? 'late' : ''}">EI: ${esc(i.status || '–')}</span>${i.status === "Won't do" ? '' : `<span class="tag">${esc(plan(i))}</span>`}${i.committed ? `<span class="tag commit">Commit ${fd(String(i.committed).slice(0, 10))}</span>` : ''}${frTag(i)}</div>`;
   const tools = readOnly || !d.live ? '' : !d.loaded ? '<div class="srow muted">Connecting to Claude…</div>'
     : !d.can ? '<div class="srow muted">The duplicate check needs Claude, which this page cannot use in this view.</div>'
     : d.running ? `<div class="lhead small">${esc(d.phase || 'Checking…')}${d.total ? ` · ${d.done} / ${d.total}` : ''} <button type="button" class="fredit" data-dupstop>Stop</button></div>`
@@ -287,6 +296,6 @@ export function renderQuality(el, { quality, horizon, scores, loading, team, rea
     const card = (e) => (e.fr ? qualityFrCard(e.fr, e.detail, e.issue, fix(e)) : listCard(e.issue, horizon, scores?.get(e.issue.id), e.detail, fix(e), c.key === 'blockedNoBlocker' ? { kind: 'blocked' } : null));
     h += section(`dq-${c.key}`, c.label, list.length, c.fix, capped(list, card, `dq-${c.key}`));
   }
-  if (dups) h += dupSection(dups, readOnly);
+  if (dups) h += dupSection(dups, readOnly, scores);
   el.innerHTML = `<div class="lists">${h}</div>`;
 }
