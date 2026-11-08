@@ -90,9 +90,9 @@ export function mergeFyiMessage(dup, target, leads, reason, moved) {
   return [
     `${who} FYI: merged 2 duplicate engineering issues.`.trim(),
     '',
-    `**Kept:** ${linked(target)} · ${target.team || 'no team'}`,
-    `**Duplicate:** ${linked(dup)} · ${dup.team || 'no team'} (status Duplicate, dates cleared)`,
-    `${n(moved)} moved to the kept issue.`,
+    `• **Kept:** ${linked(target)} · ${target.team || 'no team'}`,
+    `• **Duplicate:** ${linked(dup)} · ${dup.team || 'no team'} (status Duplicate, dates cleared)`,
+    `• **FRs moved:** ${moved}`,
     ...(reason ? ['', `Why: ${reason}`] : []),
   ].join('\n');
 }

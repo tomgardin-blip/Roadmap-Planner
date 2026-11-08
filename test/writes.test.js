@@ -172,7 +172,7 @@ test('customer channel: parse the search, pick the word, build the message', asy
   const res = { results: '## Channels (2 results)\n### Result 1 of 2\nName: #customer_acme_north\nPermalink: [link](https://x.slack.com/archives/C0AAA111)\nIs Archived: false\n---\n### Result 2 of 2\nName: #onboarding_acme\nPermalink: [link](https://x.slack.com/archives/C0BBB222)\nIs Archived: true\n' };
   assert.deepEqual(channelsFromSearch(res), [{ id: 'C0AAA111', name: 'customer_acme_north' }]);
   assert.equal(channelKeyword('The Acme Logistics B.V.'), 'acme');
-  assert.equal(customerChannelMessage({ comment: 'Moved to Q2', fr: { name: 'FR 1', url: 'https://example.invalid/f' }, customer: 'Acme' }), '@Owner Moved to Q2\nFR: [FR 1](https://example.invalid/f) (Acme)');
+  assert.equal(customerChannelMessage({ comment: 'Moved to Q2', fr: { name: 'FR 1', url: 'https://example.invalid/f' }, customer: 'Acme' }), '@Owner Moved to Q2\n\n• **FR:** [FR 1](https://example.invalid/f) (Acme)');
 });
 
 test('customer channel: picked from the name when one channel fits best, asked on a tie', async () => {

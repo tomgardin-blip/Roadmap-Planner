@@ -32,6 +32,7 @@ test('an issue whose commit a Pushback Req GL FR sets leaves "Planned after the 
 
 test('reminder DM names the FR, the customer and the next step', () => {
   const m = pushbackReminder({ fr: { name: 'FR f1', url: 'https://example.invalid/f1' }, customer: 'Acme', since: '2026-10-20T09:00:00Z' });
-  assert.match(m, /^Hi @Owner, reminder: we set \[FR f1\]\(https:\/\/example.invalid\/f1\) for Acme to "Pushback Req GL" on 20\/10\/2026/);
+  assert.match(m, /^Hi @Owner, reminder: we set this FR for Acme to "Pushback Req GL" on 20\/10\/2026/);
+  assert.match(m, /\n\n• \*\*FR:\*\* \[FR f1\]\(https:\/\/example.invalid\/f1\) \(Acme\)$/);
   assert.match(m, /Needed after go-live/);
 });

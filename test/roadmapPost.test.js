@@ -8,7 +8,7 @@ test('roadmap post: Tom\'s text, then link, planned start and end, committed', (
   assert.equal(plannedText({ start: '2026-10-26', end: '2026-11-06' }), '26/10/2026 → 06/11/2026');
   assert.equal(plannedText({}), 'not planned (no dates)');
   const m = roadmapMessage('  Can we plan a week for this?  ', { name: 'Orders | X', url: 'https://app.notion.com/p/abc', start: '2027-01-29', end: '2027-01-29', committed: '2027-01-15' });
-  assert.equal(m, 'Can we plan a week for this?\n\n• **Engineering issue:** [Orders | X](https://app.notion.com/p/abc)\n• **Planned:** 29/01/2027 (Jan pot)\n• **Committed:** 15/01/2027');
+  assert.equal(m, 'Can we plan a week for this?\n\n• **EI:** [Orders | X](https://app.notion.com/p/abc)\n• **Planned:** 29/01/2027 (Jan pot)\n• **Committed:** 15/01/2027');
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution']), /^<@U041Z01AKFC> Hi\n\n/);
   assert.match(roadmapMessage('Hi', { name: 'X', url: 'u' }, TEAM_LEADS['Trip Execution'], { preview: true }), /^@Jone Hoong Hi/);
   assert.match(roadmapMessage('Hi', { name: 'X' }), /^Hi\n\n.*\*\*Committed:\*\* none$/s);
@@ -29,15 +29,15 @@ test('roadmap post templates: one line per issue, linked commit source, concise 
   const m = dependencyMessage(a, b, [TEAM_LEADS['Application Platform']]);
   assert.equal(m, [
     '@Wim Onderbeke Is this dependency correct?', '',
-    '**Blocked:** [A](ua) · Application Platform · 16/11 → 18/12/2026 · commit 31/12/2026 (via [C](uc))',
-    '**Blocker:** [B](ub) · Application Platform · 02/11 → 25/12/2026 · commit 31/12/2026 (inherited from it)', '',
+    '• **Blocked:** [A](ua) · Application Platform · 16/11 → 18/12/2026 · commit 31/12/2026 (via [C](uc))',
+    '• **Blocker:** [B](ub) · Application Platform · 02/11 → 25/12/2026 · commit 31/12/2026 (inherited from it)', '',
     '⚠️ The blocker ends 25/12/2026, after the blocked issue starts 16/11/2026.',
     '',
     'Could u have a look and advise so we can amend accordingly?',
   ].join('\n'));
   assert.match(withMentions(m, [TEAM_LEADS['Application Platform']]), /^<@U0421DD1LLC> Is this/);
   const p = { id: 'p', name: 'P', url: 'up', team: 'Trip Execution', start: '2027-03-26', end: '2027-03-26', committed: '2027-01-04', commitSrc: { customers: ['Tyneside Express'] } };
-  assert.match(blockedMessage(p, [TEAM_LEADS['Trip Execution']], []), /\*\*Issue:\*\* \[P\]\(up\) · Trip Execution · 26\/03\/2027 \(Q1 pot\) · commit 04\/01\/2027 \(Tyneside Express\)\n\*\*Blocked by:\*\* nothing linked/);
+  assert.match(blockedMessage(p, [TEAM_LEADS['Trip Execution']], []), /• \*\*Issue:\*\* \[P\]\(up\) · Trip Execution · 26\/03\/2027 \(Q1 pot\) · commit 04\/01\/2027 \(Tyneside Express\)\n• \*\*Blocked by:\*\* nothing linked/);
   assert.match(blockedMessage(p, [], [b]), /\*\*Blocked by:\*\* \[B\]\(ub\)/);
   assert.match(roadmapMessage('x', { ...a }), /set by the issue it blocks: \[C\]\(uc\)/);
   assert.match(blockedMessage({ ...p, name: '[Elasticsearch] Global search' }, []), /\[\(Elasticsearch\) Global search\]\(up\)/);
@@ -46,9 +46,9 @@ test('roadmap post templates: one line per issue, linked commit source, concise 
 test('ask COM/AM: friendly DM with issue, FR, customer and the ask; Slack user from search by email', async () => {
   const { askOwnerMessage, slackUserFromSearch } = await import('../src/roadmapPost.js');
   const m = askOwnerMessage({ ownerName: 'Yana Kashparova', issue: { name: 'Issue X', url: 'ux', committed: '2027-01-15' }, fr: { name: 'FR Y', url: 'uy', priority: 'Needed for go-live' }, customer: 'Salva', ctx: { kind: 'over', quarterLabel: 'Q1 2027', team: 'Transport Planning' } });
-  assert.equal(m, "Hi @Yana Kashparova, we're planning Q1 2027 and Transport Planning is overbooked. [Issue X](ux) is committed for 15/01/2027 because of Salva's request [FR Y](uy) (Needed for go-live). Would it be ok to lower the priority / move the date? Could u check with Salva and let me know? Thx!");
+  assert.equal(m, "Hi @Yana Kashparova, we're planning Q1 2027 and Transport Planning is overbooked. The EI below is committed for 15/01/2027 because of Salva's request (Needed for go-live). Would it be ok to lower the priority / move the date? Could u check with Salva and let me know? Thx!\n\n• **FR:** [FR Y](uy) (Salva)\n• **EI:** [Issue X](ux)");
   const late = askOwnerMessage({ ownerName: null, issue: { name: 'I', url: 'u', start: '2027-03-26', end: '2027-03-26', committed: '2027-01-04' }, fr: { name: 'F', url: 'f', priority: 'High' }, customer: 'C', ctx: { kind: 'late' } });
-  assert.match(late, /^Hi, \[I\]\(u\) is planned 26\/03\/2027 \(Q1 pot\), after its committed date 04\/01\/2027\. That date is set because of C's request \[F\]\(f\) \(High\)\./);
+  assert.match(late, /^Hi, the EI below is planned 26\/03\/2027 \(Q1 pot\), after its committed date 04\/01\/2027\. That date is set because of C's request \(High\)\./);
   const res = { results: '# Search Results\n## Users (1 results)\n### Result 1 of 1\nName: Buysse\nUser ID: U02SD5QCSSH\nTitle: x\nEmail: sam.buysse@qargo.com\n' };
   assert.deepEqual(slackUserFromSearch(res, 'Sam.Buysse@qargo.com'), { id: 'U02SD5QCSSH', name: 'Buysse' });
   assert.equal(slackUserFromSearch(res, 'other@qargo.com'), null);

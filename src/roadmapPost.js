@@ -30,7 +30,7 @@ export function plannedText({ start, end } = {}) {
 export function roadmapFooter(issue) {
   const link = issue.url ? linked({ ...issue, name: issue.name || 'Engineering issue' }) : (issue.name || 'Engineering issue');
   return [
-    `• **Engineering issue:** ${link}`,
+    `• **EI:** ${link}`,
     `• **Planned:** ${plannedText(issue)}`,
     `• **Committed:** ${issue.committed ? `${formatDate(String(issue.committed).slice(0, 10))}${issue.commitSrc ? ` (${longSource(issue.commitSrc)})` : ''}` : 'none'}`,
   ].join('\n');
@@ -83,7 +83,10 @@ function shortPlan(i) {
 const commitShort = (i, from) => (i.committed ? `commit ${formatDate(String(i.committed).slice(0, 10))}${shortSource(i.commitSrc, from)}` : 'no commit');
 // Both templates end with one ask (Tom, 2026-10-28, replaces the Correct / Not correct options).
 const ASK = 'Could u have a look and advise so we can amend accordingly?';
-const line = (label, i, from) => `**${label}:** ${linked(i)} · ${i.team || 'no team'} · ${shortPlan(i)} · ${commitShort(i, from)}`;
+// Every message (Tom, 2026-11-08): the text on top, then one bullet per FR / EI underneath.
+const line = (label, i, from) => `• **${label}:** ${linked(i)} · ${i.team || 'no team'} · ${shortPlan(i)} · ${commitShort(i, from)}`;
+const bullet = (label, i, extra = '') => `• **${label}:** ${linked(i)}${extra}`;
+const bullets = (...xs) => xs.filter(Boolean).join('\n');
 
 /**
  * At risk → "Dependency in the wrong order" (Tom, 2026-10-28): ask the teams' leads whether the "Blocked by"
@@ -134,7 +137,7 @@ export function blockedMessage(issue, leads, blockers = []) {
     `${who(leads)} Is this still blocked/on hold?`.trim(),
     '',
     line('Issue', issue),
-    ...(blockers.length ? blockers.map((b) => line('Blocked by', b, issue)) : ['**Blocked by:** nothing linked']),
+    ...(blockers.length ? blockers.map((b) => line('Blocked by', b, issue)) : ['• **Blocked by:** nothing linked']),
     '',
     ASK,
   ].join('\n');
@@ -156,9 +159,9 @@ export function askOwnerMessage({ ownerName, issue, fr, customer, ctx }) {
   const hi = ownerName ? `Hi @${ownerName}` : 'Hi';
   const commit = issue.committed ? formatDate(String(issue.committed).slice(0, 10)) : '–';
   const why = ctx.kind === 'over'
-    ? `we're planning ${ctx.quarterLabel} and ${ctx.team} is overbooked. ${linked(issue)} is committed for ${commit}`
-    : `${linked(issue)} is planned ${shortPlan(issue)}, after its committed date ${commit}. That date is set`;
-  return `${hi}, ${why} because of ${customer}'s request ${linked(fr)} (${fr.priority || 'no priority'}). Would it be ok to lower the priority / move the date? Could u check with ${customer} and let me know? Thx!`;
+    ? `we're planning ${ctx.quarterLabel} and ${ctx.team} is overbooked. The EI below is committed for ${commit}`
+    : `the EI below is planned ${shortPlan(issue)}, after its committed date ${commit}. That date is set`;
+  return `${hi}, ${why} because of ${customer}'s request (${fr.priority || 'no priority'}). Would it be ok to lower the priority / move the date? Could u check with ${customer} and let me know? Thx!\n\n${bullets(bullet('FR', fr, ` (${customer})`), bullet('EI', issue))}`;
 }
 
 /**
@@ -166,9 +169,9 @@ export function askOwnerMessage({ ownerName, issue, fr, customer, ctx }) {
  * make the go-live. "@Owner" becomes the person. d: { fr: {name,url}, issue?, customer, since? }
  */
 export function pushbackReminder(d) {
-  const iss = d.issue ? ` ${linked(d.issue)} is planned ${shortPlan(d.issue)}.` : '';
+  const iss = d.issue ? ` The EI is planned ${shortPlan(d.issue)}.` : '';
   const when = d.since ? ` on ${formatDate(String(d.since).slice(0, 10))}` : '';
-  return `Hi @Owner, reminder: we set ${linked(d.fr)} for ${d.customer} to "Pushback Req GL"${when}: we can't deliver it before the go-live.${iss} Could u let ${d.customer} know and then set the priority to "Needed after go-live"? If they don't accept, set it back to "Needed for go-live" and let me know. Thx!`;
+  return `Hi @Owner, reminder: we set this FR for ${d.customer} to "Pushback Req GL"${when}: we can't deliver it before the go-live.${iss} Could u let ${d.customer} know and then set the priority to "Needed after go-live"? If they don't accept, set it back to "Needed for go-live" and let me know. Thx!\n\n${bullets(bullet('FR', d.fr, ` (${d.customer})`), d.issue && bullet('EI', d.issue))}`;
 }
 
 /** slack_search_channels result → [{ id, name }] (Tom, 2026-10-30: customer channels for the COM/AM tag). */
@@ -212,8 +215,7 @@ export const channelKeyword = (customer) => (String(customer || '').toLowerCase(
  * Slack, the Notion comment without a tag. "@Owner" becomes the person.
  */
 export function customerChannelMessage({ comment, fr, issue, customer }) {
-  const links = [`FR: ${linked(fr)}${customer ? ` (${customer})` : ''}`, issue ? `Issue: ${linked(issue)}` : null].filter(Boolean).join(' · ');
-  return `@Owner ${comment}\n${links}`;
+  return `@Owner ${comment}\n\n${bullets(bullet('FR', fr, customer ? ` (${customer})` : ''), issue && bullet('EI', issue))}`;
 }
 
 /** Default text when an FR goes to "Pushback Req GL" without a comment (Tom, 2026-10-31: a Slack post every time). */
@@ -236,25 +238,27 @@ export function slackUserFromSearch(result, email) {
  * owner's name (and becomes a mention on Send). d: { fr: {name,url,priority}, issue?, customer, golive?, stage?, committed? }
  */
 export function qualityDm(check, d) {
-  const fr = linked(d.fr);
-  const iss = d.issue ? linked(d.issue) : null;
   const gl = d.golive ? formatDate(d.golive) : null;
-  switch (check) {
-    case 'goLivePassed':
-      return `Hi @Owner, ${fr} for ${d.customer} is "${d.fr.priority}", but the go-live in Notion (${gl}) has passed. Did they go live without it, or did the go-live move? If it moved, could u update the go-live date on the deal? Thx!`;
-    case 'goLiveCustomerLive':
-      return `Hi @Owner, ${fr} for ${d.customer} is still "${d.fr.priority}", but the deal is ${d.stage}. Is it still needed? If so, which priority should it get now? Thx!`;
-    case 'goLiveNoDate':
-      return `Hi @Owner, ${fr} for ${d.customer} is "${d.fr.priority}", but the deal has no go-live date${d.stage ? ` (stage ${d.stage})` : ''}, so it has no committed date. Could u set the go-live, or let me know if it's no longer needed? Thx!`;
-    case 'frCommitPast':
-      return `Hi @Owner, ${fr} for ${d.customer} was committed for ${formatDate(d.committed)}, but ${iss} is still ${d.issue?.status || 'open'}. Could u check with ${d.customer} and agree a new date? Thx!`;
-    case 'issueDoneFrOpen':
-      return `Hi @Owner, ${iss} is Done, so ${fr} for ${d.customer} is delivered. Could u let ${d.customer} know and close the FR? Thx!`;
-    case 'integrationTagged':
-      return `Hi @Owner, ${fr} for ${d.customer} is tagged both Feature Request and Integrations. Is it product work for the roadmap, or an integration? If it's an integration, could u change the Type/Category so it leaves the roadmap? Thx!`;
-    default:
-      return `Hi @Owner, could u have a look at ${fr} for ${d.customer}? Thx!`;
-  }
+  const list = bullets(bullet('FR', d.fr, d.customer ? ` (${d.customer})` : ''), d.issue && bullet('EI', d.issue));
+  const text = (() => {
+    switch (check) {
+      case 'goLivePassed':
+        return `Hi @Owner, this FR for ${d.customer} is "${d.fr.priority}", but the go-live in Notion (${gl}) has passed. Did they go live without it, or did the go-live move? If it moved, could u update the go-live date on the deal? Thx!`;
+      case 'goLiveCustomerLive':
+        return `Hi @Owner, this FR for ${d.customer} is still "${d.fr.priority}", but the deal is ${d.stage}. Is it still needed? If so, which priority should it get now? Thx!`;
+      case 'goLiveNoDate':
+        return `Hi @Owner, this FR for ${d.customer} is "${d.fr.priority}", but the deal has no go-live date${d.stage ? ` (stage ${d.stage})` : ''}, so it has no committed date. Could u set the go-live, or let me know if it's no longer needed? Thx!`;
+      case 'frCommitPast':
+        return `Hi @Owner, this FR for ${d.customer} was committed for ${formatDate(d.committed)}, but the EI is still ${d.issue?.status || 'open'}. Could u check with ${d.customer} and agree a new date? Thx!`;
+      case 'issueDoneFrOpen':
+        return `Hi @Owner, the EI is Done, so this FR for ${d.customer} is delivered. Could u let ${d.customer} know and close the FR? Thx!`;
+      case 'integrationTagged':
+        return `Hi @Owner, this FR for ${d.customer} is tagged both Feature Request and Integrations. Is it product work for the roadmap, or an integration? If it's an integration, could u change the Type/Category so it leaves the roadmap? Thx!`;
+      default:
+        return `Hi @Owner, could u have a look at this FR for ${d.customer}? Thx!`;
+    }
+  })();
+  return `${text}\n\n${list}`;
 }
 
 /** Data quality → "Blocker already Done": ask the lead to remove the stale "Blocked by" link. */
@@ -263,7 +267,7 @@ export function staleBlockerMessage(issue, leads, blockers) {
     `${who(leads)} The "Blocked by" on this issue points to work that is already finished.`.trim(),
     '',
     line('Issue', issue),
-    ...blockers.map((b) => `**Blocked by:** ${linked(b)} · ${b.status}`),
+    ...blockers.map((b) => `• **Blocked by:** ${linked(b)} · ${b.status}`),
     '',
     'Could u remove the link (or link the real blocker) so the planning is right? Thx!',
   ].join('\n');
