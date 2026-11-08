@@ -4,7 +4,7 @@
 import { formatDate, potQuarters, potMonths } from '../periods.js';
 import { PUSHBACK_REQ } from '../pushbackReq.js';
 import { FR_PRIORITIES, FR_STATUS_DONE, FR_STATUS_WRITES, EI_STATUSES, REASONS, effectiveCommitted, goLiveDeadline, moveWarnings, isAllowed, TEST_FR } from '../notion/writes.js';
-import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack, requestEi, requestEiUpdate } from '../data/writer.js';
+import { postEstimate, postRoadmap, askOwner, findSlackUser, findChannels, postCustomerChannel, moveIssue, editFr, readFrLive, readIssue, setIssueStatus, findOwner, adviseOwner, whoAmI, postSlack, requestEi, requestEiUpdate, readMerge, mergeIssues } from '../data/writer.js';
 import { eiRequestLabel } from '../eiRequest.js';
 import { ESTIMATE_TARGETS, estimateLines, estimatePosts } from '../estimate.js';
 import { ROADMAP_CHANNEL, roadmapMessage, withMentions, askOwnerMessage, channelKeyword, customerChannelMessage, rankChannels, pushbackDefaultText } from '../roadmapPost.js';
@@ -766,5 +766,58 @@ export function startEiRequests({ mcp, groups, preselect = [], requests = () => 
     }
     closeSheet();
     toast(`${frs.length} ${upd ? 'estimate' : 'EI'} request${frs.length === 1 ? '' : 's'} sent to the Engineering Issues app. Logged.`);
+  });
+}
+
+/**
+ * Merge a duplicate pair (Tom, 2026-11-08): pick the issue that stays, give the reason, see what will change
+ * (read live from Notion), Merge. Then the FYI in #roadmap_product, as the usual editable preview.
+ * pair: { a, b } (issues with id, name, url, team); fyi({ dup, target, reason, moved }) → opens the post.
+ */
+export function startMerge({ mcp, pair, onMerged, fyi }) {
+  if (!mcp) return toast('Merging needs the live page in claude.ai.', 'bad');
+  const opt = (i, k) => `<label class="pickrow"><input type="radio" name="mKeep" value="${k}"${k === 'a' ? ' checked' : ''}><span><b>Keep</b> ${esc(i.name)}<span class="muted"> · ${esc(i.team || 'no team')} · ${esc(i.status || '–')}</span></span></label>`;
+  const sheet = openSheet(`
+    <h3>Merge duplicate issues</h3>
+    <div class="srow muted">The product plugin's mark-duplicate steps, as you: the other issue's FRs move to the one you keep, it gets Status Duplicate, its assignees move to Contributors, its dates are cleared, and both get a comment. Then an FYI in #roadmap_product.</div>
+    <div class="picklist">${opt(pair.a, 'a')}${opt(pair.b, 'b')}</div>
+    <label class="sfld">Why they are the same (required, goes in the comment and the FYI) <textarea id="mWhy" rows="2" class="smsg" maxlength="600"></textarea></label>
+    <div class="srow" id="mPlan"><span class="muted">Reading both issues from Notion…</span></div>
+    <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="mGo" disabled>Merge</button></div>`);
+  const why = sheet.querySelector('#mWhy'); why.value = pair.why || '';
+  let plans = {}; let busyNow = false;
+  const keep = () => sheet.querySelector('input[name=mKeep]:checked').value;
+  const sides = () => (keep() === 'a' ? { target: pair.a, dup: pair.b } : { target: pair.b, dup: pair.a });
+  const render = async () => {
+    const k = keep(); const { dup, target } = sides();
+    const box = sheet.querySelector('#mPlan');
+    if (!plans[k]) { box.innerHTML = '<span class="muted">Reading both issues from Notion…</span>'; try { plans[k] = await readMerge(mcp, dup.id, target.id); } catch (err) { box.innerHTML = `<span class="swarn">Could not read the issues: ${esc(explainError(NOTION, err))}</span>`; return; } }
+    if (k !== keep()) return;
+    const p = plans[k].plan;
+    box.innerHTML = `<b>Changes</b><ul class="cl">
+      <li>${p.frs.length ? `${p.frs.length} feature request${p.frs.length === 1 ? '' : 's'} move to <b>${esc(target.name)}</b>` : 'No feature requests to move'}</li>
+      <li><b>${esc(dup.name)}</b>: Status ${esc(p.dup.status || '–')} → Duplicate</li>
+      <li>${p.movedPeople.length ? `${p.movedPeople.length} assignee${p.movedPeople.length === 1 ? '' : 's'} (Assigned to, Preplanned on) move to Contributors` : 'No assignments to clear'}</li>
+      <li>${p.clearDates ? `Start and End (${esc(p.dup.start || '–')} / ${esc(p.dup.end || '–')}) cleared` : 'No dates to clear'}</li>
+      <li>A comment on both issues</li></ul>`;
+    sheet.querySelector('#mGo').disabled = busyNow || !why.value.trim();
+  };
+  sheet.addEventListener('change', (e) => { if (e.target.name === 'mKeep') render(); });
+  why.addEventListener('input', () => { sheet.querySelector('#mGo').disabled = busyNow || !why.value.trim() || !plans[keep()]; });
+  render();
+  sheet.querySelector('#mGo').addEventListener('click', async (e) => {
+    const k = keep(); const { dup, target } = sides(); const plan = plans[k]?.plan; const reason = why.value.trim();
+    if (!plan || !reason) return;
+    busyNow = true; busy(e.target, true, 'Merging…');
+    let report;
+    try { report = await mergeIssues(mcp, { plan, reason, onStep: (s) => busy(e.target, true, s) }); } catch (err) {
+      busyNow = false; busy(e.target, false, 'Merge'); return toast(`Not merged: ${explainError(NOTION, err)}`, 'bad');
+    }
+    closeSheet();
+    onMerged?.({ dup, target, report });
+    const moved = report.moved + report.already;
+    const problems = report.errors.length ? ` ${report.errors.length} step${report.errors.length === 1 ? '' : 's'} failed: ${report.errors.slice(0, 3).join('; ')}.` : '';
+    toast(`Merged into ${target.name}: ${moved} FR${moved === 1 ? '' : 's'} on it${report.dupUpdated ? ', duplicate closed' : ''}.${problems}`, report.errors.length ? 'bad' : '');
+    fyi?.({ dup, target, reason, moved });
   });
 }

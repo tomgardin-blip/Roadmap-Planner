@@ -269,7 +269,7 @@ function dupSection(d, readOnly, scores = null) {
   const err = d.error ? `<div class="srow swarn">${esc(d.error)}</div>` : '';
   const card = (p) => `<div class="issue dup">${p.wontDo ? '<div class="meta"><span class="tag late">Duplicates a Won\'t do issue: PO to decide</span></div>' : ''}${side(p.a)}<div class="muted" style="margin:4px 0">and</div>${side(p.b)}
     <div class="detail">Claude ${p.score}/100${p.why ? `: ${esc(p.why)}` : ''}</div>
-    ${readOnly ? '' : `<div class="cardacts"><button type="button" class="fredit" data-duppost="${p.key}" title="Ready-made post in #roadmap_product tagging the leads of both teams, editable before Send">Ask PMs in #roadmap_product</button><button type="button" class="fredit" data-dupno="${p.key}" title="Logged; the pair never shows again">Not a duplicate</button></div>`}</div>`;
+    ${readOnly ? '' : `<div class="cardacts"><button type="button" class="fredit primary" data-dupmerge="${p.key}" title="Pick the issue to keep: FRs move to it, the other becomes Duplicate (mark-duplicate steps), then an FYI in #roadmap_product">Merge…</button><button type="button" class="fredit" data-duppost="${p.key}" title="Ready-made post in #roadmap_product tagging the leads of both teams, editable before Send">Ask PMs in #roadmap_product</button><button type="button" class="fredit" data-dupno="${p.key}" title="Logged; the pair never shows again">Not a duplicate</button></div>`}</div>`;
   const list = d.list || [];
   const likely = list.filter((p) => p.score >= 70);
   const review = list.filter((p) => p.score < 70);

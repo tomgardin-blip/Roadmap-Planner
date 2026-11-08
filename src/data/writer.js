@@ -3,12 +3,13 @@
 // Order per action: read the live "before" from Notion, write, then audit. A failed audit after a
 // successful write is reported, never silently dropped.
 
+import { mergeFields, mergePlan, frMoveInput, dupUpdateInput, targetFrsInput, mergeComments } from '../merge.js';
 import { eiRequestInput, eiUpdateInput, createdRowUrl, EI_APP, ESTIMATE_CHANGE } from '../eiRequest.js';
 import { ROADMAP_CHANNEL, slackLink, slackUserFromSearch, channelsFromSearch } from '../roadmapPost.js';
 import { call, runQuery, LIGHTDASH, NOTION } from './live.js';
 import {
   TEST_FR, assertAllowed, issueDatesInput, issuePriorityInput, issueStatusInput, frUpdateInput, ownerCommentInput, ownerCommentText,
-  auditRowInput, readIssueDates, readFr, moveWarnings,
+  auditRowInput, readIssueDates, readFr, moveWarnings, parseFetchedProperties,
 } from '../notion/writes.js';
 
 const dashed = (id) => { const h = String(id).replace(/-/g, '').toLowerCase(); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`; };
@@ -263,4 +264,53 @@ export async function requestEiUpdate(mcp, issue, change = ESTIMATE_CHANGE) {
     reason: change, issueId: issue.id, itemName: issue.name || 'Issue', updateId: updateId(),
   });
   return row;
+}
+
+/** Read both issues of a pair for the merge summary: { dup, target, plan }. */
+export async function readMerge(mcp, dupId, targetId) {
+  const [d, t] = await Promise.all([dupId, targetId].map((id) => call(mcp, NOTION, 'notion-fetch', { id: dashed(id) })));
+  const dup = mergeFields(parseFetchedProperties(d), dupId);
+  const target = mergeFields(parseFetchedProperties(t), targetId);
+  return { dup, target, plan: mergePlan(dup, target) };
+}
+
+/**
+ * Merge a duplicate into the issue that stays (Tom, 2026-11-08), the product plugin's mark-duplicate steps:
+ * FRs moved, the duplicate closed as Duplicate, comments on both, FRs checked on the target. No rollback on a
+ * partial failure (as the skill): returns what happened, step by step. Audit rows: "Issue merged" on the
+ * duplicate (Status) and one per moved FR (field "Engineering feature").
+ */
+export async function mergeIssues(mcp, { plan, reason, onStep = () => {} }) {
+  assertAllowed('issue', plan.dup.id); assertAllowed('issue', plan.target.id);
+  const uid = updateId();
+  const report = { moved: 0, already: 0, failed: [], dupUpdated: false, comments: 0, addedOnTarget: 0, errors: [] };
+  for (const fr of plan.frs) {
+    onStep(`Moving FRs ${report.moved + report.already + report.failed.length + 1}/${plan.frs.length}…`);
+    try {
+      const props = parseFetchedProperties(await call(mcp, NOTION, 'notion-fetch', { id: dashed(fr) }));
+      const input = frMoveInput(fr, props['Engineering feature'], plan.dup.id, plan.target.id);
+      if (!input) { report.already++; continue; }
+      await call(mcp, NOTION, 'notion-update-page', input);
+      report.moved++;
+      await audit(mcp, { category: 'Issue merged', field: 'Engineering feature', before: plan.dup.name, after: plan.target.name, reason, frId: fr, issueId: plan.target.id, itemName: props.task || props.Name || 'FR', updateId: uid }).catch((e) => report.errors.push(`audit row for an FR: ${e.message}`));
+    } catch (err) { report.failed.push(fr); report.errors.push(`FR ${fr}: ${err?.message || err?.code || 'failed'}`); }
+  }
+  onStep('Closing the duplicate…');
+  try {
+    await call(mcp, NOTION, 'notion-update-page', dupUpdateInput(plan));
+    report.dupUpdated = true;
+    await audit(mcp, { category: 'Issue merged', field: 'Status', before: plan.dup.status || '', after: 'Duplicate', reason, warning: `Merged into ${plan.target.name}`, issueId: plan.dup.id, itemName: plan.dup.name, updateId: uid }).catch((e) => report.errors.push(`audit row: ${e.message}`));
+  } catch (err) { report.errors.push(`Duplicate not updated: ${err?.message || err?.code || 'failed'}`); }
+  onStep('Commenting on both issues…');
+  for (const c of mergeComments(plan, reason, report.moved + report.already)) {
+    try { await call(mcp, NOTION, 'notion-create-comment', c); report.comments++; } catch (err) { report.errors.push(`Comment not added: ${err?.message || err?.code || 'failed'}`); }
+  }
+  onStep('Checking the FRs on the kept issue…');
+  try {
+    const t = parseFetchedProperties(await call(mcp, NOTION, 'notion-fetch', { id: dashed(plan.target.id) }));
+    const ok = plan.frs.filter((x) => !report.failed.includes(x));
+    const input = targetFrsInput(plan.target.id, t['All customer requests'], ok);
+    if (input) { await call(mcp, NOTION, 'notion-update-page', input); report.addedOnTarget = input.properties['All customer requests'].length - (t['All customer requests'] || []).length; }
+  } catch (err) { report.errors.push(`FR check on the kept issue: ${err?.message || err?.code || 'failed'}`); }
+  return report;
 }

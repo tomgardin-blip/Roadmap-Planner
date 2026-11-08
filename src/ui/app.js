@@ -26,7 +26,8 @@ import { pushbackReqList, heldByPushback } from '../pushbackReq.js';
 import { candidatePairs, judgePrompt, parseVerdicts, dismissedPairs, snapshot, REVIEW, WONT_DO } from '../duplicates.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates, startEiRequests } from './actions.js';
+import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates, startEiRequests, startMerge } from './actions.js';
+import { mergeFyiMessage } from '../merge.js';
 import { TEAM_LEADS, dependencyMessage, blockedMessage, duplicateMessage, qualityDm, staleBlockerMessage, pushbackReminder } from '../roadmapPost.js';
 import { closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
@@ -269,6 +270,27 @@ function shell() {
     }
     if (e.target.closest('button[data-dupscan]')) { runDupCheck(); return; }
     if (e.target.closest('button[data-dupstop]')) { state.dups.stop?.(); return; }
+    const dm = e.target.closest('button[data-dupmerge]');
+    if (dm) {
+      // Merge the pair (Tom, 2026-11-08): keep one, the other becomes Duplicate; then an FYI in #roadmap_product.
+      const pair = (suspectedDups() || []).find((p) => p.key === dm.dataset.dupmerge);
+      if (!pair) return;
+      const teamOf = (i) => TEAMS.find((t) => t.toLowerCase() === String(i.team || '').trim().toLowerCase()) || (state.run ? [...issueTeams(state.run, i)].find((t) => TEAM_LEADS[t]) : null) || i.team || null;
+      startMerge({ mcp: state.mcp, pair,
+        onMerged: ({ dup }) => {
+          state.merged = new Set([...(state.merged || []), pair.key]);
+          state.audit = [{ category: 'Issue merged', field: 'Status', after: 'Duplicate', issueId: dup.id, itemName: dup.name, at: new Date().toISOString() }, ...(state.audit || [])];
+          draw();
+        },
+        fyi: ({ dup, target, reason, moved }) => {
+          const full = (i) => ({ ...i, team: teamOf(i) });
+          let leads = [TEAM_LEADS[teamOf(target)], TEAM_LEADS[teamOf(dup)]].filter(Boolean);
+          leads = [...new Map(leads.map((l) => [l.id, l])).values()];
+          startRoadmapPost({ mcp: state.mcp, issue: full(target), lead: leads[0] || null, leads, template: mergeFyiMessage(full(dup), full(target), leads, reason, moved),
+            onDone: ({ link }) => { state.audit = [{ category: 'Roadmap post', field: 'Slack', after: link || '', issueId: target.id, itemName: target.name, at: new Date().toISOString() }, ...(state.audit || [])]; draw(); } });
+        } });
+      return;
+    }
     const dp = e.target.closest('button[data-duppost],button[data-dupno]');
     if (dp) {
       const key = dp.dataset.duppost || dp.dataset.dupno;
@@ -904,7 +926,7 @@ function suspectedDups() {
   const side = (x) => (x?.status === WONT_DO ? x : openById.get(x?.id));
   const out = [];
   for (const [key, v] of state.dups.verdicts) {
-    if (v.pass !== 2 || v.score < REVIEW || no.has(key)) continue;
+    if (v.pass !== 2 || v.score < REVIEW || no.has(key) || state.merged?.has(key)) continue;
     const a = side(v.a); const b = side(v.b);
     if (!a || !b || !(ours(a) || ours(b))) continue;
     out.push({ key, a, b, score: v.score, why: v.why, wontDo: a.status === WONT_DO || b.status === WONT_DO });
