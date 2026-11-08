@@ -47,7 +47,7 @@ test('data quality: issue checks', () => {
   const q = dataQuality({ run: run(issues), today: '2026-10-28' });
   const ids = (k) => q[k].map((e) => e.issue.id.slice(-1));
   assert.deepEqual(ids('blockedNoBlocker'), ['1']);
-  assert.deepEqual(ids('plannedScoping'), ['5']);
+  assert.equal(q.plannedScoping, undefined); // removed (Tom, 2026-11-08)
   assert.deepEqual(ids('plannedNoEffort'), ['6']);
   assert.deepEqual(ids('staleBlocker'), ['5']);
 });

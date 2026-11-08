@@ -433,11 +433,6 @@ function qualityFix(key, id) {
       { label: 'Ask the team lead what blocks it', desc: 'Ready-made post in #roadmap_product: is it still blocked, and which issue blocks it?', run: () => document.querySelector(`button[data-rmpost="${issue?.id}"]`)?.click() },
       { label: 'Not blocked: change the status', desc: 'Set the engineering issue status', run: status('No open blocker is linked. Pick the right status.') },
     ],
-    plannedScoping: [
-      { label: 'Change the status', desc: 'Scoping is done: set the engineering issue status', run: status(`Planned for ${formatDate(issue?.end || issue?.start)} but still ${issue?.status}.`) },
-      { label: 'Take it out of the plan', desc: 'Clear Start and End until scoping is done', run: unplan('Still in Product scoping') },
-      { label: 'Ask the team lead in #roadmap_product', desc: 'Your message, tagging the lead', run: post() },
-    ],
     plannedNoEffort: [
       { label: 'Request an estimate in the Engineering Issues app', desc: 'Update issue request: Claude adds the FE/BE/MOB estimate (product-feature), as you', run: issue && (() => openEiRequests([{ label: 'Planned without effort', frs: [{ id: issue.id, title: issue.name, url: issue.url, committed: issue.committed }] }], [issue.id], 'update')) },
       { label: 'Take it out of the plan', desc: 'Clear Start and End until it has an estimate', run: unplan('No estimate yet') },

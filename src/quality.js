@@ -13,7 +13,6 @@ const FR_TYPE = 'Feature request';
 const FR_CLOSED = new Set(['Done', "Won't do", 'Duplicate', 'Closed', 'Cancelled', 'No longer needed']);
 const GO_LIVE = new Set(['Needed for go-live', 'Needed 1 month before']);
 const NOT_LIVE_ANY_MORE = new Set(['Live', 'Churn', 'Deal Lost', 'Dropped']);
-const SCOPING = new Set(['Product scoping TODO', 'Product scoping in progress']);
 // Estimated = effort on any skill, AI, BI, analyst and infra included (Tom, 2026-10-29).
 const estimated = (i) => Object.values(i.skillEfforts || {}).some((v) => v > 0);
 const nid = (x) => String(x || '').replace(/-/g, '').toLowerCase();
@@ -29,7 +28,6 @@ export const CHECKS = [
   { key: 'goLiveNoDate', side: 'fr', label: '"Needed for go-live", deal has no go-live date', fix: 'Set the go-live on the deal' },
   { key: 'integrationTagged', side: 'fr', label: 'Feature request also tagged Integrations', fix: 'Check it is product work, not an integration' },
   { key: 'blockedNoBlocker', side: 'issue', label: 'Blocked/on hold, no open blocker linked', fix: 'Ask the lead which issue blocks it' },
-  { key: 'plannedScoping', side: 'issue', label: 'Planned, but still in Product scoping', fix: 'Edit → engineering issue status' },
   { key: 'plannedNoEffort', side: 'issue', label: 'Planned with dates, 0 effort', fix: 'Estimate it, or it counts 0 in capacity' },
   { key: 'staleBlocker', side: 'issue', label: 'Blocker already Done / Won\'t do, link still there', fix: 'Remove the "Blocked by" link in Notion' },
 ];
@@ -102,7 +100,6 @@ export function dataQuality({ run, backlog = [], taskRows = [], featureRows = []
     const openBl = bl.filter((b) => !CLOSED.has(b.status));
     const doneBl = bl.filter((b) => CLOSED.has(b.status));
     if (i.status === 'Blocked/on hold' && !openBl.length) out.blockedNoBlocker.push({ issue: i, detail: doneBl.length ? `Only finished blockers: ${doneBl.map((b) => `"${b.name}" (${b.status})`).join(', ')}` : 'No "Blocked by" linked' });
-    if (planned && SCOPING.has(i.status)) out.plannedScoping.push({ issue: i, detail: `Status ${i.status}, planned ${formatDate(i.end || i.start)}` });
     if (planned && !estimated(i)) out.plannedNoEffort.push({ issue: i, detail: `Planned ${formatDate(i.end || i.start)}, no effort on any skill` });
     if (doneBl.length) out.staleBlocker.push({ issue: i, detail: `Blocked by ${doneBl.map((b) => `"${b.name}" (${b.status})`).join(', ')}` });
   }
