@@ -13,7 +13,6 @@ const estimated = (i) => Object.values(i.skillEfforts || {}).some((v) => v > 0);
 
 export const RULES = [
   { key: 'afterCommit', label: 'Planned after the committed date' },
-  { key: 'committedUnplanned', label: 'Committed, not planned' },
   { key: 'committedBlocked', label: 'Committed in the next 6 months, status Blocked/on hold' },
   { key: 'dependency', label: 'Dependency in the wrong order' },
   { key: 'noTeam', label: 'No team: invisible in capacity' },
@@ -46,7 +45,7 @@ export function atRisk(run, { team = 'all', baseline = null, held = null } = {})
     const planned = i.start || i.end;
     if (inScope(i)) {
       if (lateVsCommit(i) && !held?.has(i.id)) out.afterCommit.push({ issue: i, detail: `Ends ${formatDate(i.end)}, committed ${formatDate(i.committed)}` });
-      if (i.committed && !planned && estimated(i)) out.committedUnplanned.push({ issue: i, detail: `Committed ${formatDate(i.committed)}, no dates` });
+      // "Committed, not planned" removed (Tom, 2026-11-10): the same as Prep queues → Required for GO LIVE → Not planned.
       if (i.committed && i.status === 'Blocked/on hold' && String(i.committed).slice(0, 10) <= sixMonths) out.committedBlocked.push({ issue: i, detail: `Committed ${formatDate(i.committed)}` });
       // A blocker that ends after this issue starts (pot issues: Start = End).
       const start = i.start || i.end;

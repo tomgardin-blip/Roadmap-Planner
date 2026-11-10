@@ -32,7 +32,7 @@ test('at risk: after commit, committed unplanned, blocked, dependency, no team, 
   feats[4][10] = 'dep'; // blocker blocks dep
   const r = atRisk(runCapacity(rowsOf(feats), { now: NOW }));
   assert.deepEqual(ids(r.afterCommit), ['late']);
-  assert.deepEqual(ids(r.committedUnplanned), ['tbd']);
+  assert.equal(r.committedUnplanned, undefined); // removed (Tom, 2026-11-10): Prep queues covers it
   assert.deepEqual(ids(r.committedBlocked), ['blk']);
   assert.deepEqual(ids(r.dependency), ['dep']);
   assert.deepEqual(ids(r.noTeam), ['orphan']);
