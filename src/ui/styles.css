@@ -556,3 +556,18 @@ b.tiunder { color: var(--ok-ink); } b.tiover { color: var(--orange); }
 
 /* "Pushback Req GL" FR priority tag (Tom, 2026-10-30). */
 .tag.pbreq { background: var(--amb-bg); color: var(--amb-ink); font-weight: 700; }
+
+/* Tick boxes (Tom, 2026-11-10: "black tickbox is ugly - white tickbox instead"): a white box with a grey
+   border; ticked, it stays white with a navy border and a navy tick. Same on every page and theme. */
+input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none;
+  width: 16px; height: 16px; margin: 0 8px 0 0; vertical-align: -3px; cursor: pointer;
+  background: #fff center / 12px 12px no-repeat; border: 1.5px solid #B8C0C3; border-radius: 4px;
+}
+input[type="checkbox"]:hover { border-color: var(--navy); }
+input[type="checkbox"]:checked {
+  border-color: var(--navy);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%2300343C' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }
+input[type="checkbox"]:disabled { opacity: .45; cursor: default; }
