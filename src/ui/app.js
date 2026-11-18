@@ -13,6 +13,7 @@ import { applyFeed } from '../data/capacityFeed.js';
 import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, loadChangesSince, loadLastEdited, loadEiRequests, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
 import { userName, whoAmI, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
+import { readCache, writeCache } from '../data/cache.js';
 import { effectiveCommitted } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
 import { selectedFrs, toggleFrSelected, clearFrSelected, openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setEiRequests, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
@@ -775,6 +776,7 @@ function rescore() {
 
 function onExtra(step, p) {
   const x = state.extra;
+  if (!p.error && state.mode === 'live') (state.lastPayloads ||= {})[step] = p; // kept for the local cache
   if (p.error) { x[step] = 'error'; x[`${step}Error`] = p.error; }
   else if (step === 'scores') { x.scores = 'ok'; x.deals = dealSizeMap(p.deals); x.taskRows = p.tasks; x.signed = p.signed instanceof Set ? p.signed : p.signed ? signedSet(p.signed) : null; x.featureFrs = p.frs instanceof Set ? p.frs : p.frs ? featureFrSet(p.frs) : null; x.nonFeature = p.nonFeature instanceof Set ? p.nonFeature : p.nonFeature ? featureFrSet(p.nonFeature) : null; x.mixed = p.mixed instanceof Map ? p.mixed : p.mixed ? mixedMap(p.mixed) : null; }
   else { x.backlog = 'ok'; x.featureRows = p.features; }
@@ -793,6 +795,10 @@ function renderChrome() {
   setConn('connN', state.mode === 'live' ? s.notion : '');
 
   const pills = [];
+  if (state.mode === 'live' && state.cachedAt) {
+    const failed = s.lightdash === 'error';
+    pills.push(`<span class="pill ${failed ? 'warn' : ''}" title="The plan as it was when you last had the planner open in this browser. ${failed ? 'The live refresh failed: see the connector icons, then ↻ Refresh.' : 'Lightdash and Notion are being read behind it; the page updates by itself.'}">${failed ? 'Showing saved data' : 'Saved data'} from ${esc(fmtTime(state.cachedAt))}${failed ? ' · refresh failed' : ' · refreshing…'}</span>`);
+  }
   if (state.mode === 'live' && s.syncedAt) {
     const n = (s.changed?.length || 0) + (s.added?.length || 0);
     pills.push(`<span class="pill" title="Lightdash last synced from Notion at ${esc(fmtTime(s.syncedAt))}. Issues edited in Notion since then are read live and applied on top.">Lightdash ${esc(fmtTime(s.syncedAt))} · <b>${n}</b> live from Notion</span>`);
@@ -1106,7 +1112,14 @@ async function loadAllLiveOnce(mcp) {
   ]);
   state.feed = feed;
   state.status = status;
-  if (!rows) { renderChrome(); document.getElementById('grid').innerHTML = ''; return false; }
+  if (!rows) {
+    // Showing the cached plan: keep it on screen, say the refresh failed (the connector icons show why).
+    // Capacity stays under the no-fallback rule (Tom, 2026-10-29): a failed refresh blocks the capacity tabs
+    // rather than keep showing saved capacity as if it were current. The lists keep the saved data, marked as such.
+    if (state.cachedAt) { state.status = { ...status, cached: true }; if (state.run) state.run.capacitySource = null; renderChrome(); draw(); return false; }
+    renderChrome(); document.getElementById('grid').innerHTML = ''; return false;
+  }
+  state.cachedAt = null;
   state.frComments = new Map(); // re-read on the next Prep queues draw
   show(rows);
   renderDrawer();
@@ -1129,6 +1142,38 @@ async function loadAllLiveOnce(mcp) {
       .finally(() => { recompute(); if (['risk', 'history'].includes(state.tab)) draw(); }),
   ];
   await Promise.allSettled(background);
+  saveSnapshot();
+  return true;
+}
+
+/**
+ * Local browser cache (Tom, 2026-11-18, Liam: "loads instantly and only updates rather than re-pulling on every
+ * refresh"). After a full live load, and when the page is hidden (so the viewer's own moves are in it), the
+ * inputs are kept in this browser's IndexedDB. On open they are shown at once and the live load runs behind.
+ */
+function saveSnapshot() {
+  if (state.mode !== 'live' || !state.rows || state.cachedAt || state.status?.lightdash !== 'ok') return;
+  writeCache({
+    at: new Date().toISOString(), rows: state.rows, status: state.status, feed: state.feed, feedError: state.feedError,
+    extras: state.lastPayloads || {}, audit: state.audit, users: state.users, baseline: state.baseline, eiReq: state.eiReq,
+  });
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSnapshot(); });
+
+/** Show the cached snapshot at once (true when there was one). */
+async function showCached() {
+  const snap = await readCache();
+  if (!snap) return false;
+  state.cachedAt = snap.at;
+  state.status = { ...snap.status, lightdash: 'loading', notion: 'loading', cached: true };
+  state.feed = snap.feed; state.feedError = snap.feedError || null;
+  state.audit = snap.audit || null; state.users = snap.users instanceof Map ? snap.users : new Map();
+  state.baseline = snap.baseline || null; state.eiReq = snap.eiReq || null;
+  state.lastPayloads = snap.extras || {};
+  show(snap.rows);
+  if (snap.extras?.scores) onExtra('scores', snap.extras.scores);
+  if (snap.extras?.backlog) onExtra('backlog', snap.extras.backlog);
+  recompute(); renderChrome(); draw();
   return true;
 }
 
@@ -1169,7 +1214,14 @@ async function boot() {
     setReadOnly(state.readOnly);
     state.mode = 'live';
     loadDupStore();
-    await loadAllLive(mcp);
+    // Cached plan first (instant), then the live load behind it.
+    const cached = await showCached().catch(() => false);
+    const btn = document.getElementById('refreshBtn');
+    if (cached) { state.refreshing = true; btn.disabled = true; btn.textContent = '↻ Refreshing…'; }
+    try { await loadAllLive(mcp); } finally {
+      if (cached) { state.refreshing = false; btn.disabled = false; btn.textContent = '↻ Refresh'; }
+      renderChrome();
+    }
     return;
   }
   state.mode = Array.isArray(window.__RP_ROWS__) ? 'snapshot' : 'fake';
