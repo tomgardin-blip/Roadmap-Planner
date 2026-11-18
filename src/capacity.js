@@ -11,6 +11,14 @@ import * as Engine from '../vendor/capacity-engine.js';
 export const TEAMS = ['Order + Invoice', 'Transport Planning', 'Trip Execution', 'Application Platform'];
 
 /** Team filter → the picked teams in TEAMS order, or null for all. Accepts 'all', one name or a list (Tom, 2026-10-27: pick one or more teams). */
+// Team picker selection over every team (the Week plan shows all of them); pickedTeams keeps
+// the other tabs on the four FE/BE/MOB teams (Sander, 2026-11-16).
+export function anyTeams(team) {
+  if (!team || team === 'all') return null;
+  const list = [].concat(team);
+  const out = TEAM_DISPLAY_ORDER.filter((t) => list.includes(t));
+  return out.length && out.length < TEAM_DISPLAY_ORDER.length ? out : null;
+}
 export function pickedTeams(team) {
   if (!team || team === 'all') return null;
   const list = [].concat(team);
@@ -52,7 +60,7 @@ export function toEngineRows(lightdashRows) {
 }
 
 /** Run the engine silently (it logs diagnostics). */
-function quiet(fn) {
+export function quiet(fn) {
   const log = console.log;
   console.log = () => {};
   try { return fn(); } finally { console.log = log; }

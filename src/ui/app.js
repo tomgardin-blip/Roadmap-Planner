@@ -6,15 +6,16 @@
 // All three run through the same capacity engine.
 
 import { horizon as buildHorizon, formatDate, formatDateTime, potQuarters, potMonths } from '../periods.js';
-import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams, issueTeams } from '../capacity.js';
+import { buildGrid, runCapacity, issuesWithoutTeam, toIssues, TEAMS, pickedTeams, anyTeams, issueTeams, quiet, toEngineRows, ALLOCATION_SETTINGS, TEAM_DISPLAY_ORDER } from '../capacity.js';
+import { buildAllocation, activeAllocation, weekYm, personStartIdx, isOverdue, fmtYMD, toDate } from '../../vendor/capacity-engine.js';
 import { scoreRows, dealSizeMap, dealNameMap } from '../scoring.js';
 import { fakeLightdashRows } from '../data/fake.js';
 import { applyFeed } from '../data/capacityFeed.js';
-import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, loadChangesSince, loadLastEdited, loadEiRequests, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
-import { userName, whoAmI, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
+import { loadWontDoIssues, loadIssueTexts, loadFrComments, loadCapacityFeed, loadLive, loadExtras, syncBaseline, loadAudit, loadOwnerEmails, loadChangesSince, loadLastEdited, loadEiRequests, runQuery, signedSet, featureFrSet, mixedMap, explainError, NOTION } from '../data/live.js';
+import { moveIssue, userName, whoAmI, setIssuePriority, setPushOutKeep, dismissDuplicate } from '../data/writer.js';
 import { quarterKeyOf } from '../notion/baseline.js';
 import { readCache, writeCache } from '../data/cache.js';
-import { effectiveCommitted } from '../notion/writes.js';
+import { effectiveCommitted, moveWarnings, isAllowed } from '../notion/writes.js';
 import { renderGrid } from './grid.js';
 import { selectedFrs, toggleFrSelected, clearFrSelected, openDrawer, closeDrawer, setCommitSource, setRoadmapPosts, setEstimatePosts, shownIssue, shownFr, setDealNames, setEiRequests, setReadOnly, selectedIssues, toggleSelected, clearSelected } from './drawer.js';
 import { renderQuarterPlan, renderAtRisk, renderPrep, renderHistory, renderQuality, tabCounts } from './lists.js';
@@ -27,10 +28,10 @@ import { pushbackReqList, heldByPushback } from '../pushbackReq.js';
 import { candidatePairs, judgePrompt, parseVerdicts, dismissedPairs, snapshot, REVIEW, WONT_DO } from '../duplicates.js';
 import { prepQueues } from '../prep.js';
 import { ESTIMATE_TARGETS } from '../estimate.js';
-import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates, startEiRequests, startMerge } from './actions.js';
+import { startBulkFrEdit, startMove, startBulkMove, startFrEdit, startEstimatePost, startRoadmapPost, startAskOwner, startChoice, startIssueStatus, startClearDates, startEiRequests, startMerge, reasonField, wireReason, inBackground, fail, errText } from './actions.js';
 import { mergeFyiMessage } from '../merge.js';
 import { TEAM_LEADS, dependencyMessage, blockedMessage, duplicateMessage, qualityDm, staleBlockerMessage, pushbackReminder } from '../roadmapPost.js';
-import { closeSheet, toast } from './sheet.js';
+import { openSheet, closeSheet, toast } from './sheet.js';
 import { parseBlob } from '../scoring.js';
 import { LOGO } from './logo.js';
 
@@ -58,6 +59,8 @@ const state = {
   frComments: new Map(), frCommentsLoading: false, // Notion comments of No-engineering-issue FRs
   feed: null, feedError: null, // Lightdash engineering_capacity per team × skill × week, or null with the error
   mcp: null,
+  // Week plan (Sander, 2026-11-16): open rows, what-if End dates, person capacity from Lightdash.
+  wp: { open: new Set(), overrides: new Map(), key: 0, cap: null, capLoading: false, capError: null, saving: false },
   chg: { since: null, loading: false, error: null, result: null, key: null }, // History: what changed since (Tom, 2026-11-06)
 };
 
@@ -99,6 +102,7 @@ function shell() {
       <nav class="tabs">
         <button class="on" data-tab="capacity">Capacity</button>
         <button data-tab="qplan">Quarter plan</button>
+        <button data-tab="week">Week plan</button>
         <button data-tab="prep">Prep queues<span class="cnt" id="cntPrep"></span></button>
         <button data-tab="risk">At risk<span class="cnt" id="cntRisk"></span></button>
         <button data-tab="quality">Data quality<span class="cnt" id="cntDq"></span></button>
@@ -108,6 +112,8 @@ function shell() {
         <div class="fld teampick"><span class="flab">Team</span><button type="button" id="teamBtn" aria-haspopup="true" aria-expanded="false"><span id="teamLbl">All teams</span></button>
           <div class="teampanel" id="teamPanel" hidden>
             ${TEAMS.map((t) => `<label><input type="checkbox" data-team="${esc(t)}"> ${esc(t)}</label>`).join('')}
+            <div class="tpsep" title="These teams have no FE/BE/MOB capacity grid: the other tabs ignore them">Week plan only</div>
+            ${TEAM_DISPLAY_ORDER.filter((t) => !TEAMS.includes(t)).map((t) => `<label><input type="checkbox" data-team="${esc(t)}"> ${esc(t)}</label>`).join('')}
             <div class="tpacts"><button type="button" data-teamall>All teams</button><button type="button" class="primary" data-teamdone>Done</button></div>
           </div></div>
         <span class="spacer" style="flex:1"></span>
@@ -578,19 +584,19 @@ function initTeamPicker() {
   const btn = document.getElementById('teamBtn'); const panel = document.getElementById('teamPanel');
   const boxes = [...panel.querySelectorAll('input[data-team]')];
   const label = () => {
-    const p = pickedTeams(state.teamFilter);
+    const p = anyTeams(state.teamFilter);
     document.getElementById('teamLbl').textContent = !p ? 'All teams' : p.length === 1 ? p[0] : `${p.length} teams: ${p.join(', ')}`;
     btn.title = p ? p.join(', ') : 'All teams';
   };
   const apply = () => {
     const picked = boxes.filter((b) => b.checked).map((b) => b.dataset.team);
-    state.teamFilter = pickedTeams(picked) ? picked : 'all';
-    try { localStorage.setItem('rp.teams', JSON.stringify(pickedTeams(state.teamFilter) || [])); } catch { /* storage unavailable */ }
+    state.teamFilter = anyTeams(picked) ? picked : 'all';
+    try { localStorage.setItem('rp.teams', JSON.stringify(anyTeams(state.teamFilter) || [])); } catch { /* storage unavailable */ }
     label(); recompute(); draw();
   };
   const open = (on) => { panel.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
-  try { const saved = JSON.parse(localStorage.getItem('rp.teams') || '[]'); if (pickedTeams(saved)) state.teamFilter = pickedTeams(saved); } catch { /* storage unavailable */ }
-  const p0 = pickedTeams(state.teamFilter);
+  try { const saved = JSON.parse(localStorage.getItem('rp.teams') || '[]'); if (anyTeams(saved)) state.teamFilter = anyTeams(saved); } catch { /* storage unavailable */ }
+  const p0 = anyTeams(state.teamFilter);
   boxes.forEach((b) => { b.checked = !!p0?.includes(b.dataset.team); });
   label();
   // Same filter from the team toggles in the Quarter plan header.
@@ -1049,6 +1055,425 @@ function restoreFolds(root) {
   root?.querySelectorAll('details').forEach((d) => { const k = foldKey(d); if (k && folds.has(k)) d.open = folds.get(k); });
 }
 
+
+// ── Week plan (Sander, 2026-11-16, published straight to the page; ported into the source 2026-11-18) ──
+const wpFd = (iso) => (iso ? formatDate(iso) : '–');
+// Week plan tab (Sander, 2026-11-16): per team, per engineer, per week
+// load vs capacity for the next 13 weeks, like the Lightdash planner's "By person" roster.
+// Expand a row to see its issues on a timeline; drag a bar's right edge to change its End
+// date. Drags are a what-if (the engine re-runs on the edited rows) until saved to Notion.
+var WP_WEEKS = 13;
+var WP_DAY = 864e5;
+var wpEsc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+var wpNorm = (s) => String(s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
+var wpFmt1 = (v) => (v >= 0 ? "+" : "") + (Math.round(v * 10) / 10).toFixed(1);
+var wpIso = (d) => fmtYMD(d);
+function wpShort(iso) {
+  const d = toDate(iso);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+// Person capacity per week from Lightdash engineering_capacity (dbt: holidays and part-time
+// applied), keyed team label → person → week. Loaded the first time the tab opens.
+async function loadPersonCapacity(mcp, weeks) {
+  const last = new Date(toDate(weeks[weeks.length - 1]).getTime() + 6 * WP_DAY);
+  const rows = await runQuery(mcp, "Roadmap Planner: engineering capacity per person per week", {
+    exploreName: "engineering_capacity",
+    dimensions: ["engineering_team_allocations_team", "engineering_team_allocations_person", "engineering_capacity_week_start"],
+    metrics: ["engineering_capacity_sum_capacity_days"],
+    sorts: [],
+    limit: 5e3,
+    filters: { type: "and", dimensions: [
+      { fieldId: "engineering_team_allocations_team", fieldType: "string", fieldFilterType: "string", operator: "equals", values: TEAM_DISPLAY_ORDER },
+      { fieldId: "engineering_capacity_week_start", fieldType: "date", fieldFilterType: "date", operator: "inBetween", values: [weeks[0], wpIso(last)] }
+    ] }
+  });
+  const cap = {};
+  for (const r of rows || []) {
+    const t2 = r.engineering_team_allocations_team, p = r.engineering_team_allocations_person;
+    const wk = String(r.engineering_capacity_week_start || "").slice(0, 10);
+    if (!t2 || !p || !wk) continue;
+    const byP = (cap[t2] || (cap[t2] = {}));
+    const byW = (byP[wpNorm(p)] || (byP[wpNorm(p)] = {}));
+    byW[wk] = (byW[wk] || 0) + (Number(r.engineering_capacity_sum_capacity_days) || 0);
+  }
+  return cap;
+}
+function wpEnsureCapacity(weeks) {
+  if (!state.mcp || state.wp.cap || state.wp.capLoading || state.wp.capError) return;
+  state.wp.capLoading = true;
+  loadPersonCapacity(state.mcp, weeks).then((cap) => {
+    state.wp.cap = cap;
+  }).catch((err) => {
+    state.wp.capError = explainError("Lightdash", err);
+  }).finally(() => {
+    state.wp.capLoading = false;
+    if (state.tab === "week") draw();
+  });
+}
+// Rows with the what-if End dates applied (same patch as afterMoves, without saving).
+function wpRowsWith(rows, overrides) {
+  if (!overrides.size) return rows;
+  return rows.map((r) => {
+    const blob = r.serve_engineering_capacity_features;
+    if (blob == null) return r;
+    let changed = false;
+    const feats = parseBlob(blob).map((f) => {
+      const o = overrides.get(String(f[0]).replace(/-/g, "").toLowerCase());
+      if (!o) return f;
+      changed = true;
+      const g = f.slice();
+      g[24] = o.start;
+      g[25] = o.end;
+      return g;
+    });
+    return changed ? { ...r, serve_engineering_capacity_features: JSON.stringify(feats) } : r;
+  });
+}
+function wpRun() {
+  const wp = state.wp;
+  if (!wp.overrides.size) return state.run;
+  if (wp.runFor !== state.rows || wp.runKey !== wp.key) {
+    wp.whatIf = runCapacity(wpRowsWith(state.rows, wp.overrides), { now: NOW });
+    wp.runFor = state.rows;
+    wp.runKey = wp.key;
+  }
+  return wp.whatIf;
+}
+function wpAlloc() {
+  if (state.wp.allocFor !== state.rows) {
+    state.wp.alloc = quiet(() => buildAllocation(toEngineRows(state.rows), ALLOCATION_SETTINGS));
+    state.wp.allocFor = state.rows;
+  }
+  return state.wp.alloc;
+}
+// Working-day axis: week i, weekday d (0 = Mon) sits at (i + d / 5) / N of the track.
+function wpAxis(weeks) {
+  const t0 = toDate(weeks[0]).getTime();
+  const n2 = weeks.length;
+  const slot = (iso) => {
+    const d = toDate(iso);
+    const days2 = Math.round((d.getTime() - t0) / WP_DAY);
+    const wi = Math.floor(days2 / 7);
+    const wd = Math.min(days2 - wi * 7, 4);
+    return wi * 5 + wd;
+  };
+  const ofSlot = (s) => {
+    const wi = Math.floor(s / 5), wd = s - wi * 5;
+    return wpIso(new Date(t0 + (wi * 7 + wd) * WP_DAY + 12 * 36e5));
+  };
+  return { n: n2, slots: n2 * 5, slot, ofSlot };
+}
+// A person's / pseudo-row's issues in the window, with the person's effort on each.
+function wpIssuesOf(run, entriesByWeek, weeks) {
+  const by = new Map();
+  for (const wk of weeks) for (const en of entriesByWeek?.[wk] || []) {
+    const iss = run.issues[en.issueIdx];
+    if (!iss) continue;
+    const cur = by.get(iss.id) || { issue: iss, effort: 0 };
+    cur.effort += en.effort || 0;
+    by.set(iss.id, cur);
+  }
+  return [...by.values()].sort((a, b2) => String(a.issue.start || a.issue.end).localeCompare(String(b2.issue.start || b2.issue.end)) || String(a.issue.end).localeCompare(String(b2.issue.end)));
+}
+function wpColor(load, budget) {
+  if (budget <= 0) return load > 0 ? "wp-x" : "wp-n";
+  const u = load / budget;
+  if (u > 5 / 3) return "wp-x";
+  if (u > 1) return "wp-r";
+  if (u <= 0.5) return "wp-g";
+  return "wp-a";
+}
+function wpTeamModel(run, team, weeks) {
+  const c = run.computed || {};
+  const tid = run.teamIdByLabel[team];
+  const alloc = wpAlloc();
+  const cap = state.wp.cap?.[team] || null;
+  const onTeam = (p, w) => {
+    const a = activeAllocation(p, weekYm(w));
+    return !!a && a.teamId === tid;
+  };
+  const isLead = (p) => p.allocations.some((s) => s.lead && s.teamId === tid);
+  const pw = c.newPersonWeek || {};
+  const pe = c.newPersonEntries || {};
+  const keyByNorm = {};
+  Object.keys(pe).forEach((k) => {
+    keyByNorm[wpNorm(k)] = k;
+  });
+  const budgetOf = (p, w) => {
+    if (cap) return cap[wpNorm(p.name)]?.[w] || 0;
+    const bySkill = c.capWeekPersonSkill?.[p.name] || {};
+    return Object.values(bySkill).reduce((s, byW) => s + (byW[w] || 0), 0);
+  };
+  const people = (alloc.people || []).filter((p) => tid && p.allocations.some((s) => s.teamId === tid) && weeks.some((w) => onTeam(p, w))).sort((a, b2) => (isLead(a) ? 0 : 1) - (isLead(b2) ? 0 : 1) || personStartIdx(a) - personStartIdx(b2) || a.name.localeCompare(b2.name));
+  const rows = people.map((p) => {
+    const key = keyByNorm[wpNorm(p.name)] || p.name;
+    const cells = weeks.map((w) => {
+      if (!onTeam(p, w)) return null;
+      const budget = budgetOf(p, w), load = pw[key]?.[w] || 0;
+      const hol = c.holidayPlannedPersonWeek?.[key]?.[w] || 0;
+      const a = activeAllocation(p, weekYm(w));
+      const weekly = 5 * ((a?.pct ?? 100) / 100);
+      const overdue = (pe[key]?.[w] || []).some((en) => run.issues[en.issueIdx] && isOverdue(run.issues[en.issueIdx]));
+      return { budget, load, delta: budget - load, palms: hol >= 1 ? (weekly > 0 && hol >= 0.8 * weekly ? 2 : 1) : 0, hol, overdue };
+    });
+    return { id: `p:${wpNorm(p.name)}`, label: p.name + (isLead(p) ? " (TL)" : ""), kind: "person", cells, entries: pe[key] || {} };
+  });
+  const uw = c.unassignedWeekly?.[tid] || {}, ue = c.unassignedEntries?.[tid] || {};
+  const frw = c.foreignRosterWeek?.[tid] || {}, fre = c.foreignRosterEntries?.[tid] || {};
+  const extra = [];
+  const memberKeys = new Set(rows.map((r) => keyByNorm[wpNorm(r.label)] || ""));
+  Object.keys(frw).filter((nm) => !people.some((p) => wpNorm(p.name) === wpNorm(nm)) && !memberKeys.has(nm) && weeks.some((w) => (frw[nm]?.[w] || 0) > 0)).sort((a, b2) => a.localeCompare(b2)).forEach((nm) => {
+    const counted = weeks.some((w) => (fre[nm]?.[w] || []).some((e) => e.counted));
+    extra.push({ id: `f:${wpNorm(nm)}`, label: counted ? `${nm} (no team)` : nm, kind: counted ? "counted" : "info", entries: fre[nm] || {}, cells: weeks.map((w) => {
+      const v = frw[nm]?.[w] || 0;
+      return v > 0 ? { budget: 0, load: v, delta: -v } : null;
+    }) });
+  });
+  const counted = extra.filter((r) => r.kind === "counted"), info = extra.filter((r) => r.kind === "info");
+  const unassigned = weeks.some((w) => (uw[w] || 0) > 0) ? [{ id: "u", label: "Unassigned", kind: "unassigned", entries: ue, cells: weeks.map((w) => (uw[w] || 0) > 0 ? { budget: 0, load: uw[w], delta: -uw[w], overdue: (ue[w] || []).some((en) => run.issues[en.issueIdx] && isOverdue(run.issues[en.issueIdx])) } : null) }] : [];
+  const total = weeks.map((w, i) => {
+    const budget = rows.reduce((s, r) => s + (r.cells[i]?.budget || 0), 0);
+    const load = rows.reduce((s, r) => s + (r.cells[i]?.load || 0), 0) + (uw[w] || 0) + counted.reduce((s, r) => s + (r.cells[i]?.load || 0), 0);
+    return { budget, load, delta: budget - load };
+  });
+  // Team total's timeline: every issue its members, no-team assignees and Unassigned carry.
+  const totalEntries = {};
+  for (const w of weeks) totalEntries[w] = [...rows, ...counted, ...unassigned].flatMap((r) => r.entries[w] || []);
+  return { team, tid, total, totalEntries, rows: [...rows, ...counted, ...unassigned, ...info] };
+}
+function wpCell(cell, base, { info = false } = {}) {
+  if (!cell) return `<td class="wpc wp-dot">\xB7</td>`;
+  if (info) return `<td class="wpc wp-info" title="On another team: counted there, not here">${cell.load.toFixed(1)}</td>`;
+  const was = base && Math.abs(base.delta - cell.delta) > 0.05 ? base.delta : null;
+  const tip = `Capacity ${cell.budget.toFixed(1)}d − load ${cell.load.toFixed(1)}d = ${wpFmt1(cell.delta)}d${cell.hol ? ` \xB7 ${cell.hol}d holiday` : ""}${cell.overdue ? " \xB7 has overdue issues" : ""}${was != null ? ` \xB7 was ${wpFmt1(was)}d before your changes` : ""}`;
+  const icons = (cell.overdue ? `<sup class="wp-warn">⚠</sup>` : "") + (cell.palms ? `<sup>${"\u{1F334}".repeat(cell.palms)}</sup>` : "");
+  return `<td class="wpc ${wpColor(cell.load, cell.budget)}${was != null ? " wp-chg" : ""}" title="${wpEsc(tip)}">${wpFmt1(cell.delta)}${icons}</td>`;
+}
+function wpWho(issue) {
+  const byEmail = new Map((wpAlloc().people || []).filter((p) => p.email).map((p) => [p.email, p.name.split(" ")[0]]));
+  const names = (issue.assignedToAll || issue.assignedTo || []).map((e) => byEmail.get(e) || String(e).split("@")[0]);
+  return names.length ? names.join(", ") : "unassigned";
+}
+function wpTimeline(run, row, weeks, axis) {
+  const items = wpIssuesOf(run, row.entries, weeks);
+  const ov = state.wp.overrides;
+  const nCols = weeks.length;
+  if (!items.length) return `<tr class="wptl"><td class="wpname wpsub muted">No dated issues in these weeks</td><td colspan="${nCols}"></td></tr>`;
+  const grid = `<div class="wpgrid">${weeks.map(() => "<i></i>").join("")}</div>`;
+  return items.map(({ issue, effort }) => {
+    const s0 = issue.start || issue.end, e0 = issue.end || issue.start;
+    const sl = axis.slot(s0), el = axis.slot(e0);
+    const left = Math.max(0, sl), right = Math.min(axis.slots, el + 1);
+    const late = issue.committed && e0 > issue.committed;
+    const edited = ov.has(issue.id);
+    const drag = !state.wp.saving && el < axis.slots && el >= 0;
+    const tip = `${issue.name}\n${issue.status || ""}${issue.start ? ` \xB7 ${formatDate(issue.start)} → ${formatDate(issue.end)}` : ` \xB7 pot ${formatDate(issue.end)}`}${issue.committed ? ` \xB7 committed ${formatDate(issue.committed)}` : ""}\n${effort.toFixed(1)}d for this row in these weeks${row.who ? `\nAssigned: ${wpWho(issue)}` : ""}${edited ? `\nWhat-if: End was ${formatDate(ov.get(issue.id).was.end)}` : ""}`;
+    const cls = ["wpbar", late ? "late" : "", edited ? "edited" : "", sl < 0 ? "cutl" : "", el + 1 > axis.slots ? "cutr" : ""].filter(Boolean).join(" ");
+    const bar = right > left ? `<div class="${cls}" style="left:${left / axis.slots * 100}%;width:${(right - left) / axis.slots * 100}%" title="${wpEsc(tip)}"><span>${effort.toFixed(1)}d \xB7 ${wpShort(e0)}${row.who ? ` <i class="who">\xB7 ${wpEsc(wpWho(issue))}</i>` : ""}</span>${drag ? `<b class="wph" data-wpdrag="${issue.id}" data-start="${wpEsc(issue.start || "")}" data-end="${wpEsc(e0)}" title="Drag to change the End date"></b>` : ""}</div>` : "";
+    const name = `<a href="${wpEsc(issue.url || "#")}" target="_blank" rel="noopener">${wpEsc(issue.name)}</a>${late ? ` <span class="wplate" title="End after commit ${wpEsc(formatDate(issue.committed))}">late</span>` : ""}`;
+    return `<tr class="wptl"><td class="wpname wpsub" title="${wpEsc(issue.name)}">${name}</td><td class="wptrack" colspan="${nCols}"><div class="wptr">${grid}${bar}</div></td></tr>`;
+  }).join("");
+}
+function wpHeaders(weeks) {
+  return weeks.map((w) => {
+    const s = toDate(w), e = new Date(s.getTime() + 4 * WP_DAY);
+    const f = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    return `<th class="wpc"><b>${f(s)}</b><span>– ${f(e)}</span></th>`;
+  }).join("");
+}
+function renderWeekPlan(el) {
+  const wp = state.wp;
+  const weeks = (state.run.computed.sortedWeeks || []).slice(0, WP_WEEKS);
+  if (!weeks.length) {
+    el.innerHTML = `<div class="lists"><div class="banner warn">No weeks to show.</div></div>`;
+    return;
+  }
+  wpEnsureCapacity(weeks);
+  const run = wpRun();
+  const axis = wpAxis(weeks);
+  const teams = anyTeams(state.teamFilter) || TEAM_DISPLAY_ORDER;
+  const keepScroll = {};
+  el.querySelectorAll(".wpscroll[data-team]").forEach((x) => {
+    keepScroll[x.dataset.team] = x.scrollLeft;
+  });
+  const capNote = state.wp.cap ? "Capacity: Lightdash engineering_capacity per person (holidays and part-time applied)." : state.wp.capLoading ? "Loading capacity per person from Lightdash… showing the planner's estimate meanwhile." : state.wp.capError ? `Capacity per person not read (${wpEsc(state.wp.capError)}): showing the planner's estimate (allocation \xD7 60%, minus Holiday issues).` : "Capacity: the planner's estimate (allocation \xD7 60%, minus Holiday issues).";
+  const cards = teams.map((team) => {
+    const m2 = wpTeamModel(run, team, weeks);
+    if (!m2.tid || !m2.rows.length) return "";
+    const base = wp.overrides.size ? wpTeamModel(state.run, team, weeks) : null;
+    const baseRow = (id) => base?.rows.find((r) => r.id === id);
+    const head = `<tr><th class="wpname">Engineer</th>${wpHeaders(weeks)}</tr>`;
+    const totKey = `${team}|total`, totOpen = wp.open.has(totKey);
+    const total = `<tr class="wptot wprow${totOpen ? " open" : ""}"><td class="wpname"><button type="button" class="wpx" data-wpopen="${wpEsc(totKey)}" aria-expanded="${totOpen}" title="Show all of the team's work on a timeline"><span class="chev">▸</span>Team total (capacity − load)</button></td>${m2.total.map((c, i) => {
+      const was = base && Math.abs(base.total[i].delta - c.delta) > 0.05 ? base.total[i].delta : null;
+      const pct = c.budget > 0 ? c.load / c.budget * 100 : c.load > 0 ? 999 : 0;
+      return `<td class="wpc ${pct > 140 ? "wp-x" : pct > 100 ? "wp-r" : pct > 50 ? "wp-a" : "wp-g"}${was != null ? " wp-chg" : ""}" title="Capacity ${c.budget.toFixed(1)}d − load ${c.load.toFixed(1)}d${was != null ? ` \xB7 was ${wpFmt1(was)}d` : ""}">${wpFmt1(c.delta)}d</td>`;
+    }).join("")}</tr>${totOpen ? wpTimeline(run, { entries: m2.totalEntries, who: true }, weeks, axis) : ""}`;
+    const body = m2.rows.map((r) => {
+      const key = `${team}|${r.id}`;
+      const open = wp.open.has(key);
+      const b2 = baseRow(r.id);
+      const label = r.kind === "unassigned" || r.kind === "info" ? `<i>${wpEsc(r.label)}</i>` : wpEsc(r.label);
+      const head2 = `<tr class="wprow${open ? " open" : ""} k-${r.kind}"><td class="wpname"><button type="button" class="wpx" data-wpopen="${wpEsc(key)}" aria-expanded="${open}"><span class="chev">▸</span>${label}</button></td>${r.cells.map((c, i) => wpCell(c, b2?.cells[i], { info: r.kind === "info" })).join("")}</tr>`;
+      return head2 + (open ? wpTimeline(run, r, weeks, axis) : "");
+    }).join("");
+    const allOpen = m2.rows.every((r) => wp.open.has(`${team}|${r.id}`));
+    return `<section class="wpcard"><div class="wpcardh"><b>${wpEsc(team)}</b><span class="lsub">${m2.rows.filter((r) => r.kind === "person").length} engineers</span><span class="spacer" style="flex:1"></span><button type="button" class="wpall" data-wpall="${wpEsc(team)}">${allOpen ? "Collapse all" : "Expand all"}</button></div>
+      <div class="wpscroll" data-team="${wpEsc(team)}"><table class="wpt" style="--wpn:${weeks.length}">${head}${total}${body}</table></div></section>`;
+  }).join("") || `<div class="banner warn">No engineers allocated to the picked team${teams.length === 1 ? "" : "s"} in these weeks.</div>`;
+  const n2 = wp.overrides.size;
+  const can = !!state.mcp && !state.readOnly;
+  const bar = n2 ? `<div class="wpbarbar"><b>${n2} unsaved change${n2 === 1 ? "" : "s"}</b><span class="lsub">What-if: the loads above include ${n2 === 1 ? "it" : "them"}. Changed cells are outlined.</span><span class="spacer" style="flex:1"></span><button type="button" data-wpdiscard>Discard</button><button type="button" class="primary" data-wpsave ${can ? "" : `disabled title="${state.mcp ? "You can view this page, not edit it" : "Saving needs the live page in claude.ai"}"`}>Save to Notion…</button></div>` : "";
+  el.innerHTML = `<div class="lists wplists"><div class="lhead"><b>Week plan</b><span class="lsub">Capacity minus load per engineer per week, next ${weeks.length} weeks. Expand a row to see its issues on a timeline; drag the right edge of a bar to change its End date. Changes stay a what-if until you save them.</span></div>
+    <div class="wplegend"><span class="wp-g">≤ 50% loaded</span><span class="wp-a">50–100%</span><span class="wp-r">over</span><span class="wp-x">&gt; 167% or no capacity</span><span>\u{1F334} holiday</span><span>⚠ overdue</span><span class="lsub">${capNote}</span></div>
+    ${cards}</div>${bar}`;
+  el.querySelectorAll(".wpscroll[data-team]").forEach((x) => {
+    if (keepScroll[x.dataset.team] != null) x.scrollLeft = keepScroll[x.dataset.team];
+  });
+  wpWire(el);
+}
+function wpSetOverride(issue, start, end) {
+  const ov = state.wp.overrides;
+  const prev = ov.get(issue.id);
+  const was = prev ? prev.was : { start: issue.start || null, end: issue.end || null };
+  if (end === was.end && start === was.start) ov.delete(issue.id);
+  else ov.set(issue.id, { start, end, was, name: issue.name });
+  state.wp.key = (state.wp.key || 0) + 1;
+}
+function wpIssueById(id) {
+  return state.run.issues.find((i) => i.id === id) || null;
+}
+function wpStartDrag(e, h) {
+  e.preventDefault();
+  e.stopPropagation();
+  const barEl = h.closest(".wpbar"), track = h.closest(".wptr");
+  const weeks = (state.run.computed.sortedWeeks || []).slice(0, WP_WEEKS);
+  const axis = wpAxis(weeks);
+  const w = track.getBoundingClientRect().width;
+  const startIso = h.dataset.start || null, endIso = h.dataset.end;
+  const sl = startIso ? axis.slot(startIso) : axis.slot(endIso);
+  const el0 = axis.slot(endIso);
+  const x0 = e.clientX;
+  const left = Math.max(0, sl);
+  const tag = document.createElement("div");
+  tag.className = "wpdragtag";
+  barEl.appendChild(tag);
+  barEl.classList.add("dragging");
+  let cur = el0;
+  const label = barEl.querySelector("span");
+  const move = (ev) => {
+    const ds = Math.round((ev.clientX - x0) / (w / axis.slots));
+    cur = Math.max(Math.max(sl, 0), Math.min(axis.slots - 1, el0 + ds));
+    barEl.style.width = `${(cur + 1 - left) / axis.slots * 100}%`;
+    if (label) label.textContent = wpShort(axis.ofSlot(cur));
+    tag.textContent = `End ${wpShort(axis.ofSlot(cur))}${cur === el0 ? "" : ` (${cur > el0 ? "+" : "−"}${Math.abs(cur - el0)} working day${Math.abs(cur - el0) === 1 ? "" : "s"})`}`;
+  };
+  const up = () => {
+    h.releasePointerCapture?.(e.pointerId);
+    h.removeEventListener("pointermove", move);
+    h.removeEventListener("pointerup", up);
+    h.removeEventListener("pointercancel", up);
+    if (cur === el0) {
+      draw();
+      return;
+    }
+    const issue = wpIssueById(h.dataset.wpdrag);
+    if (!issue) return draw();
+    const newEnd = axis.ofSlot(cur);
+    // A pot issue (End only) gets its old End as Start, so the effort spreads over the range.
+    const newStart = issue.start || issue.end || endIso;
+    wpSetOverride(issue, newStart, newEnd);
+    draw();
+  };
+  h.setPointerCapture?.(e.pointerId);
+  h.addEventListener("pointermove", move);
+  h.addEventListener("pointerup", up);
+  h.addEventListener("pointercancel", up);
+  move(e);
+}
+function wpWire(el) {
+  if (el._wpWired) return;
+  el._wpWired = true;
+  el.addEventListener("pointerdown", (e) => {
+    if (state.tab !== "week") return;
+    const h = e.target.closest?.("[data-wpdrag]");
+    if (h) wpStartDrag(e, h);
+  });
+  el.addEventListener("click", (e) => {
+    if (state.tab !== "week") return;
+    const o = e.target.closest("[data-wpopen]");
+    if (o) {
+      const k = o.dataset.wpopen;
+      if (state.wp.open.has(k)) state.wp.open.delete(k);
+      else state.wp.open.add(k);
+      draw();
+      return;
+    }
+    const a = e.target.closest("[data-wpall]");
+    if (a) {
+      const team = a.dataset.wpall;
+      const keys = wpTeamModel(wpRun(), team, (state.run.computed.sortedWeeks || []).slice(0, WP_WEEKS)).rows.map((r) => `${team}|${r.id}`);
+      const all = keys.every((k) => state.wp.open.has(k));
+      keys.forEach((k) => all ? state.wp.open.delete(k) : state.wp.open.add(k));
+      draw();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (state.tab !== "week") return;
+    if (e.target.closest("[data-wpdiscard]")) {
+      state.wp.overrides.clear();
+      state.wp.key++;
+      draw();
+      return;
+    }
+    if (e.target.closest("[data-wpsave]")) wpSave();
+  });
+}
+function wpSave() {
+  const wp = state.wp;
+  if (!state.mcp || state.readOnly) return toast("Saving needs edit access on the live page in claude.ai.", "bad");
+  const items = [...wp.overrides.entries()].map(([id, o]) => ({ id, o, issue: wpIssueById(id) })).filter((x) => x.issue && isAllowed("issue", x.id));
+  if (!items.length) return toast("None of these issues has a Notion id to save to.", "bad");
+  const rows = items.map(({ issue, o }) => {
+    const warns = moveWarnings(issue, o.end, blockersOf(issue));
+    return `<div class="pickrow"><span><b>${wpEsc(issue.name)}</b><span class="muted"> \xB7 End ${wpEsc(wpFd(o.was.end))} → <b>${wpEsc(wpFd(o.end))}</b>${o.start !== o.was.start ? ` \xB7 Start ${wpEsc(wpFd(o.was.start))} → ${wpEsc(wpFd(o.start))}` : ""}</span>${warns.map((x) => `<div class="warnt">⚠ ${wpEsc(x)}</div>`).join("")}</span></div>`;
+  }).join("");
+  const sheet = openSheet(`
+  <h3>Save ${items.length} date change${items.length === 1 ? "" : "s"} to Notion</h3>
+  <div class="srow">Writes Start/End on each issue and logs an audit row per change.</div>
+  <div class="picklist">${rows}</div>
+  ${reasonField()}
+  <div class="sact"><button data-sheet-close>Cancel</button><button class="primary" id="sSave">Save ${items.length}</button></div>`);
+  wireReason(sheet);
+  sheet.querySelector("#sSave").addEventListener("click", () => {
+    const reason = sheet.querySelector("#sReason").value.trim();
+    closeSheet();
+    wp.saving = true;
+    draw();
+    inBackground(`${items.length} date change${items.length === 1 ? "" : "s"}`, async () => {
+      const done = [], failed = [];
+      try {
+        for (const { issue, o } of items) {
+          try {
+            await moveIssue(state.mcp, { issue, start: o.start, end: o.end, reason, blockers: blockersOf(issue) });
+            done.push({ issue, r: { after: { start: o.start, end: o.end } } });
+            wp.overrides.delete(issue.id);
+          } catch (err) {
+            failed.push(`"${issue.name}": ${errText(err)}`);
+          }
+        }
+      } finally {
+        wp.saving = false;
+        wp.key++;
+        if (done.length) afterMoves(done);
+        else draw();
+      }
+      if (failed.length) throw fail(`Saved ${done.length}, ${failed.length} failed and stay unsaved. ${failed.join("; ")}`);
+      return `Saved ${done.length} date change${done.length === 1 ? "" : "s"} to Notion. Logged.`;
+    });
+  });
+}
+
 function draw() {
   drawTab();
   restoreFolds(document.getElementById('grid'));
@@ -1064,6 +1489,7 @@ function drawTab() {
     return;
   }
   if (state.tab === 'risk' && state.risk) { loadPbOwners(); renderAtRisk(main, { risk: state.risk, horizon, scores: state.scores, loading: state.extra.scores === 'loading', baselineError: state.baselineError, sort: state.listSort, readOnly: state.readOnly || !state.mcp, pbReq: state.pbReq, owners: state.mcp ? state.owners : new Map() }); return; }
+  if (state.tab === 'week') { if (state.run) renderWeekPlan(main); else main.innerHTML = '<div class="loading">Loading capacity from Lightdash…</div>'; return; }
   if (state.tab === 'prep') { loadComments(); renderPrep(main, { queues: state.queues, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', readOnly: state.readOnly || !state.mcp, sort: state.listSort, comments: state.frComments }); return; }
   if (state.tab === 'qplan') { if (state.run) renderQuarterPlan(main, { run: state.run, grid: state.grid, scores: state.scores, open: state.qpOpen, horizon, quarterKey: state.qpQuarter || horizon[0].key, team: state.teamFilter, readOnly: state.readOnly || !state.mcp, sort: state.qpSort || { key: 'plan', dir: 1 } }); return; }
   if (state.tab === 'quality') { renderQuality(main, { quality: state.quality, horizon, scores: state.scores, loading: state.extra.scores === 'loading' || state.extra.backlog === 'loading', team: state.teamFilter, readOnly: state.readOnly || !state.mcp,

@@ -13,14 +13,14 @@ import { openSheet, closeSheet, toast } from './sheet.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fd = (iso) => (iso ? formatDate(iso) : '–');
-const errText = (err) => (err?.code === 'not_allowed' || err?.code === 'audit_failed' ? err.message : explainError(NOTION, err));
+export const errText = (err) => (err?.code === 'not_allowed' || err?.code === 'audit_failed' ? err.message : explainError(NOTION, err));
 
-function reasonField() {
+export function reasonField() {
   return `<label class="sfld">Reason <span class="muted">(optional, goes in the audit log and the owner ping)</span>
     <div class="chips">${REASONS.map((r) => `<button type="button" class="chip" data-reason="${esc(r)}">${esc(r)}</button>`).join('')}</div>
     <input id="sReason" type="text" maxlength="200" placeholder="Or type a reason"></label>`;
 }
-function wireReason(sheet) {
+export function wireReason(sheet) {
   sheet.addEventListener('click', (e) => {
     const c = e.target.closest('[data-reason]');
     if (!c) return;
@@ -33,7 +33,7 @@ const busy = (btn, on, label) => { btn.disabled = on; if (label) btn.textContent
 // Saves run in the background (Tom, 2026-10-27): Save closes the window at once, the planner shows the
 // change straight away, and a "Saving…" toast stays up while Notion writes; then a done or error toast.
 let pending = 0;
-async function inBackground(label, job) {
+export async function inBackground(label, job) {
   pending++;
   toast(`Saving${pending > 1 ? ` ${pending} changes` : ''}… ${label}`, 'busy');
   try {
@@ -45,7 +45,7 @@ async function inBackground(label, job) {
     toast(err?.bgMessage || errText(err), 'bad');
   }
 }
-const fail = (bgMessage, cause) => Object.assign(new Error(bgMessage), { bgMessage, cause });
+export const fail = (bgMessage, cause) => Object.assign(new Error(bgMessage), { bgMessage, cause });
 
 /** Date button: set Start = End = date on an issue. ctx: { mcp, issue, date, label, blockers, onDone } */
 export function startMove(ctx) {
