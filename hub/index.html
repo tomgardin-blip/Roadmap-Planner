@@ -8277,6 +8277,7 @@ var daysBetween = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i
   }
   function onExtra(step, p) {
     const x = state.extra;
+    if (!p.error && state.mode === "live") (state.lastPayloads || (state.lastPayloads = {}))[step] = p; // kept for the local cache
     if (p.error) {
       x[step] = "error";
       x[`${step}Error`] = p.error;
@@ -8310,6 +8311,10 @@ var daysBetween = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i
     setConn("connL", state.mode === "live" ? s.lightdash : "");
     setConn("connN", state.mode === "live" ? s.notion : "");
     const pills = [];
+    if (state.mode === "live" && state.cachedAt) {
+      const failed = s.lightdash === "error";
+      pills.push(`<span class="pill ${failed ? "warn" : ""}" title="The plan as it was when you last had the planner open in this browser. ${failed ? "The live refresh failed: see the connector icons, then Refresh. Capacity and Quarter plan stay blocked." : "Lightdash and Notion are being read behind it; the page updates by itself."}">${failed ? "Showing saved data" : "Saved data"} from ${esc(fmtTime(state.cachedAt))}${failed ? " · refresh failed" : " · refreshing…"}</span>`);
+    }
     if (state.mode === "live" && s.syncedAt) {
       const n = (s.changed?.length || 0) + (s.added?.length || 0);
       pills.push(`<span class="pill" title="Lightdash last synced from Notion at ${esc(fmtTime(s.syncedAt))}. Issues edited in Notion since then are read live and applied on top.">Lightdash ${esc(fmtTime(s.syncedAt))} · <b>${n}</b> live from Notion</span>`);
@@ -8603,7 +8608,7 @@ var daysBetween = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i
   document.addEventListener("change", (e) => {
     if (e.target.classList?.contains("hsdate") && e.target.value) setSince(`${e.target.value}T23:59:59.000Z`);
   });
-  var capacityOk = () => state.mode !== "live" || hasCapacity(state.run);
+  var capacityOk = () => state.mode !== "live" || (!state.cacheFailed && hasCapacity(state.run));
   var folds = new Map();
   function foldKey(d) {
     const id = d.id || d.dataset.more || d.dataset.fold;
@@ -10341,10 +10346,20 @@ var daysBetween = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i
     const { rows, status } = await loadLive(mcp);
     state.status = status;
     if (!rows) {
+      // Showing the saved plan: keep the lists, say the refresh failed, block capacity (no-fallback rule).
+      if (state.cachedAt) {
+        state.status = { ...status, cached: true };
+        state.cacheFailed = true;
+        renderChrome();
+        draw();
+        return false;
+      }
       renderChrome();
       document.getElementById("grid").innerHTML = "";
       return false;
     }
+    state.cachedAt = null;
+    state.cacheFailed = false;
     state.frComments = new Map();
     show(rows);
     renderDrawer();
@@ -10380,6 +10395,62 @@ var daysBetween = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i
       })
     ];
     await Promise.allSettled(background);
+    saveSnapshot();
+    return true;
+  }
+  // Local browser cache (Tom, 2026-11-18/20, Liam's tip in #success_directors: "loads instantly and only updates
+  // rather than re-pulling on every refresh"). After a full live load, and when the page is hidden, the inputs are
+  // kept in this browser's IndexedDB (per viewer, per browser; never shared or sent). On open they show at once and
+  // the live load runs behind. Older than 3 days or another cache version: ignored. Any storage error: no cache.
+  var RP_CACHE = { db: "qargo-roadmap-planner", store: "snapshot", key: "last", version: 1, maxAge: 3 * 864e5 };
+  function rpIdb(mode, fn) {
+    return new Promise((resolve, reject) => {
+      let req;
+      try { req = indexedDB.open(RP_CACHE.db, 1); } catch (e) { reject(e); return; }
+      req.onupgradeneeded = () => req.result.createObjectStore(RP_CACHE.store);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const db = req.result;
+        try {
+          const t = db.transaction(RP_CACHE.store, mode);
+          const r = fn(t.objectStore(RP_CACHE.store));
+          t.oncomplete = () => { db.close(); resolve(r?.result); };
+          t.onerror = t.onabort = () => { db.close(); reject(t.error); };
+        } catch (e) { db.close(); reject(e); }
+      };
+    });
+  }
+  async function readSnapshot() {
+    try {
+      const s = await rpIdb("readonly", (st) => st.get(RP_CACHE.key));
+      const ok = s && s.v === RP_CACHE.version && Array.isArray(s.rows) && Date.now() - Date.parse(s.at) <= RP_CACHE.maxAge;
+      return ok ? s : null;
+    } catch { return null; }
+  }
+  function saveSnapshot() {
+    if (state.mode !== "live" || !state.rows || state.cachedAt || state.status?.lightdash !== "ok") return;
+    rpIdb("readwrite", (st) => st.put({
+      v: RP_CACHE.version, at: (new Date()).toISOString(), rows: state.rows, status: state.status,
+      extras: state.lastPayloads || {}, audit: state.audit, users: state.users, baseline: state.baseline, eiReq: state.eiReq,
+    }, RP_CACHE.key)).catch(() => {});
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") saveSnapshot(); });
+  async function showCached() {
+    const snap = await readSnapshot();
+    if (!snap) return false;
+    state.cachedAt = snap.at;
+    state.status = { ...snap.status, lightdash: "loading", notion: "loading", cached: true };
+    state.audit = snap.audit || null;
+    if (snap.users instanceof Map) state.users = snap.users;
+    state.baseline = snap.baseline || null;
+    state.eiReq = snap.eiReq || null;
+    state.lastPayloads = snap.extras || {};
+    show(snap.rows);
+    if (snap.extras?.scores) onExtra("scores", snap.extras.scores);
+    if (snap.extras?.backlog) onExtra("backlog", snap.extras.backlog);
+    recompute();
+    renderChrome();
+    draw();
     return true;
   }
   async function refresh() {
@@ -10419,7 +10490,16 @@ var daysBetween = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i
       document.getElementById("refreshBtn").hidden = false;
       state.mode = "live";
       loadDupStore();
-      await loadAllLive(mcp);
+      // Saved plan first (instant), then the live load behind it.
+      const cached = await showCached().catch(() => false);
+      const btn = document.getElementById("refreshBtn");
+      if (cached) { state.refreshing = true; btn.disabled = true; btn.classList.add("spin"); }
+      try {
+        await loadAllLive(mcp);
+      } finally {
+        if (cached) { state.refreshing = false; btn.disabled = false; btn.classList.remove("spin"); }
+        renderChrome();
+      }
       return;
     }
     state.mode = Array.isArray(window.__RP_ROWS__) ? "snapshot" : "fake";
