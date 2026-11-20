@@ -1,0 +1,1 @@
+{"mcp":{"servers":[{"server":"Lightdash","tools":["run_metric_query","get_query_result"]},{"server":"Notion","tools":["notion-query-data-sources","notion-fetch","notion-create-pages","notion-update-page","notion-get-users","notion-get-comments","notion-create-comment"]},{"server":"Slack","tools":["slack_search_users","slack_search_channels","slack_send_message"]}]},"sample":{}}

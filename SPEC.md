@@ -1,3 +1,5 @@
+> **Code lives in the Qargo Artifacts hub (Tom, 2026-11-20).** The planner runs from its register row in the Notion Shared Artifacts table (page `40ce32e8f8c881a7affdec5bb404510e`), maintained by Tom and Sander De Wilde. `hub/` mirrors it; see CLAUDE.md for the sync-before-change rule. The modular build described below was the planner up to the standalone artifact v118 (code in `legacy/`, commit 9f2a208). Sander's hub releases since 16/11 (V1 to V12: Week plan, Daily plan, capacity history per team-quarter, GitHub PRs, all 12 teams, data-app capacity engine) are listed in the row's version history. The local browser cache (standalone v118, 18/11) is not in the hub yet.
+
 # Roadmap Planner: build spec
 
 Oct 9, 2026 · Tom Gardin

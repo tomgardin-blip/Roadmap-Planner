@@ -1,19 +1,27 @@
 # Roadmap Planner: standing rules
 
-A claude.ai artifact (published with the `mcp` capability) for planning engineering issues into months and quarters against FE/BE/MOB capacity for 4 teams, with instant write-back to Notion.
+A Qargo Artifacts hub app for planning engineering issues into months, quarters, weeks and days against capacity for every engineering team, with write-back to Notion and Slack follow-ups. Maintained by Tom and Sander De Wilde (both Owners of the hub row).
 
-## Source of truth
-- `SPEC.md` is the source of truth. Read it fully before any work.
+## The live version lives in the hub, not in this repo (Tom, 2026-11-20)
+- **Source of truth for the code: the register row** "Roadmap Planner" in the Notion Shared Artifacts table, page `40ce32e8f8c881a7affdec5bb404510e`. Its "App code" block and child pages ("App code 1 · <version>") hold the exact code the hub runs; its Current version / Version history say who released what. Sander publishes there too, from his own sessions.
+- `hub/` in this repo is a **mirror** of that row: `hub/index.html` (the whole app, no build step), `hub/capabilities.json`, and `hub/HUB_VERSION.json` (the row's version this mirror holds).
+- **Before ANY change, every session, sync first:**
+  1. `notion-fetch` the row. Compare its App code `version` with `hub/HUB_VERSION.json`.
+  2. Different: fetch every App code page the row lists (in order), save the results, run `python3 -I tools/hub_decode.py <saved results...>`, update `hub/HUB_VERSION.json` (version, version_number, code_pages, published_at, pulled_at) and commit "Sync hub V<n> (<version>)" before touching anything else. Note in the commit what the version history says changed.
+  3. Same: carry on. Never edit a `hub/index.html` that is behind the row.
+- **Change only `hub/index.html`** (and `hub/capabilities.json` when a connector tool is added). The modular `legacy/` code (the pre-hub planner, last published as the standalone artifact v118, commit 9f2a208) is history: never build or publish it.
+- **Publish only to the hub, with the `qargo:publish-artifact` skill**, starting from this mirror. Its step 7 refuses when someone else released since the version you started from: then sync again (step 2 above), merge your change onto the new version, and publish again. Never force over Sander's release.
+- After a publish, write the new version into `hub/HUB_VERSION.json`, commit and push, so the mirror equals the row.
+- **Never publish to the old standalone artifact** (https://claude.ai/artifact/8tbFzeRwUKf4fAakW8uR4m). The hub row is the only release channel.
+- Before a release that changes behaviour Sander owns (Week plan, Daily plan, capacity history, GitHub PRs), tell Tom so Sander knows.
+
+## SPEC
+- `SPEC.md` records Tom's decisions. Sander's additions since 16/11 (Week plan, Daily plan, capacity history, GitHub PRs, all 12 teams, the data-app capacity engine) are described in the row's version history, not in SPEC.md.
 - When a decision changes, update `SPEC.md` in the same commit.
 - If `SPEC.md` is unclear, wrong or silent on something, ask Tom. Never fill a gap with a plausible assumption.
 
 ## Visual style
-- Copy colours, typography and components from Liam's Go Live Schedule (skill `success:go-live-schedule-artifact`).
-- Do NOT copy its single-file structure.
-
-## Code structure
-- Separate modules: data loading, capacity math, scoring, at-risk rules, Notion writes, UI.
-- Bundle into one HTML file only at publish time.
+- Qargo app look (qargo-brand skill), as the hub app already uses.
 
 ## Capacity math
 - Must match the Lightdash Engineering capacity planner exactly.
